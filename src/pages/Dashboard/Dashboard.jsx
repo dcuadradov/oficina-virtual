@@ -13,11 +13,11 @@ export default function Dashboard() {
     // 1. Carga inicial
     fetchLeads();
 
-    // 2. Configurar RECARGA AUTOMÁTICA cada 5 minutos (300,000 ms)
+    // 2. Configurar RECARGA AUTOMÁTICA cada 3 minutos (180,000 ms)
     const intervalId = setInterval(() => {
       console.log("🔄 Actualizando datos en segundo plano...");
       fetchLeads(true); // true = modo silencioso (sin spinner de carga total)
-    }, 300000); 
+    }, 180000); 
 
     // 3. Limpieza al salir
     return () => clearInterval(intervalId);
@@ -36,7 +36,7 @@ export default function Dashboard() {
         return;
       }
 
-      // Consulta a Supabase trayendo leads y recordatorios
+      // Consulta a Supabase trayendo SOLO los leads del comercial actual
       const { data, error } = await supabase
         .from('leads')
         .select(`
@@ -45,7 +45,8 @@ export default function Dashboard() {
             fecha_programada,
             estado
           )
-        `);
+        `)
+        .eq('comercial_email', userEmail);
 
       if (error) throw error;
       
