@@ -1,79 +1,20 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React from 'react';
 import { Users, Clock, AlertCircle, CheckCircle, UserPlus, UserX } from 'lucide-react';
 
-const DashboardStats = ({ leads = [], activeFilter = 'todos', onFilterChange }) => {
-  const [tick, setTick] = useState(new Date());
+const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange }) => {
+  const { total = 0, porEstado = {} } = statsData;
 
-  useEffect(() => {
-    const timerID = setInterval(() => setTick(new Date()), 60000);
-    return () => clearInterval(timerID);
-  }, []);
+  // Mapear los estados de la BD a los keys del frontend
+  const stats = {
+    total,
+    sin_gestionar: porEstado.sin_gestionar || 0,
+    atrasado: porEstado.atrasado || 0,
+    gestionado: porEstado.gestionado || 0,
+    matriculado: porEstado.matriculado || 0,
+    caido: porEstado.caido || 0,
+  };
 
-  const stats = useMemo(() => {
-    const now = tick;
-    
-    let counts = {
-      total: 0,
-      sinGestionar: 0,
-      atrasado: 0,
-      gestionado: 0,
-      nuevaMatricula: 0,
-      matriculaCaida: 0
-    };
-
-    leads.forEach(lead => {
-      counts.total++;
-
-      if (lead.fase_id_pipefy === "339756299") { 
-        counts.nuevaMatricula++;
-        return; 
-      }
-      if (lead.fase_id_pipefy === "341189602") { 
-        counts.matriculaCaida++;
-        return; 
-      }
-
-      const recordatorios = lead.recordatorios || [];
-      
-      if (recordatorios.length === 0) {
-        counts.sinGestionar++;
-        return;
-      }
-
-      const recordatoriosConFecha = recordatorios.filter(r => r.fecha_programada);
-      
-      if (recordatoriosConFecha.length === 0) {
-        counts.sinGestionar++;
-        return;
-      }
-
-      const tieneRecordatorioVigente = recordatoriosConFecha.some(r => {
-        const fechaRecordatorio = new Date(r.fecha_programada);
-        return fechaRecordatorio >= now;
-      });
-
-      if (tieneRecordatorioVigente) {
-        counts.gestionado++;
-        return;
-      }
-
-      const recordatorioMasReciente = recordatoriosConFecha
-        .map(r => ({ ...r, fechaDate: new Date(r.fecha_programada) }))
-        .sort((a, b) => b.fechaDate - a.fechaDate)[0];
-
-      const horasDiferencia = (now - recordatorioMasReciente.fechaDate) / (1000 * 60 * 60);
-
-      if (horasDiferencia > 48) {
-        counts.atrasado++;
-      } else {
-        counts.sinGestionar++;
-      }
-    });
-
-    return counts;
-  }, [leads, tick]);
-
-  // Configuración de estilos para cada stat card con colores corporativos
+  // Configuración de estilos para cada stat card
   const statsConfig = [
     {
       key: 'todos',
@@ -86,9 +27,9 @@ const DashboardStats = ({ leads = [], activeFilter = 'todos', onFilterChange }) 
       textColor: 'text-[#02214A]',
     },
     {
-      key: 'sinGestionar',
+      key: 'sin_gestionar',
       title: 'Sin gestionar',
-      count: stats.sinGestionar,
+      count: stats.sin_gestionar,
       icon: Clock,
       gradient: 'from-amber-500 to-orange-500',
       bgGradient: 'from-amber-50 to-orange-50',
@@ -116,9 +57,9 @@ const DashboardStats = ({ leads = [], activeFilter = 'todos', onFilterChange }) 
       textColor: 'text-emerald-600',
     },
     {
-      key: 'nuevaMatricula',
+      key: 'matriculado',
       title: 'Nueva matrícula',
-      count: stats.nuevaMatricula,
+      count: stats.matriculado,
       icon: UserPlus,
       gradient: 'from-blue-500 to-indigo-600',
       bgGradient: 'from-blue-50 to-indigo-50',
@@ -126,9 +67,9 @@ const DashboardStats = ({ leads = [], activeFilter = 'todos', onFilterChange }) 
       textColor: 'text-blue-600',
     },
     {
-      key: 'matriculaCaida',
+      key: 'caido',
       title: 'Matrícula caída',
-      count: stats.matriculaCaida,
+      count: stats.caido,
       icon: UserX,
       gradient: 'from-slate-400 to-slate-500',
       bgGradient: 'from-slate-50 to-gray-100',
@@ -175,7 +116,7 @@ const DashboardStats = ({ leads = [], activeFilter = 'todos', onFilterChange }) 
               {stat.title}
             </div>
             
-            {/* Indicador de activo con color corporativo */}
+            {/* Indicador de activo */}
             {isActive && (
               <div className="absolute top-3 right-3">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />

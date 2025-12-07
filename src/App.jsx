@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
+import Home from './pages/Home/Home';
 import Dashboard from './pages/Dashboard/Dashboard';
 
 // Este componente actúa como "Guardia de Seguridad"
@@ -23,7 +24,17 @@ export default function App() {
       {/* Ruta donde aterriza n8n */}
       <Route path="/auth/callback" element={<AuthCallback />} />
       
-      {/* Ruta privada (Dashboard) */}
+      {/* Home - Selección de módulos */}
+      <Route 
+        path="/home" 
+        element={
+          <ProtectedRoute>
+            <Home />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Dashboard Comercial */}
       <Route 
         path="/dashboard" 
         element={
@@ -33,8 +44,8 @@ export default function App() {
         } 
       />
 
-      {/* Si entran a cualquier otro lado, mandar al dashboard (el guardia decidirá si entran o no) */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Si entran a cualquier otro lado, mandar al home (el guardia decidirá si entran o no) */}
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }

@@ -17,9 +17,8 @@ const AuthCallback = () => {
       localStorage.setItem('user_email', email);
       localStorage.setItem('user_name', name);
 
-      // 3. CAMBIO CLAVE: Usamos redirección forzada
-      // Esto recarga la página para asegurar que el token sea leído correctamente
-      window.location.href = '/dashboard';
+      // 3. Redirigir al Home (que verificará permisos y mostrará módulos)
+      window.location.href = '/home';
       
     } else {
       // Si algo salió mal, volver al login

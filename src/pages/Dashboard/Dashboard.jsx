@@ -1,103 +1,340 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import DashboardStats from './components/DashboardStats';
+import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
-import { LogOut, RefreshCcw } from 'lucide-react';
+import LeadSidebar from './components/LeadSidebar';
+import { LogOut, RefreshCcw, Home } from 'lucide-react';
 
-// Función para clasificar un lead en su estado de gestión
-const getLeadCategory = (lead) => {
-  const now = new Date();
-  
-  // Fases especiales
-  if (lead.fase_id_pipefy === "339756299") return 'nuevaMatricula';
-  if (lead.fase_id_pipefy === "341189602") return 'matriculaCaida';
-
-  const recordatorios = lead.recordatorios || [];
-  if (recordatorios.length === 0) return 'sinGestionar';
-  
-  const recordatoriosConFecha = recordatorios.filter(r => r.fecha_programada);
-  if (recordatoriosConFecha.length === 0) return 'sinGestionar';
-
-  const tieneVigente = recordatoriosConFecha.some(r => new Date(r.fecha_programada) >= now);
-  if (tieneVigente) return 'gestionado';
-
-  const masReciente = recordatoriosConFecha
-    .map(r => new Date(r.fecha_programada))
-    .sort((a, b) => b - a)[0];
-  
-  const horasDiferencia = (now - masReciente) / (1000 * 60 * 60);
-  return horasDiferencia > 48 ? 'atrasado' : 'sinGestionar';
-};
+// Configuración de paginación
+const LEADS_PER_PAGE = 50;
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  
+  // Estados para KPIs (datos globales)
+  const [statsData, setStatsData] = useState({
+    total: 0,
+    porEstado: {},
+    porEtapa: {}
+  });
+  
+  // Estados para la tabla (datos paginados)
   const [leads, setLeads] = useState([]);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // Estados de UI
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('todos');
+  const [activeEtapa, setActiveEtapa] = useState(null);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState('info');
+  
+  // Estados para filtros avanzados
+  const [comerciales, setComerciales] = useState([]);
+  const [selectedComercial, setSelectedComercial] = useState(null);
+  const [selectedMes, setSelectedMes] = useState(null);
+  const [selectedPeriodo, setSelectedPeriodo] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
+  const userEmail = localStorage.getItem('user_email');
+  const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
 
-  // Filtrar leads según el filtro activo
-  const filteredLeads = leads.filter(lead => {
-    if (activeFilter === 'todos') return true;
-    return getLeadCategory(lead) === activeFilter;
-  });
+  // Función para abrir el sidebar con un lead (tab opcional)
+  const handleOpenSidebar = (lead, tab = 'info') => {
+    setSelectedLead(lead);
+    setInitialTab(tab);
+    setSidebarOpen(true);
+  };
 
-  useEffect(() => {
-    // 1. Carga inicial
-    fetchLeads();
+  // Función para cerrar el sidebar
+  const handleCloseSidebar = () => {
+    setSidebarOpen(false);
+    setTimeout(() => setSelectedLead(null), 300);
+  };
 
-    // 2. Configurar RECARGA AUTOMÁTICA cada 3 minutos (180,000 ms)
-    const intervalId = setInterval(() => {
-      console.log("🔄 Actualizando datos en segundo plano...");
-      fetchLeads(true); // true = modo silencioso (sin spinner de carga total)
-    }, 180000); 
+  // Email activo para las consultas (el comercial seleccionado o el usuario actual)
+  const emailActivo = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
 
-    // 3. Limpieza al salir
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const fetchLeads = async (silent = false) => {
+  // Función para cargar lista de comerciales (solo si puede ver todos)
+  const fetchComerciales = useCallback(async () => {
+    if (!puedeVerTodos) return;
+    
     try {
-      // Solo mostramos spinner grande si NO es una recarga silenciosa
-      if (!silent) setLoading(true);
-      if (silent) setIsRefreshing(true); // Indicador pequeño opcional
-      
-      const userEmail = localStorage.getItem('user_email');
-      
-      if (!userEmail) {
-        console.error("No hay email de usuario");
-        return;
-      }
-
-      // Consulta a Supabase trayendo SOLO los leads del comercial actual
+      // Obtener usuarios del módulo comercial
       const { data, error } = await supabase
-        .from('leads')
+        .from('usuarios')
         .select(`
-          *,
-          recordatorios (
-            fecha_programada,
-            estado
+          email,
+          nombre,
+          usuarios_modulos!inner (
+            modulo_id
           )
         `)
-        .eq('comercial_email', userEmail);
+        .eq('activo', true)
+        .eq('usuarios_modulos.modulo_id', 'comercial');
 
       if (error) throw error;
+      setComerciales(data || []);
+    } catch (error) {
+      console.error('Error cargando comerciales:', error.message);
+    }
+  }, [puedeVerTodos]);
+
+  // Parsear filtros de fecha
+  const parseDateFilters = useCallback(() => {
+    let fechaInicio = null;
+    let fechaFin = null;
+
+    if (selectedPeriodo) {
+      // Periodo tiene formato: "2025-01-07_2025-01-14"
+      const [inicio, fin] = selectedPeriodo.split('_');
+      fechaInicio = inicio;
+      fechaFin = fin;
+    } else if (selectedMes) {
+      // Mes tiene formato: "2025-01"
+      const [año, mes] = selectedMes.split('-');
+      fechaInicio = `${año}-${mes}-01`;
+      // Último día del mes
+      const ultimoDia = new Date(parseInt(año), parseInt(mes), 0).getDate();
+      fechaFin = `${año}-${mes}-${ultimoDia}`;
+    }
+
+    return { fechaInicio, fechaFin };
+  }, [selectedMes, selectedPeriodo]);
+
+  // Función para obtener estadísticas globales (KPIs)
+  const fetchStats = useCallback(async () => {
+    const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+    if (!targetEmail && !puedeVerTodos) return;
+
+    try {
+      const { fechaInicio, fechaFin } = parseDateFilters();
+
+      // Query base para estado_gestion
+      let estadoQuery = supabase
+        .from('leads')
+        .select('estado_gestion, fecha_gestion')
+        .neq('etapa_funnel', 'No mostrar');
+
+      // Query base para etapa_funnel
+      let etapaQuery = supabase
+        .from('leads')
+        .select('etapa_funnel, fecha_gestion')
+        .neq('etapa_funnel', 'No mostrar');
+
+      // Aplicar filtro de comercial
+      if (puedeVerTodos && selectedComercial) {
+        estadoQuery = estadoQuery.eq('comercial_email', selectedComercial);
+        etapaQuery = etapaQuery.eq('comercial_email', selectedComercial);
+      } else if (!puedeVerTodos) {
+        estadoQuery = estadoQuery.eq('comercial_email', userEmail);
+        etapaQuery = etapaQuery.eq('comercial_email', userEmail);
+      }
+      // Si puede ver todos y no hay comercial seleccionado, no filtrar por email
+
+      // Aplicar filtros de fecha
+      if (fechaInicio && fechaFin) {
+        estadoQuery = estadoQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+        etapaQuery = etapaQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+      }
+
+      const [{ data: estadoData, error: estadoError }, { data: etapaData, error: etapaError }] = await Promise.all([
+        estadoQuery,
+        etapaQuery
+      ]);
+
+      if (estadoError) throw estadoError;
+      if (etapaError) throw etapaError;
+
+      // Procesar conteos por estado
+      const porEstado = {};
+      (estadoData || []).forEach(lead => {
+        const estado = lead.estado_gestion || 'sin_gestionar';
+        porEstado[estado] = (porEstado[estado] || 0) + 1;
+      });
+
+      // Procesar conteos por etapa
+      const porEtapa = {};
+      (etapaData || []).forEach(lead => {
+        const etapa = lead.etapa_funnel || 'Sin etapa';
+        porEtapa[etapa] = (porEtapa[etapa] || 0) + 1;
+      });
+
+      setStatsData({
+        total: (estadoData || []).length,
+        porEstado,
+        porEtapa
+      });
+
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error.message);
+    }
+  }, [userEmail, puedeVerTodos, selectedComercial, parseDateFilters]);
+
+  // Función para obtener leads paginados
+  const fetchLeads = useCallback(async (silent = false, page = 0) => {
+    const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+    if (!targetEmail && !puedeVerTodos) {
+      console.error("No hay email de usuario");
+      return;
+    }
+
+    try {
+      if (!silent) setLoading(true);
+      if (silent) setIsRefreshing(true);
+
+      const { fechaInicio, fechaFin } = parseDateFilters();
+
+      // Construir query base
+      let query = supabase
+        .from('leads')
+        .select('*', { count: 'exact' })
+        .neq('etapa_funnel', 'No mostrar');
+
+      // Aplicar filtro de comercial
+      if (puedeVerTodos && selectedComercial) {
+        query = query.eq('comercial_email', selectedComercial);
+      } else if (!puedeVerTodos) {
+        query = query.eq('comercial_email', userEmail);
+      }
+      // Si puede ver todos y no hay comercial seleccionado, traer todos los leads
+
+      // Aplicar filtros de fecha
+      if (fechaInicio && fechaFin) {
+        query = query.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+      }
+
+      // Aplicar filtro por estado si está activo
+      if (activeFilter !== 'todos') {
+        query = query.eq('estado_gestion', activeFilter);
+      }
+
+      // Aplicar filtro por etapa si está activo
+      if (activeEtapa) {
+        query = query.eq('etapa_funnel', activeEtapa);
+      }
+
+      // Aplicar búsqueda de texto (búsqueda en múltiples campos)
+      if (searchQuery && searchQuery.trim()) {
+        const searchTerm = `%${searchQuery.trim()}%`;
+        query = query.or(
+          `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+        );
+      }
+
+      // Ordenar y paginar
+      const from = page * LEADS_PER_PAGE;
+      const to = from + LEADS_PER_PAGE - 1;
       
-      // Actualizamos el estado
+      query = query
+        .order('fecha_gestion', { ascending: false, nullsFirst: false })
+        .range(from, to);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
       setLeads(data || []);
-      
+      setTotalLeads(count || 0);
+      setCurrentPage(page);
+
     } catch (error) {
       console.error('Error cargando leads:', error.message);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, parseDateFilters]);
+
+  // Efecto para carga inicial
+  useEffect(() => {
+    if (userEmail) {
+      fetchComerciales();
+      fetchStats();
+      fetchLeads(false, 0);
+    }
+  }, [userEmail]);
+
+  // Efecto para recargar cuando cambian los filtros
+  useEffect(() => {
+    if (!loading && userEmail) {
+      fetchStats();
+      fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
+    }
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, searchQuery]);
+
+  // Efecto para recarga automática cada 3 minutos
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      console.log("🔄 Actualizando datos en segundo plano...");
+      fetchStats();
+      fetchLeads(true, currentPage);
+    }, 180000);
+
+    return () => clearInterval(intervalId);
+  }, [currentPage, fetchStats, fetchLeads]);
+
+  // Manejadores de paginación
+  const handleNextPage = () => {
+    const maxPage = Math.ceil(totalLeads / LEADS_PER_PAGE) - 1;
+    if (currentPage < maxPage) {
+      fetchLeads(true, currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      fetchLeads(true, currentPage - 1);
+    }
+  };
+
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    setCurrentPage(0);
+  };
+
+  const handleEtapaChange = (etapa) => {
+    setActiveEtapa(etapa);
+    setCurrentPage(0);
+  };
+
+  const handleComercialChange = (comercial) => {
+    setSelectedComercial(comercial);
+    setCurrentPage(0);
+  };
+
+  const handleMesChange = (mes) => {
+    setSelectedMes(mes);
+    setSelectedPeriodo(null); // Limpiar periodo cuando se selecciona mes
+    setCurrentPage(0);
+  };
+
+  const handlePeriodoChange = (periodo) => {
+    setSelectedPeriodo(periodo);
+    setSelectedMes(null); // Limpiar mes cuando se selecciona periodo
+    setCurrentPage(0);
+  };
+
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
+    setCurrentPage(0);
   };
 
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = '/login';
   };
+
+  // Calcular info de paginación
+  const totalPages = Math.ceil(totalLeads / LEADS_PER_PAGE);
+  const showingFrom = currentPage * LEADS_PER_PAGE + 1;
+  const showingTo = Math.min((currentPage + 1) * LEADS_PER_PAGE, totalLeads);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -108,7 +345,7 @@ export default function Dashboard() {
         <div className="absolute -bottom-40 right-1/3 w-80 h-80 bg-emerald-100 rounded-full blur-3xl opacity-20" />
       </div>
 
-      {/* --- HEADER MODERNO CON COLORES CORPORATIVOS --- */}
+      {/* --- HEADER --- */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-slate-200/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -128,13 +365,23 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
-          >
-            <LogOut size={18} />
-            <span className="hidden md:inline">Cerrar sesión</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => navigate('/home')}
+              className="flex items-center gap-2 text-slate-500 hover:text-[#1717AF] transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100"
+            >
+              <Home size={18} />
+              <span className="hidden md:inline">Inicio</span>
+            </button>
+            
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
+            >
+              <LogOut size={18} />
+              <span className="hidden md:inline">Salir</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -151,38 +398,84 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 1. SECCIÓN DE KPIs - Clickeables para filtrar */}
+            {/* 1. SECCIÓN DE KPIs */}
             <DashboardStats 
-              leads={leads} 
+              statsData={statsData}
               activeFilter={activeFilter}
-              onFilterChange={setActiveFilter}
+              onFilterChange={handleFilterChange}
             />
 
-            {/* Indicador de filtro activo con colores corporativos */}
-            {activeFilter !== 'todos' && (
+            {/* 2. FILTROS AVANZADOS */}
+            <DashboardFilters
+              comerciales={comerciales}
+              selectedComercial={selectedComercial}
+              onComercialChange={handleComercialChange}
+              selectedMes={selectedMes}
+              onMesChange={handleMesChange}
+              selectedPeriodo={selectedPeriodo}
+              onPeriodoChange={handlePeriodoChange}
+              showComercialFilter={puedeVerTodos}
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+            />
+
+            {/* Indicador de filtro activo */}
+            {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || searchQuery) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
-                  Mostrando <strong className="text-[#02214A]">{filteredLeads.length}</strong> leads filtrados
+                  Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
+                  {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
+                  {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
+                  {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
+                  {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
+                  {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                 </span>
                 <button
-                  onClick={() => setActiveFilter('todos')}
+                  onClick={() => {
+                    setActiveFilter('todos');
+                    setActiveEtapa(null);
+                    setSelectedComercial(null);
+                    setSelectedMes(null);
+                    setSelectedPeriodo(null);
+                    setSearchQuery('');
+                  }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
-                  Limpiar filtro
+                  Limpiar filtros
                 </button>
               </div>
             )}
 
             {/* 2. TABLA DE LEADS */}
             <LeadsTable 
-              leads={filteredLeads}
-              onOpenModal={(lead) => console.log('Abrir modal:', lead)}
+              leads={leads}
+              statsData={statsData}
+              onOpenModal={handleOpenSidebar}
               onOpenReminder={(lead) => console.log('Abrir recordatorio:', lead)}
+              activeEtapa={activeEtapa}
+              onEtapaChange={handleEtapaChange}
+              activeFilter={activeFilter}
+              // Props de paginación
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalLeads={totalLeads}
+              showingFrom={showingFrom}
+              showingTo={showingTo}
+              onNextPage={handleNextPage}
+              onPrevPage={handlePrevPage}
             />
           </div>
         )}
       </main>
+
+      {/* Sidebar de detalle del lead */}
+      <LeadSidebar 
+        lead={selectedLead}
+        isOpen={sidebarOpen}
+        onClose={handleCloseSidebar}
+        initialTab={initialTab}
+      />
     </div>
   );
 }

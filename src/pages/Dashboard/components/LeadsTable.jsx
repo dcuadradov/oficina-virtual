@@ -1,46 +1,16 @@
 import React from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight } from 'lucide-react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft } from 'lucide-react';
+import { getCountryFlag } from '../../../utils/countryFlags';
 
-// Mapeo de países a banderas emoji
-const countryFlags = {
-  'Colombia': '🇨🇴',
-  'colombia': '🇨🇴',
-  'México': '🇲🇽',
-  'Mexico': '🇲🇽',
-  'méxico': '🇲🇽',
-  'mexico': '🇲🇽',
-  'España': '🇪🇸',
-  'Espana': '🇪🇸',
-  'españa': '🇪🇸',
-  'Argentina': '🇦🇷',
-  'argentina': '🇦🇷',
-  'Chile': '🇨🇱',
-  'chile': '🇨🇱',
-  'Perú': '🇵🇪',
-  'Peru': '🇵🇪',
-  'perú': '🇵🇪',
-  'peru': '🇵🇪',
-  'Ecuador': '🇪🇨',
-  'ecuador': '🇪🇨',
-  'Venezuela': '🇻🇪',
-  'venezuela': '🇻🇪',
-  'Estados Unidos': '🇺🇸',
-  'USA': '🇺🇸',
-  'Brasil': '🇧🇷',
-  'brazil': '🇧🇷',
-};
-
-// Estilos modernos para cada fase
-const faseStyles = {
-  'Sin contacto': { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
-  'Perfilamiento': { bg: 'bg-violet-50', text: 'text-violet-600', dot: 'bg-violet-400' },
-  'Pitch agendado': { bg: 'bg-sky-50', text: 'text-sky-600', dot: 'bg-sky-400' },
-  'Pitch': { bg: 'bg-indigo-50', text: 'text-indigo-600', dot: 'bg-indigo-400' },
-  'Posible matrícula': { bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
-  'Pendiente de pago': { bg: 'bg-orange-50', text: 'text-orange-600', dot: 'bg-orange-400' },
-  'Nueva matrícula': { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-400' },
-  'Matrícula caída': { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-400' },
-};
+// Etapas del funnel para los chips de filtro
+const etapasFunnel = [
+  { id: 'Sin contacto', label: 'Sin contacto' },
+  { id: 'Perfilamiento', label: 'Perfilamiento' },
+  { id: 'Pitch agendado', label: 'Pitch agendado' },
+  { id: 'Pitch', label: 'Pitch' },
+  { id: 'Posible matrícula', label: 'Posible matrícula' },
+  { id: 'Pendiente de pago', label: 'Pendiente de pago' },
+];
 
 // Función para calcular tiempo relativo
 const getTimeAgo = (dateString) => {
@@ -61,57 +31,64 @@ const getTimeAgo = (dateString) => {
   return `${Math.floor(diffDays / 365)} años`;
 };
 
-// Función para determinar el estado del lead
-const getLeadStatus = (lead) => {
-  const now = new Date();
-  
-  if (lead.fase_id_pipefy === "339756299" || lead.fase_id_pipefy === "341189602") {
-    return 'none';
-  }
-
-  const recordatorios = lead.recordatorios || [];
-  if (recordatorios.length === 0) return 'sin-gestionar';
-  
-  const recordatoriosConFecha = recordatorios.filter(r => r.fecha_programada);
-  if (recordatoriosConFecha.length === 0) return 'sin-gestionar';
-
-  const tieneVigente = recordatoriosConFecha.some(r => new Date(r.fecha_programada) >= now);
-  if (tieneVigente) return 'gestionado';
-
-  const masReciente = recordatoriosConFecha
-    .map(r => new Date(r.fecha_programada))
-    .sort((a, b) => b - a)[0];
-  
-  const horasDiferencia = (now - masReciente) / (1000 * 60 * 60);
-  return horasDiferencia > 48 ? 'atrasado' : 'sin-gestionar';
-};
-
-// Gradientes del indicador de estado
+// Mapear estado_gestion de BD a estilos visuales
 const statusStyles = {
   'gestionado': 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-200',
   'atrasado': 'bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-200',
-  'sin-gestionar': 'bg-gradient-to-r from-amber-400 to-orange-400 shadow-amber-200',
-  'none': 'bg-slate-200',
+  'sin_gestionar': 'bg-gradient-to-r from-amber-400 to-orange-400 shadow-amber-200',
+  'matriculado': 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-blue-200',
+  'caido': 'bg-slate-300',
 };
 
-const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
+const LeadsTable = ({ 
+  leads = [], 
+  statsData = {},
+  onOpenModal, 
+  onOpenReminder, 
+  activeEtapa, 
+  onEtapaChange,
+  activeFilter,
+  // Props de paginación
+  currentPage = 0,
+  totalPages = 1,
+  totalLeads = 0,
+  showingFrom = 0,
+  showingTo = 0,
+  onNextPage,
+  onPrevPage
+}) => {
   
-  const getLastReminder = (recordatorios) => {
-    if (!recordatorios || recordatorios.length === 0) return null;
-    const conFecha = recordatorios.filter(r => r.fecha_programada);
-    if (conFecha.length === 0) return null;
-    return conFecha.sort((a, b) => new Date(b.fecha_programada) - new Date(a.fecha_programada))[0];
-  };
+  const { porEtapa = {} } = statsData;
 
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
       
       {/* Header de la tabla */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-800">Gestión de Leads</h2>
-            <p className="text-sm text-slate-400 mt-0.5">{leads.length} contactos en tu pipeline</p>
+          </div>
+          
+          {/* Chips de filtro por etapa del funnel */}
+          <div className="flex flex-wrap gap-2">
+            {etapasFunnel.map((etapa) => {
+              // Obtener conteo desde statsData (datos globales)
+              const count = porEtapa[etapa.id] || 0;
+              return (
+                <button
+                  key={etapa.id}
+                  onClick={() => onEtapaChange?.(activeEtapa === etapa.id ? null : etapa.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
+                    activeEtapa === etapa.id
+                      ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+                  }`}
+                >
+                  {etapa.label} ({count})
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -126,33 +103,30 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Fase</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En gestión</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En fase</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden md:table-cell">Recordatorio</th>
-              <th className="text-center py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden md:table-cell">#</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {leads.map((lead, index) => {
-              const status = getLeadStatus(lead);
-              const lastReminder = getLastReminder(lead.recordatorios);
-              const recordatoriosCount = lead.recordatorios?.length || 0;
-              const faseStyle = faseStyles[lead.fase_nombre_pipefy] || { bg: 'bg-slate-50', text: 'text-slate-500', dot: 'bg-slate-300' };
+              // Usar el campo estado_gestion directamente de la BD
+              const status = lead.estado_gestion || 'sin_gestionar';
               
               return (
                 <tr 
-                  key={lead.id || index}
-                  className="group hover:bg-gradient-to-r hover:from-slate-50/80 hover:to-transparent transition-all duration-300"
+                  key={lead.id || lead.card_id || index}
+                  onClick={() => onOpenModal?.(lead)}
+                  className="group hover:bg-gradient-to-r hover:from-slate-50/80 hover:to-transparent transition-all duration-300 cursor-pointer"
                 >
                   {/* Contacto con bandera e indicador */}
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-4">
-                      {/* Indicador de estado con gradiente */}
-                      <div className={`w-2 h-8 rounded-full ${statusStyles[status]} shadow-sm`} />
+                      {/* Indicador de estado */}
+                      <div className={`w-2 h-8 rounded-full ${statusStyles[status] || statusStyles['sin_gestionar']} shadow-sm`} />
                       
                       {/* Avatar con bandera */}
                       <div className="relative">
                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-lg shadow-sm">
-                          {countryFlags[lead.pais] || '🌎'}
+                          {getCountryFlag(lead.pais)}
                         </div>
                       </div>
                       
@@ -175,14 +149,11 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
                     </span>
                   </td>
 
-                  {/* Fase Badge moderno */}
+                  {/* Fase */}
                   <td className="py-4 px-4">
-                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl ${faseStyle.bg}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${faseStyle.dot}`} />
-                      <span className={`text-xs font-semibold ${faseStyle.text}`}>
-                        {lead.fase_nombre_pipefy || 'Sin fase'}
-                      </span>
-                    </div>
+                    <span className="text-sm text-slate-600">
+                      {lead.fase_nombre_pipefy || 'Sin fase'}
+                    </span>
                   </td>
 
                   {/* Tiempo en gestión */}
@@ -204,28 +175,13 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
                     </span>
                   </td>
 
-                  {/* Último recordatorio */}
-                  <td className="py-4 px-4 hidden md:table-cell">
-                    <span className="text-sm text-slate-500">
-                      {lastReminder ? getTimeAgo(lastReminder.fecha_programada) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </span>
-                  </td>
-
-                  {/* # Recordatorios */}
-                  <td className="py-4 px-4 text-center hidden md:table-cell">
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">
-                      {recordatoriosCount}
-                    </span>
-                  </td>
-
                   {/* Acciones */}
-                  <td className="py-4 px-6">
+                  <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       {/* WhatsApp */}
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (lead.respond_io_url) {
                             window.open(lead.respond_io_url, '_blank');
                           }
@@ -243,23 +199,29 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
 
                       {/* Modal Info */}
                       <button
-                        onClick={() => onOpenModal?.(lead)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenModal?.(lead, 'formulario');
+                        }}
                         className="p-2.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
-                        title="Ver información"
+                        title="Ver formulario"
                       >
                         <ClipboardList size={18} strokeWidth={2} />
                       </button>
 
                       {/* Recordatorio */}
                       <button
-                        onClick={() => onOpenReminder?.(lead)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenReminder?.(lead);
+                        }}
                         className="p-2.5 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all duration-200 hover:scale-110"
                         title="Programar recordatorio"
                       >
                         <Clock size={18} strokeWidth={2} />
                       </button>
 
-                      {/* Flecha para indicar que es clickeable */}
+                      {/* Flecha */}
                       <ChevronRight size={16} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </td>
@@ -269,7 +231,7 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
           </tbody>
         </table>
 
-        {/* Estado vacío elegante */}
+        {/* Estado vacío */}
         {leads.length === 0 && (
           <div className="py-20 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
@@ -280,6 +242,56 @@ const LeadsTable = ({ leads = [], onOpenModal, onOpenReminder }) => {
           </div>
         )}
       </div>
+
+      {/* Paginación */}
+      {totalLeads > 0 && (
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between">
+            {/* Info de paginación */}
+            <p className="text-sm text-slate-500">
+              Mostrando <span className="font-medium text-slate-700">{showingFrom}</span> a{' '}
+              <span className="font-medium text-slate-700">{showingTo}</span> de{' '}
+              <span className="font-medium text-slate-700">{totalLeads}</span> leads
+            </p>
+
+            {/* Controles de paginación */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onPrevPage}
+                disabled={currentPage === 0}
+                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  currentPage === 0
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-slate-600 hover:bg-white hover:shadow-md hover:text-[#1717AF]'
+                }`}
+              >
+                <ChevronLeft size={16} />
+                <span className="hidden sm:inline">Anterior</span>
+              </button>
+
+              {/* Indicador de página */}
+              <div className="flex items-center gap-1 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
+                <span className="text-sm font-medium text-[#1717AF]">{currentPage + 1}</span>
+                <span className="text-sm text-slate-400">/</span>
+                <span className="text-sm text-slate-600">{totalPages}</span>
+              </div>
+
+              <button
+                onClick={onNextPage}
+                disabled={currentPage >= totalPages - 1}
+                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  currentPage >= totalPages - 1
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-slate-600 hover:bg-white hover:shadow-md hover:text-[#1717AF]'
+                }`}
+              >
+                <span className="hidden sm:inline">Siguiente</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
