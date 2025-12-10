@@ -5,7 +5,8 @@ import DashboardStats from './components/DashboardStats';
 import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
-import { LogOut, RefreshCcw, Home } from 'lucide-react';
+import PitchCalendar from './components/PitchCalendar';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -28,7 +29,7 @@ export default function Dashboard() {
   // Estados de UI
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('todos');
+  const [activeFilter, setActiveFilter] = useState('sin_gestionar');
   const [activeEtapa, setActiveEtapa] = useState(null);
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -41,15 +42,59 @@ export default function Dashboard() {
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Estado para tabs (Tabla / Mis Pitch)
+  const [activeView, setActiveView] = useState('tabla');
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
 
   // Función para abrir el sidebar con un lead (tab opcional)
-  const handleOpenSidebar = (lead, tab = 'info') => {
+  const handleOpenSidebar = async (lead, tab = 'info') => {
     setSelectedLead(lead);
     setInitialTab(tab);
     setSidebarOpen(true);
+    
+    // Marcar como revisado si no lo estaba
+    if (lead.revisado === false) {
+      try {
+        await supabase
+          .from('leads')
+          .update({ revisado: true })
+          .eq('card_id', lead.card_id);
+        
+        // Actualizar el lead en el estado local
+        setLeads(prevLeads => 
+          prevLeads.map(l => 
+            l.card_id === lead.card_id ? { ...l, revisado: true } : l
+          )
+        );
+        setSelectedLead({ ...lead, revisado: true });
+      } catch (error) {
+        console.error('Error al marcar como revisado:', error);
+      }
+    }
+  };
+
+  // Función para marcar un lead como no revisado (sin actualizar fecha_asignacion)
+  const handleMarcarNoRevisado = async (lead) => {
+    try {
+      await supabase
+        .from('leads')
+        .update({ revisado: false })
+        .eq('card_id', lead.card_id);
+      
+      // Actualizar el lead en el estado local (mantiene fecha_asignacion original)
+      const leadActualizado = { ...lead, revisado: false };
+      setLeads(prevLeads => 
+        prevLeads.map(l => 
+          l.card_id === lead.card_id ? leadActualizado : l
+        )
+      );
+      setSelectedLead(leadActualizado);
+    } catch (error) {
+      console.error('Error al marcar como no revisado:', error);
+    }
   };
 
   // Función para cerrar el sidebar
@@ -233,7 +278,7 @@ export default function Dashboard() {
       const to = from + LEADS_PER_PAGE - 1;
       
       query = query
-        .order('fecha_gestion', { ascending: false, nullsFirst: false })
+        .order('fecha_asignacion', { ascending: false, nullsFirst: true })
         .range(from, to);
 
       const { data, error, count } = await query;
@@ -252,12 +297,75 @@ export default function Dashboard() {
     }
   }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, parseDateFilters]);
 
+  // Función para verificar y actualizar recordatorios vencidos
+  const verificarRecordatoriosVencidos = useCallback(async () => {
+    try {
+      const ahora = new Date().toISOString();
+      
+      // 1. Buscar recordatorios programados que ya vencieron
+      const { data: vencidos, error: errorBuscar } = await supabase
+        .from('recordatorios')
+        .select('id, lead_id')
+        .eq('estado', 'Programado')
+        .lt('fecha_programada', ahora);
+      
+      if (errorBuscar) throw errorBuscar;
+      
+      if (vencidos && vencidos.length > 0) {
+        console.log(`⏰ Encontrados ${vencidos.length} recordatorios vencidos`);
+        
+        // 2. Actualizar estado de recordatorios a "Vencido"
+        const idsVencidos = vencidos.map(r => r.id);
+        const { error: errorActualizarRec } = await supabase
+          .from('recordatorios')
+          .update({ estado: 'Vencido' })
+          .in('id', idsVencidos);
+        
+        if (errorActualizarRec) throw errorActualizarRec;
+        
+        // 3. Obtener lead_ids únicos afectados
+        const leadIdsUnicos = [...new Set(vencidos.map(r => r.lead_id))];
+        
+        // 4. Marcar todos los leads afectados como NO revisados y actualizar fecha_asignacion
+        await supabase
+          .from('leads')
+          .update({ 
+            revisado: false,
+            fecha_asignacion: new Date().toISOString()
+          })
+          .in('card_id', leadIdsUnicos);
+        
+        // 5. Para cada lead, verificar si tiene otros recordatorios activos
+        for (const leadId of leadIdsUnicos) {
+          const { count } = await supabase
+            .from('recordatorios')
+            .select('*', { count: 'exact', head: true })
+            .eq('lead_id', leadId)
+            .eq('estado', 'Programado');
+          
+          // Si no tiene más recordatorios programados, desactivar
+          if (count === 0) {
+            await supabase
+              .from('leads')
+              .update({ recordatorio_activo: false })
+              .eq('card_id', leadId);
+          }
+        }
+        
+        console.log('✅ Recordatorios vencidos actualizados y leads marcados como no revisados');
+      }
+    } catch (error) {
+      console.error('Error verificando recordatorios:', error.message);
+    }
+  }, []);
+
   // Efecto para carga inicial
   useEffect(() => {
     if (userEmail) {
       fetchComerciales();
       fetchStats();
       fetchLeads(false, 0);
+      verificarRecordatoriosVencidos(); // Verificar al cargar
     }
   }, [userEmail]);
 
@@ -271,14 +379,28 @@ export default function Dashboard() {
 
   // Efecto para recarga automática cada 3 minutos
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    const intervalId = setInterval(async () => {
       console.log("🔄 Actualizando datos en segundo plano...");
-      fetchStats();
-      fetchLeads(true, currentPage);
-    }, 180000);
+      
+      // Verificar recordatorios vencidos
+      try {
+        await verificarRecordatoriosVencidos();
+      } catch (e) { console.error('Error en verificación de recordatorios:', e); }
+      
+      // Actualizar estadísticas
+      try {
+        await fetchStats();
+      } catch (e) { console.error('Error en fetchStats:', e); }
+      
+      // Actualizar leads
+      try {
+        await fetchLeads(true, currentPage);
+      } catch (e) { console.error('Error en fetchLeads:', e); }
+      
+    }, 180000); // 3 minutos
 
     return () => clearInterval(intervalId);
-  }, [currentPage, fetchStats, fetchLeads]);
+  }, [currentPage, fetchStats, fetchLeads, verificarRecordatoriosVencidos]);
 
   // Manejadores de paginación
   const handleNextPage = () => {
@@ -398,73 +520,125 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 1. SECCIÓN DE KPIs */}
-            <DashboardStats 
-              statsData={statsData}
-              activeFilter={activeFilter}
-              onFilterChange={handleFilterChange}
-            />
+            {/* 1. TABS PRINCIPALES */}
+            <div className="flex items-center gap-1 p-1.5 bg-slate-100 rounded-2xl w-fit">
+              <button
+                onClick={() => setActiveView('tabla')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                  activeView === 'tabla'
+                    ? 'bg-white text-[#1717AF] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Table size={18} />
+                Gestión
+              </button>
+              <button
+                onClick={() => setActiveView('pitch')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                  activeView === 'pitch'
+                    ? 'bg-white text-[#1717AF] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <CalendarDays size={18} />
+                Mis Pitch
+              </button>
+            </div>
 
-            {/* 2. FILTROS AVANZADOS */}
-            <DashboardFilters
-              comerciales={comerciales}
-              selectedComercial={selectedComercial}
-              onComercialChange={handleComercialChange}
-              selectedMes={selectedMes}
-              onMesChange={handleMesChange}
-              selectedPeriodo={selectedPeriodo}
-              onPeriodoChange={handlePeriodoChange}
-              showComercialFilter={puedeVerTodos}
-              searchQuery={searchQuery}
-              onSearchChange={handleSearchChange}
-            />
+            {/* CONTENIDO SEGÚN TAB ACTIVO */}
+            {activeView === 'tabla' ? (
+              <>
+                {/* Filtros avanzados - ARRIBA de los KPIs */}
+                <DashboardFilters
+                  comerciales={comerciales}
+                  selectedComercial={selectedComercial}
+                  onComercialChange={handleComercialChange}
+                  selectedMes={selectedMes}
+                  onMesChange={handleMesChange}
+                  selectedPeriodo={selectedPeriodo}
+                  onPeriodoChange={handlePeriodoChange}
+                  showComercialFilter={puedeVerTodos}
+                  searchQuery={searchQuery}
+                  onSearchChange={handleSearchChange}
+                />
 
-            {/* Indicador de filtro activo */}
-            {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || searchQuery) && (
-              <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
-                <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
-                <span className="text-sm text-slate-600">
-                  Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
-                  {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
-                  {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
-                  {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
-                  {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
-                  {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
-                </span>
-                <button
-                  onClick={() => {
-                    setActiveFilter('todos');
-                    setActiveEtapa(null);
-                    setSelectedComercial(null);
-                    setSelectedMes(null);
-                    setSelectedPeriodo(null);
-                    setSearchQuery('');
-                  }}
-                  className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
-                >
-                  Limpiar filtros
-                </button>
-              </div>
+                {/* KPIs - Debajo de los filtros */}
+                <DashboardStats 
+                  statsData={statsData}
+                  activeFilter={activeFilter}
+                  onFilterChange={handleFilterChange}
+                />
+
+                {/* Indicador de filtro activo */}
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || searchQuery) && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
+                    <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
+                    <span className="text-sm text-slate-600">
+                      Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
+                      {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
+                      {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
+                      {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
+                      {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
+                      {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setActiveFilter('todos');
+                        setActiveEtapa(null);
+                        setSelectedComercial(null);
+                        setSelectedMes(null);
+                        setSelectedPeriodo(null);
+                        setSearchQuery('');
+                      }}
+                      className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
+
+                {/* Tabla de leads */}
+                <LeadsTable 
+                  leads={leads}
+                  statsData={statsData}
+                  onOpenModal={handleOpenSidebar}
+                  onOpenReminder={(lead) => handleOpenSidebar(lead, 'recordatorio')}
+                  onMarcarNoRevisado={handleMarcarNoRevisado}
+                  activeEtapa={activeEtapa}
+                  onEtapaChange={handleEtapaChange}
+                  activeFilter={activeFilter}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalLeads={totalLeads}
+                  showingFrom={showingFrom}
+                  showingTo={showingTo}
+                  onNextPage={handleNextPage}
+                  onPrevPage={handlePrevPage}
+                  isEmbedded={false}
+                />
+              </>
+            ) : (
+              <>
+                {/* Filtro de comercial para Mis Pitch */}
+                {puedeVerTodos && (
+                  <DashboardFilters
+                    comerciales={comerciales}
+                    selectedComercial={selectedComercial}
+                    onComercialChange={handleComercialChange}
+                    showComercialFilter={true}
+                    showOnlyComercial={true}
+                  />
+                )}
+
+                {/* Calendario de Pitches */}
+                <PitchCalendar 
+                  selectedComercial={selectedComercial}
+                  userEmail={userEmail}
+                  onOpenLead={handleOpenSidebar}
+                />
+              </>
             )}
-
-            {/* 2. TABLA DE LEADS */}
-            <LeadsTable 
-              leads={leads}
-              statsData={statsData}
-              onOpenModal={handleOpenSidebar}
-              onOpenReminder={(lead) => console.log('Abrir recordatorio:', lead)}
-              activeEtapa={activeEtapa}
-              onEtapaChange={handleEtapaChange}
-              activeFilter={activeFilter}
-              // Props de paginación
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalLeads={totalLeads}
-              showingFrom={showingFrom}
-              showingTo={showingTo}
-              onNextPage={handleNextPage}
-              onPrevPage={handlePrevPage}
-            />
           </div>
         )}
       </main>
@@ -475,6 +649,11 @@ export default function Dashboard() {
         isOpen={sidebarOpen}
         onClose={handleCloseSidebar}
         initialTab={initialTab}
+        onMarcarNoRevisado={handleMarcarNoRevisado}
+        onRefreshData={() => {
+          fetchStats();
+          fetchLeads(true, currentPage);
+        }}
       />
     </div>
   );

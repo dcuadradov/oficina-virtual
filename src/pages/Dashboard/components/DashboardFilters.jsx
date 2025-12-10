@@ -85,6 +85,7 @@ const DashboardFilters = ({
   selectedPeriodo,
   onPeriodoChange,
   showComercialFilter = false,
+  showOnlyComercial = false,
   searchQuery = '',
   onSearchChange
 }) => {
@@ -158,34 +159,36 @@ const DashboardFilters = ({
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Campo de búsqueda */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search size={16} className="text-slate-400" />
+      {/* Campo de búsqueda - oculto si showOnlyComercial */}
+      {!showOnlyComercial && (
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search size={16} className="text-slate-400" />
+          </div>
+          <input
+            type="text"
+            value={localSearch}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Buscar lead..."
+            className={`pl-9 pr-8 py-2.5 w-56 rounded-xl text-sm border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 ${
+              localSearch
+                ? 'border-[#1717AF] bg-[#1717AF]/5 text-slate-700'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          />
+          {localSearch && (
+            <button
+              onClick={() => {
+                setLocalSearch('');
+                onSearchChange?.('');
+              }}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
-        <input
-          type="text"
-          value={localSearch}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder="Buscar lead..."
-          className={`pl-9 pr-8 py-2.5 w-56 rounded-xl text-sm border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 ${
-            localSearch
-              ? 'border-[#1717AF] bg-[#1717AF]/5 text-slate-700'
-              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-          }`}
-        />
-        {localSearch && (
-          <button
-            onClick={() => {
-              setLocalSearch('');
-              onSearchChange?.('');
-            }}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Filtro de Comercial (solo si tiene permiso) */}
       {showComercialFilter && comerciales.length > 0 && (
@@ -257,164 +260,168 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Mes */}
-      <div className="relative filter-dropdown">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setMesOpen(!mesOpen);
-            setComercialOpen(false);
-            setPeriodoOpen(false);
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-            selectedMes
-              ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
-          }`}
-        >
-          <Calendar size={16} />
-          <span>{selectedMesLabel}</span>
-          <ChevronDown size={14} className={`transition-transform duration-200 ${mesOpen ? 'rotate-180' : ''}`} />
-          {selectedMes && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onMesChange(null);
-              }}
-              className="ml-1 p-0.5 rounded-full hover:bg-white/20"
-            >
-              <X size={12} />
-            </button>
+      {/* Filtro de Mes - oculto si showOnlyComercial */}
+      {!showOnlyComercial && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMesOpen(!mesOpen);
+              setComercialOpen(false);
+              setPeriodoOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedMes
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <Calendar size={16} />
+            <span>{selectedMesLabel}</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${mesOpen ? 'rotate-180' : ''}`} />
+            {selectedMes && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMesChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {mesOpen && (
+            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onMesChange(null);
+                  setMesOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedMes 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todos los meses
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              {monthOptions.map((month) => {
+                const isCurrentMonth = month.value === currentMonth;
+                return (
+                  <button
+                    key={month.value}
+                    onClick={() => {
+                      onMesChange(month.value);
+                      setMesOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                      selectedMes === month.value
+                        ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{month.label}</span>
+                    {isCurrentMonth && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                        Actual
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           )}
-        </button>
-        
-        {mesOpen && (
-          <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
-            <button
-              onClick={() => {
-                onMesChange(null);
-                setMesOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                !selectedMes 
-                  ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Todos los meses
-            </button>
-            <div className="h-px bg-slate-100 my-1" />
-            {monthOptions.map((month) => {
-              const isCurrentMonth = month.value === currentMonth;
-              return (
-                <button
-                  key={month.value}
-                  onClick={() => {
-                    onMesChange(month.value);
-                    setMesOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
-                    selectedMes === month.value
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{month.label}</span>
-                  {isCurrentMonth && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                      Actual
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Filtro de Periodo (Martes a Martes) */}
-      <div className="relative filter-dropdown">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setPeriodoOpen(!periodoOpen);
-            setComercialOpen(false);
-            setMesOpen(false);
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-            selectedPeriodo
-              ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
-          }`}
-        >
-          <CalendarRange size={16} />
-          <span>{selectedPeriodoLabel}</span>
-          <ChevronDown size={14} className={`transition-transform duration-200 ${periodoOpen ? 'rotate-180' : ''}`} />
-          {selectedPeriodo && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPeriodoChange(null);
-              }}
-              className="ml-1 p-0.5 rounded-full hover:bg-white/20"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </button>
-        
-        {periodoOpen && (
-          <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
-            <button
-              onClick={() => {
-                onPeriodoChange(null);
-                setPeriodoOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                !selectedPeriodo 
-                  ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Todos los periodos
-            </button>
-            <div className="h-px bg-slate-100 my-1" />
-            
-            {/* Agrupar por año */}
-            {Array.from(new Set(periodOptions.map(p => p.year))).map(year => (
-              <div key={year}>
-                <div className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
-                  {year}
+      {/* Filtro de Periodo (Martes a Martes) - oculto si showOnlyComercial */}
+      {!showOnlyComercial && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setPeriodoOpen(!periodoOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedPeriodo
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <CalendarRange size={16} />
+            <span>{selectedPeriodoLabel}</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${periodoOpen ? 'rotate-180' : ''}`} />
+            {selectedPeriodo && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPeriodoChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {periodoOpen && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onPeriodoChange(null);
+                  setPeriodoOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedPeriodo 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todos los periodos
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              
+              {/* Agrupar por año */}
+              {Array.from(new Set(periodOptions.map(p => p.year))).map(year => (
+                <div key={year}>
+                  <div className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
+                    {year}
+                  </div>
+                  {periodOptions.filter(p => p.year === year).map((period) => {
+                    const isCurrent = currentPeriod?.value === period.value;
+                    return (
+                      <button
+                        key={period.value}
+                        onClick={() => {
+                          onPeriodoChange(period.value);
+                          setPeriodoOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                          selectedPeriodo === period.value
+                            ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{period.label}</span>
+                        {isCurrent && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                            Actual
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-                {periodOptions.filter(p => p.year === year).map((period) => {
-                  const isCurrent = currentPeriod?.value === period.value;
-                  return (
-                    <button
-                      key={period.value}
-                      onClick={() => {
-                        onPeriodoChange(period.value);
-                        setPeriodoOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
-                        selectedPeriodo === period.value
-                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span>{period.label}</span>
-                      {isCurrent && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                          Actual
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

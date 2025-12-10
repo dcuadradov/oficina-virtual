@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft } from 'lucide-react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 // Etapas del funnel para los chips de filtro
@@ -31,6 +31,25 @@ const getTimeAgo = (dateString) => {
   return `${Math.floor(diffDays / 365)} años`;
 };
 
+// Función para formatear fecha de asignación: "16 Dic 2025 05:00 pm"
+const formatFechaAsignacion = (dateString) => {
+  if (!dateString) return '-';
+  
+  const date = new Date(dateString);
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  
+  const dia = date.getDate();
+  const mes = meses[date.getMonth()];
+  const año = date.getFullYear();
+  
+  let horas = date.getHours();
+  const minutos = date.getMinutes().toString().padStart(2, '0');
+  const ampm = horas >= 12 ? 'pm' : 'am';
+  horas = horas % 12 || 12;
+  
+  return `${dia} ${mes} ${año} ${horas}:${minutos} ${ampm}`;
+};
+
 // Mapear estado_gestion de BD a estilos visuales
 const statusStyles = {
   'gestionado': 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-200',
@@ -45,6 +64,7 @@ const LeadsTable = ({
   statsData = {},
   onOpenModal, 
   onOpenReminder, 
+  onMarcarNoRevisado,
   activeEtapa, 
   onEtapaChange,
   activeFilter,
@@ -55,13 +75,14 @@ const LeadsTable = ({
   showingFrom = 0,
   showingTo = 0,
   onNextPage,
-  onPrevPage
+  onPrevPage,
+  isEmbedded = false
 }) => {
   
   const { porEtapa = {} } = statsData;
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
+    <div className={isEmbedded ? '' : 'bg-white/70 backdrop-blur-sm rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden'}>
       
       {/* Header de la tabla */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
@@ -98,7 +119,8 @@ const LeadsTable = ({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-100">
-              <th className="text-left py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
+              <th className="text-left py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">Actualizado</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Teléfono</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Fase</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En gestión</th>
@@ -110,19 +132,33 @@ const LeadsTable = ({
             {leads.map((lead, index) => {
               // Usar el campo estado_gestion directamente de la BD
               const status = lead.estado_gestion || 'sin_gestionar';
+              const noRevisado = lead.revisado === false;
               
               return (
                 <tr 
                   key={lead.id || lead.card_id || index}
                   onClick={() => onOpenModal?.(lead)}
-                  className="group hover:bg-gradient-to-r hover:from-slate-50/80 hover:to-transparent transition-all duration-300 cursor-pointer"
+                  className={`group transition-all duration-300 cursor-pointer ${
+                    noRevisado 
+                      ? 'bg-gradient-to-r from-blue-100 via-indigo-100/70 to-blue-50/50 hover:from-blue-200 hover:via-indigo-200/70' 
+                      : 'hover:bg-gradient-to-r hover:from-slate-50/80 hover:to-transparent'
+                  }`}
                 >
-                  {/* Contacto con bandera e indicador */}
+                  {/* Asignación con indicador de estado */}
                   <td className="py-4 px-6">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       {/* Indicador de estado */}
                       <div className={`w-2 h-8 rounded-full ${statusStyles[status] || statusStyles['sin_gestionar']} shadow-sm`} />
                       
+                      <span className={`text-xs ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
+                        {formatFechaAsignacion(lead.fecha_asignacion)}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Contacto con bandera */}
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
                       {/* Avatar con bandera */}
                       <div className="relative">
                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-lg shadow-sm">
@@ -132,10 +168,12 @@ const LeadsTable = ({
                       
                       {/* Nombre */}
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 truncate max-w-[140px] lg:max-w-[180px] group-hover:text-slate-900 transition-colors">
+                        <p className={`truncate max-w-[140px] lg:max-w-[180px] group-hover:text-slate-900 transition-colors ${
+                          noRevisado ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'
+                        }`}>
                           {lead.nombre || 'Sin nombre'}
                         </p>
-                        <p className="text-xs text-slate-400 truncate max-w-[140px]">
+                        <p className={`text-xs truncate max-w-[140px] ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
                           {lead.pais || 'País no especificado'}
                         </p>
                       </div>
@@ -144,33 +182,28 @@ const LeadsTable = ({
 
                   {/* Teléfono */}
                   <td className="py-4 px-4">
-                    <span className="text-slate-600 text-sm font-medium tabular-nums">
+                    <span className={`text-sm tabular-nums ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600 font-medium'}`}>
                       {lead.telefono || '-'}
                     </span>
                   </td>
 
                   {/* Fase */}
                   <td className="py-4 px-4">
-                    <span className="text-sm text-slate-600">
+                    <span className={`text-sm ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600'}`}>
                       {lead.fase_nombre_pipefy || 'Sin fase'}
                     </span>
                   </td>
 
                   {/* Tiempo en gestión */}
                   <td className="py-4 px-4 hidden lg:table-cell">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">
-                        <span className="text-xs">📅</span>
-                      </div>
-                      <span className="text-sm text-slate-500 font-medium">
-                        {getTimeAgo(lead.created_at)}
-                      </span>
-                    </div>
+                    <span className={`text-sm ${noRevisado ? 'text-slate-700 font-bold' : 'text-slate-500 font-medium'}`}>
+                      {getTimeAgo(lead.created_at)}
+                    </span>
                   </td>
 
                   {/* Tiempo en fase */}
                   <td className="py-4 px-4 hidden lg:table-cell">
-                    <span className="text-sm text-slate-500 font-medium">
+                    <span className={`text-sm ${noRevisado ? 'text-slate-700 font-bold' : 'text-slate-500 font-medium'}`}>
                       {getTimeAgo(lead.updated_at)}
                     </span>
                   </td>
@@ -192,7 +225,7 @@ const LeadsTable = ({
                             ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer' 
                             : 'text-slate-200 cursor-not-allowed'
                         }`}
-                        title={lead.respond_io_url ? "Abrir chat en WhatsApp" : "Sin enlace de chat disponible"}
+                        title={lead.respond_io_url ? "Ir a la conversación de WhatsApp" : "Sin conversación disponible"}
                       >
                         <MessageCircle size={18} strokeWidth={2} />
                       </button>
@@ -204,7 +237,7 @@ const LeadsTable = ({
                           onOpenModal?.(lead, 'formulario');
                         }}
                         className="p-2.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
-                        title="Ver formulario"
+                        title="Ver formulario del lead"
                       >
                         <ClipboardList size={18} strokeWidth={2} />
                       </button>
@@ -216,10 +249,31 @@ const LeadsTable = ({
                           onOpenReminder?.(lead);
                         }}
                         className="p-2.5 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all duration-200 hover:scale-110"
-                        title="Programar recordatorio"
+                        title="Programar un recordatorio"
                       >
                         <Clock size={18} strokeWidth={2} />
                       </button>
+
+                      {/* Marcar como pendiente */}
+                      {onMarcarNoRevisado && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (lead.revisado !== false) {
+                              onMarcarNoRevisado?.(lead);
+                            }
+                          }}
+                          disabled={lead.revisado === false}
+                          className={`p-2.5 rounded-xl transition-all duration-200 ${
+                            lead.revisado === false
+                              ? 'text-slate-200 cursor-not-allowed'
+                              : 'text-slate-400 hover:text-orange-600 hover:bg-orange-50 hover:scale-110'
+                          }`}
+                          title={lead.revisado === false ? "Este lead ya está pendiente" : "Marcar como no leído"}
+                        >
+                          <RotateCcw size={18} strokeWidth={2} />
+                        </button>
+                      )}
 
                       {/* Flecha */}
                       <ChevronRight size={16} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
