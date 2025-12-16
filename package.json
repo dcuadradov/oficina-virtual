@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:staging": "vite build --mode staging",
+    "build:prod": "vite build --mode production",
+    "deploy:staging": "npm run build:staging && firebase deploy --only hosting:staging",
+    "deploy:prod": "npm run build:prod && firebase deploy --only hosting:production",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -288,7 +288,7 @@ export default function Dashboard() {
       setLeads(data || []);
       setTotalLeads(count || 0);
       setCurrentPage(page);
-
+      
     } catch (error) {
       console.error('Error cargando leads:', error.message);
     } finally {
@@ -495,14 +495,14 @@ export default function Dashboard() {
               <Home size={18} />
               <span className="hidden md:inline">Inicio</span>
             </button>
-            
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
-            >
-              <LogOut size={18} />
+          
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
+          >
+            <LogOut size={18} />
               <span className="hidden md:inline">Salir</span>
-            </button>
+          </button>
           </div>
         </div>
       </header>
@@ -564,25 +564,25 @@ export default function Dashboard() {
                 />
 
                 {/* KPIs - Debajo de los filtros */}
-                <DashboardStats 
+            <DashboardStats 
                   statsData={statsData}
-                  activeFilter={activeFilter}
+              activeFilter={activeFilter}
                   onFilterChange={handleFilterChange}
-                />
+            />
 
                 {/* Indicador de filtro activo */}
                 {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || searchQuery) && (
-                  <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
-                    <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
-                    <span className="text-sm text-slate-600">
+              <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
+                <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
+                <span className="text-sm text-slate-600">
                       Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
                       {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
                       {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
                       {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
                       {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
-                    </span>
-                    <button
+                </span>
+                <button
                       onClick={() => {
                         setActiveFilter('todos');
                         setActiveEtapa(null);
@@ -591,15 +591,15 @@ export default function Dashboard() {
                         setSelectedPeriodo(null);
                         setSearchQuery('');
                       }}
-                      className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
-                    >
+                  className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
+                >
                       Limpiar filtros
-                    </button>
-                  </div>
-                )}
+                </button>
+              </div>
+            )}
 
                 {/* Tabla de leads */}
-                <LeadsTable 
+            <LeadsTable 
                   leads={leads}
                   statsData={statsData}
                   onOpenModal={handleOpenSidebar}
@@ -636,7 +636,8 @@ export default function Dashboard() {
                   selectedComercial={selectedComercial}
                   userEmail={userEmail}
                   onOpenLead={handleOpenSidebar}
-                />
+                  puedeVerTodos={puedeVerTodos}
+            />
               </>
             )}
           </div>

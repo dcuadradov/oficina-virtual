@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "oficina-virtual-md"
+  },
+  "targets": {
+    "oficina-virtual-md": {
+      "hosting": {
+        "staging": [
+          "oficina-virtual-md"
+        ],
+        "production": [
+          "oficina-virtual-prod"
+        ]
+      }
+    }
+  },
+  "etags": {}

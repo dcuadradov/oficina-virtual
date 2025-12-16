@@ -151,11 +151,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   // Determinar si mostrar banner de pitch agendado
   const mostrarPitchAgendado = lead?.fase_id_pipefy && FASES_PITCH_AGENDADO.includes(String(lead.fase_id_pipefy));
   
-  // Formatear fecha del pitch (sin conversión de zona horaria)
+  // Formatear fecha del pitch (sin conversión de zona horaria, soporta formato con T o espacio)
   const formatFechaPitch = (fechaPitch) => {
     if (!fechaPitch) return 'fecha por confirmar';
     // Extraer componentes de la fecha sin conversión de zona horaria
-    const match = fechaPitch.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    // Soporta "2025-12-03T18:00:00" o "2025-12-03 18:00:00+00"
+    const match = fechaPitch.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
     if (!match) return 'fecha por confirmar';
     
     const [, year, month, day, hour, minute] = match;
@@ -426,10 +427,18 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
     
     try {
       setLoadingUrls(true);
+      
+      // Usar el comercial asignado al lead, no el usuario logueado
+      const comercialEmail = lead?.comercial_email;
+      if (!comercialEmail) {
+        setUrlBooking(null);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('usuarios')
         .select('url_booking')
-        .eq('email', userEmail)
+        .eq('email', comercialEmail)
         .single();
       
       if (error) throw error;
@@ -437,17 +446,18 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       setUrlBooking(data?.url_booking || null);
     } catch (error) {
       console.error('Error cargando URL de booking:', error.message);
+      setUrlBooking(null);
     } finally {
       setLoadingUrls(false);
     }
-  }, [userEmail]);
+  }, [lead?.comercial_email]);
 
   // Cargar URL de booking cuando se abre el sidebar y el lead está listo para agendar
   useEffect(() => {
-    if (isOpen && mostrarBotonAgendar) {
+    if (isOpen && mostrarBotonAgendar && lead?.comercial_email) {
       fetchBookingUrl();
     }
-  }, [isOpen, mostrarBotonAgendar, fetchBookingUrl]);
+  }, [isOpen, mostrarBotonAgendar, lead?.comercial_email, fetchBookingUrl]);
 
   // Cargar recordatorios del lead para el calendario
   const fetchRecordatoriosCalendario = useCallback(async () => {
@@ -1942,3 +1952,4 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
 };
 
 export default LeadSidebar;
+

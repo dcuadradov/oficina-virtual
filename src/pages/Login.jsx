@@ -7,11 +7,24 @@ const Login = () => {
   const [isHovering, setIsHovering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Determinar el callback según el dominio actual (en tiempo de ejecución)
+  const hostname = window.location.hostname;
+  const isProduction = hostname === 'portal.mdenglish.us' || hostname === 'oficina-virtual-prod.web.app';
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  // Seleccionar el callback correcto
+  let callbackEndpoint = 'callback-google-staging'; // default: staging
+  if (isProduction) {
+    callbackEndpoint = 'callback-google';
+  } else if (isLocalhost) {
+    callbackEndpoint = 'callback-google-local';
+  }
+
   const handleLogin = () => {
     setIsLoading(true);
     // Pequeño delay para mostrar animación
     setTimeout(() => {
-      window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?client_id=72291957752-0qoch8qtua86qan19ni2tt7dfl57pb0e.apps.googleusercontent.com&redirect_uri=https://api.mdenglish.us/webhook/callback-google&response_type=code&scope=email%20profile&prompt=select_account";
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=72291957752-0qoch8qtua86qan19ni2tt7dfl57pb0e.apps.googleusercontent.com&redirect_uri=https://api.mdenglish.us/webhook/${callbackEndpoint}&response_type=code&scope=email%20profile&prompt=select_account`;
     }, 500);
   };
 
