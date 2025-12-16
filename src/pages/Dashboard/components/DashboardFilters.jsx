@@ -134,7 +134,7 @@ const DashboardFilters = ({
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   }, []);
-
+  
   // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -147,7 +147,7 @@ const DashboardFilters = ({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
-
+  
   // Obtener label del comercial seleccionado
   const selectedComercialLabel = comerciales.find(c => c.email === selectedComercial)?.nombre || 'Todos los comerciales';
   
@@ -156,7 +156,7 @@ const DashboardFilters = ({
   
   // Obtener label del periodo seleccionado
   const selectedPeriodoLabel = periodOptions.find(p => p.value === selectedPeriodo)?.label || 'Todos los periodos';
-
+  
   return (
     <div className="flex flex-wrap items-center gap-3">
       {/* Campo de búsqueda - oculto si showOnlyComercial */}
@@ -177,7 +177,7 @@ const DashboardFilters = ({
             }`}
           />
           {localSearch && (
-            <button
+      <button
               onClick={() => {
                 setLocalSearch('');
                 onSearchChange?.('');
@@ -289,16 +289,16 @@ const DashboardFilters = ({
               >
                 <X size={12} />
               </button>
-            )}
-          </button>
-          
+        )}
+      </button>
+      
           {mesOpen && (
             <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
-              <button
-                onClick={() => {
+            <button
+              onClick={() => {
                   onMesChange(null);
                   setMesOpen(false);
-                }}
+              }}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                   !selectedMes 
                     ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
@@ -367,8 +367,8 @@ const DashboardFilters = ({
                 <X size={12} />
               </button>
             )}
-          </button>
-          
+            </button>
+            
           {periodoOpen && (
             <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
               <button
@@ -417,8 +417,8 @@ const DashboardFilters = ({
                     );
                   })}
                 </div>
-              ))}
-            </div>
+            ))}
+          </div>
           )}
         </div>
       )}

@@ -87,7 +87,7 @@ const LeadsTable = ({
       {/* Header de la tabla */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-800">Gestión de Leads</h2>
           </div>
           
@@ -190,15 +190,15 @@ const LeadsTable = ({
                   {/* Fase */}
                   <td className="py-4 px-4">
                     <span className={`text-sm ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600'}`}>
-                      {lead.fase_nombre_pipefy || 'Sin fase'}
-                    </span>
+                        {lead.fase_nombre_pipefy || 'Sin fase'}
+                      </span>
                   </td>
 
                   {/* Tiempo en gestión */}
                   <td className="py-4 px-4 hidden lg:table-cell">
                     <span className={`text-sm ${noRevisado ? 'text-slate-700 font-bold' : 'text-slate-500 font-medium'}`}>
-                      {getTimeAgo(lead.created_at)}
-                    </span>
+                        {getTimeAgo(lead.created_at)}
+                      </span>
                   </td>
 
                   {/* Tiempo en fase */}
