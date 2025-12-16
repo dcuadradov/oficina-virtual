@@ -31,5 +31,5 @@ jobs:
           VITE_APP_URL: https://portal.mdenglish.us
 
       - name: Deploy to Firebase Hosting (Production)
-        run: npx firebase-tools deploy --only hosting:production --token "${{ secrets.FIREBASE_TOKEN }}"
+        run: npx firebase-tools deploy --only hosting:production --project oficina-virtual-md --token "${{ secrets.FIREBASE_TOKEN }}"
 
