@@ -116,7 +116,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   // Estados para el tab Recordatorios
   const [mesActual, setMesActual] = useState(new Date());
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
-  const [horaSeleccionada, setHoraSeleccionada] = useState('09:00');
+  const [horaInput, setHoraInput] = useState('09');
+  const [minutoInput, setMinutoInput] = useState('00');
+  const [periodoInput, setPeriodoInput] = useState('AM');
   const [textoRecordatorio, setTextoRecordatorio] = useState('');
   const [programandoRecordatorio, setProgramandoRecordatorio] = useState(false);
   const [recordatoriosDelLead, setRecordatoriosDelLead] = useState([]);
@@ -515,7 +517,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       fetchRecordatorioActivo();
       // Resetear formulario y sub-tab
       setFechaSeleccionada(null);
-      setHoraSeleccionada('09:00');
+      setHoraInput('09');
+      setMinutoInput('00');
+      setPeriodoInput('AM');
       setTextoRecordatorio('');
       setErrorRecordatorio(null);
       setSubTabRecordatorio('programar'); // Siempre iniciar en "Programar"
@@ -526,14 +530,28 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   const handleProgramarRecordatorio = async () => {
     if (!fechaSeleccionada || !textoRecordatorio.trim() || !lead?.card_id) return;
     
+    // Convertir hora AM/PM a formato 24h
+    let hora24 = parseInt(horaInput);
+    if (periodoInput === 'PM' && hora24 !== 12) {
+      hora24 += 12;
+    } else if (periodoInput === 'AM' && hora24 === 12) {
+      hora24 = 0;
+    }
+    const minutos = parseInt(minutoInput);
+    
+    // Validar que la hora sea válida (mínimo 10 min en el futuro si es hoy)
+    if (!isTimeValid(fechaSeleccionada, hora24, minutos)) {
+      setErrorRecordatorio('La hora debe ser al menos 10 minutos en el futuro');
+      return;
+    }
+    
     try {
       setProgramandoRecordatorio(true);
       setErrorRecordatorio(null);
       
       // Combinar fecha y hora
-      const [hora, minutos] = horaSeleccionada.split(':');
       const fechaCompleta = new Date(fechaSeleccionada);
-      fechaCompleta.setHours(parseInt(hora), parseInt(minutos), 0, 0);
+      fechaCompleta.setHours(hora24, minutos, 0, 0);
       
       // 1. Crear comentario en tabla comentarios
       const nuevoComentario = {
@@ -595,7 +613,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       setMostrarConfirmacion(true);
       setFechaSeleccionada(null);
       setTextoRecordatorio('');
-      setHoraSeleccionada('09:00');
+      setHoraInput('09');
+      setMinutoInput('00');
+      setPeriodoInput('AM');
       fetchRecordatoriosCalendario();
       fetchRecordatorioActivo(); // Actualizar estado de recordatorio activo
       
@@ -709,13 +729,35 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   };
 
   const isDateValid = (date) => {
+    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date(today);
     maxDate.setDate(maxDate.getDate() + 30);
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
-    return checkDate > today && checkDate <= maxDate;
+    // Permitir desde hoy (inclusive) hasta 30 días en el futuro
+    return checkDate >= today && checkDate <= maxDate;
+  };
+  
+  // Validar si la hora seleccionada es válida (al menos 10 minutos en el futuro si es hoy)
+  const isTimeValid = (date, hour, minute) => {
+    if (!date) return true;
+    const now = new Date();
+    const selectedDateTime = new Date(date);
+    selectedDateTime.setHours(hour, minute, 0, 0);
+    
+    // Si la fecha es hoy, verificar que sea al menos 10 minutos en el futuro
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    if (checkDate.getTime() === today.getTime()) {
+      const minTime = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutos desde ahora
+      return selectedDateTime >= minTime;
+    }
+    return true;
   };
 
   const hasRecordatorio = (day) => {
@@ -1388,7 +1430,17 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
               const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
               
-              const canSubmit = fechaSeleccionada && textoRecordatorio.trim().length > 0 && !programandoRecordatorio;
+              // Convertir hora para validación
+              let hora24Validation = parseInt(horaInput) || 12;
+              if (periodoInput === 'PM' && hora24Validation !== 12) {
+                hora24Validation += 12;
+              } else if (periodoInput === 'AM' && hora24Validation === 12) {
+                hora24Validation = 0;
+              }
+              const minutosValidation = parseInt(minutoInput) || 0;
+              const timeIsValid = isTimeValid(fechaSeleccionada, hora24Validation, minutosValidation);
+              
+              const canSubmit = fechaSeleccionada && textoRecordatorio.trim().length > 0 && !programandoRecordatorio && timeIsValid;
               
               // Formatear fecha para historial
               const formatFechaHistorial = (dateString) => {
@@ -1732,19 +1784,44 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                           }
                         </div>
                       </div>
-                      <div className="w-24">
+                      <div className="w-44">
                         <label className="text-xs text-slate-500 mb-1 block">Hora</label>
-                        <select
-                          value={horaSeleccionada}
-                          onChange={(e) => setHoraSeleccionada(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
-                        >
-                          {Array.from({ length: 24 }).map((_, h) => (
-                            <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>
-                              {h.toString().padStart(2, '0')}:00
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-1">
+                          {/* Selector de hora */}
+                          <select
+                            value={horaInput}
+                            onChange={(e) => setHoraInput(e.target.value)}
+                            className="w-14 px-1 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
+                          >
+                            {Array.from({ length: 13 }, (_, i) => i).map((h) => (
+                              <option key={h} value={h.toString().padStart(2, '0')}>
+                                {h.toString().padStart(2, '0')}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-slate-400 font-medium">:</span>
+                          {/* Selector de minutos */}
+                          <select
+                            value={minutoInput}
+                            onChange={(e) => setMinutoInput(e.target.value)}
+                            className="w-14 px-1 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
+                          >
+                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                              <option key={m} value={m.toString().padStart(2, '0')}>
+                                {m.toString().padStart(2, '0')}
+                              </option>
+                            ))}
+                          </select>
+                          {/* Selector AM/PM */}
+                          <select
+                            value={periodoInput}
+                            onChange={(e) => setPeriodoInput(e.target.value)}
+                            className="w-14 px-1 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                     
@@ -1759,6 +1836,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none"
                       />
                     </div>
+                    
+                    {/* Advertencia si la hora es muy pronto (solo para hoy) */}
+                    {fechaSeleccionada && !timeIsValid && (
+                      <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-600 flex items-center gap-2">
+                        <Clock size={16} />
+                        La hora debe ser al menos 10 minutos en el futuro
+                      </div>
+                    )}
                     
                     {/* Error message */}
                     {errorRecordatorio && (
@@ -1792,7 +1877,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                     
                     {/* Nota sobre límite */}
                     <p className="text-xs text-slate-400 text-center mt-2">
-                      Solo puedes programar hasta 30 días en el futuro
+                      Puedes programar desde hoy (mín. 10 min) hasta 30 días en el futuro
                     </p>
                   </div>
                   </>
