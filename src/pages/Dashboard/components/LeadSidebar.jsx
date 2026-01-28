@@ -1114,10 +1114,42 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 </div>
                 
                 {/* Nombre y ocupación */}
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    {lead.nombre || 'Sin nombre'}
-                  </h2>
+                <div className="flex-1">
+                  {editingField === 'nombre' ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyUp={(e) => {
+                          if (e.key === 'Enter') handleSaveField('nombre', editValue);
+                          if (e.key === 'Escape') cancelEditing();
+                        }}
+                        className="flex-1 text-xl font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/30"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveField('nombre', editValue)}
+                        className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-slate-200 text-slate-500 rounded-lg hover:bg-slate-300"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <h2 
+                      className="text-xl font-bold text-slate-800 cursor-pointer hover:text-[#1717AF] transition-colors group flex items-center gap-2"
+                      onClick={() => startEditing('nombre', getFieldValue('nombre'))}
+                    >
+                      {getFieldValue('nombre') || 'Sin nombre'}
+                      <Edit2 size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </h2>
+                  )}
                   
                   {/* Comercial asignado con dropdown de reasignación */}
                   <div className="relative comercial-dropdown mt-1">
@@ -1454,13 +1486,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                     type="text"
                                     value={editValue}
                                     onChange={(e) => setEditValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      // Ignorar si está componiendo caracteres (tildes, etc.)
-                                      if (e.isComposing || e.key === 'Dead') return;
+                                    onKeyUp={(e) => {
                                       if (e.key === 'Enter') handleSaveField(fieldName, editValue);
                                       if (e.key === 'Escape') cancelEditing();
                                     }}
-                                    className="flex-1 px-2 py-1.5 text-sm bg-slate-50 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                    className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
                                     autoFocus
                                     placeholder={placeholder}
                                   />
@@ -1484,7 +1514,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           
                           return (
                             <div 
-                              className="relative p-3 bg-slate-50 rounded-xl group cursor-pointer hover:bg-slate-100 transition-all duration-200 border border-transparent hover:border-slate-200"
+                              className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-slate-200"
                               onClick={() => startEditing(fieldName, value)}
                             >
                               <div className="flex items-start gap-2.5">
@@ -1604,7 +1634,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           
                           return (
                             <div 
-                              className="relative p-3 bg-slate-50 rounded-xl group cursor-pointer hover:bg-slate-100 transition-all duration-200 border border-transparent hover:border-slate-200"
+                              className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-slate-200"
                               onClick={() => startEditing(fieldName, value)}
                             >
                               <div className="flex items-start gap-2.5">
