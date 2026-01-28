@@ -359,7 +359,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       if (error) throw error;
       
       // Sincronizar con Respond.io si es un campo relevante
-      console.log('📤 Verificando sincronización:', { fieldName, esRelevante: CAMPOS_RESPOND_IO.includes(fieldName), tieneRespondUrl: !!lead.respond_io_url });
       if (CAMPOS_RESPOND_IO.includes(fieldName)) {
         try {
           await fetch('https://api.mdenglish.us/webhook/actualizar_respond_io', {
