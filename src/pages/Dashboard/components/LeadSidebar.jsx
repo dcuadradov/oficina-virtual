@@ -331,6 +331,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const nombreComercialActual = comercialActual?.nombre || comercialEmailActual?.split('@')[0] || 'Sin asignar';
 
   // Función para guardar un campo editado
+  // Campos que se sincronizan con Respond.io
+  const CAMPOS_RESPOND_IO = [
+    'nombre', 'telefono', 'email', 'ocupacion', 'pais', 'motivacion', 
+    'motivacion_detalle', 'nivel_ingles', 'ano_residencia', 'lugar_trabajo',
+    'universidad', 'como_adquirio_ingles', 'como_adquirio_ingles_detalle',
+    'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por'
+  ];
+
   const handleSaveField = async (fieldName, value) => {
     if (!lead?.card_id) return;
     
@@ -349,6 +357,45 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         .eq('card_id', lead.card_id);
       
       if (error) throw error;
+      
+      // Sincronizar con Respond.io si es un campo relevante
+      if (CAMPOS_RESPOND_IO.includes(fieldName) && lead.respond_io_url) {
+        try {
+          await fetch('https://api.mdenglish.us/webhook/actualizar_respond_io', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              card_id: lead.card_id,
+              campo_actualizado: fieldName,
+              valor_nuevo: value || null,
+              respond_io_url: lead.respond_io_url,
+              lead_data: {
+                nombre: fieldName === 'nombre' ? value : (getFieldValue('nombre') || lead.nombre),
+                telefono: fieldName === 'telefono' ? value : (getFieldValue('telefono') || lead.telefono),
+                email: fieldName === 'email' ? value : (getFieldValue('email') || lead.email),
+                ocupacion: fieldName === 'ocupacion' ? value : (getFieldValue('ocupacion') || lead.ocupacion),
+                pais: fieldName === 'pais' ? value : (getFieldValue('pais') || lead.pais),
+                motivacion: fieldName === 'motivacion' ? value : (getFieldValue('motivacion') || lead.motivacion),
+                motivacion_detalle: fieldName === 'motivacion_detalle' ? value : (getFieldValue('motivacion_detalle') || lead.motivacion_detalle),
+                nivel_ingles: fieldName === 'nivel_ingles' ? value : (getFieldValue('nivel_ingles') || lead.nivel_ingles),
+                ano_residencia: fieldName === 'ano_residencia' ? value : (getFieldValue('ano_residencia') || lead.ano_residencia),
+                lugar_trabajo: fieldName === 'lugar_trabajo' ? value : (getFieldValue('lugar_trabajo') || lead.lugar_trabajo),
+                universidad: fieldName === 'universidad' ? value : (getFieldValue('universidad') || lead.universidad),
+                como_adquirio_ingles: fieldName === 'como_adquirio_ingles' ? value : (getFieldValue('como_adquirio_ingles') || lead.como_adquirio_ingles),
+                como_adquirio_ingles_detalle: fieldName === 'como_adquirio_ingles_detalle' ? value : (getFieldValue('como_adquirio_ingles_detalle') || lead.como_adquirio_ingles_detalle),
+                cuando_empezar: fieldName === 'cuando_empezar' ? value : (getFieldValue('cuando_empezar') || lead.cuando_empezar),
+                especialidad: fieldName === 'especialidad' ? value : (getFieldValue('especialidad') || lead.especialidad),
+                plan_pago: fieldName === 'plan_pago' ? value : (getFieldValue('plan_pago') || lead.plan_pago),
+                consulta_decision: fieldName === 'consulta_decision' ? value : (getFieldValue('consulta_decision') || lead.consulta_decision),
+                referido_por: fieldName === 'referido_por' ? value : (getFieldValue('referido_por') || lead.referido_por)
+              }
+            })
+          });
+        } catch (webhookError) {
+          console.error('Error sincronizando con Respond.io:', webhookError);
+          // No revertimos el cambio local porque Supabase sí se actualizó
+        }
+      }
       
       // Refrescar datos en background
       onRefreshData?.();
