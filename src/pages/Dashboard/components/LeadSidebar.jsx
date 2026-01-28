@@ -1409,23 +1409,23 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             {activeTab === 'info' && (
               <div className="flex flex-col h-full">
                 {/* Sub-tabs */}
-                <div className="flex gap-2 mb-4 flex-shrink-0">
+                <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
                   <button
                     onClick={() => setSubActiveTab('informacion')}
-                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                       subActiveTab === 'informacion'
-                        ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-white text-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
                     Información
                   </button>
                   <button
                     onClick={() => setSubActiveTab('resumen-ia')}
-                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                       subActiveTab === 'resumen-ia'
-                        ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-white text-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
                     Resumen IA
@@ -1484,7 +1484,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           
                           return (
                             <div 
-                              className="relative p-3 bg-slate-50/80 rounded-xl group cursor-pointer hover:bg-slate-100/80 transition-all duration-200 border border-transparent hover:border-slate-200"
+                              className="relative p-3 bg-slate-50 rounded-xl group cursor-pointer hover:bg-slate-100 transition-all duration-200 border border-transparent hover:border-slate-200"
                               onClick={() => startEditing(fieldName, value)}
                             >
                               <div className="flex items-start gap-2.5">
@@ -1604,7 +1604,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           
                           return (
                             <div 
-                              className="relative p-3 bg-slate-50/80 rounded-xl group cursor-pointer hover:bg-slate-100/80 transition-all duration-200 border border-transparent hover:border-slate-200"
+                              className="relative p-3 bg-slate-50 rounded-xl group cursor-pointer hover:bg-slate-100 transition-all duration-200 border border-transparent hover:border-slate-200"
                               onClick={() => startEditing(fieldName, value)}
                             >
                               <div className="flex items-start gap-2.5">
