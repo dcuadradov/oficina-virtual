@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw } from 'lucide-react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 // Etapas del funnel por defecto (fallback si no se cargan de la BD)
@@ -175,16 +175,18 @@ const LeadsTable = ({
               // Usar el campo estado_gestion directamente de la BD
               const status = lead.estado_gestion || 'sin_gestionar';
               const noRevisado = lead.revisado === false;
+              const isHot = lead.is_hot === true;
               
               return (
                 <tr 
                   key={lead.id || lead.card_id || index}
                   onClick={() => onOpenModal?.(lead)}
-                  className={`group transition-all duration-300 cursor-pointer ${
+                  className={`group transition-all duration-300 cursor-pointer relative ${
                     noRevisado 
                       ? 'bg-gradient-to-r from-blue-100 via-indigo-100/70 to-blue-50/50 hover:from-blue-200 hover:via-indigo-200/70' 
                       : 'hover:bg-gradient-to-r hover:from-slate-50/80 hover:to-transparent'
                   }`}
+                  style={isHot ? { boxShadow: 'inset 4px 0 0 0 #f97316' } : {}}
                 >
                   {/* Asignación con indicador de estado */}
                   <td className="py-4 px-6">
@@ -206,6 +208,12 @@ const LeadsTable = ({
                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-lg shadow-sm">
                           {getCountryFlag(lead.pais)}
                         </div>
+                        {/* Indicador de lead HOT 🔥 */}
+                        {isHot && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center shadow-lg shadow-orange-300">
+                            <Flame size={12} className="text-white" />
+                          </div>
+                        )}
                       </div>
                       
                       {/* Nombre */}
