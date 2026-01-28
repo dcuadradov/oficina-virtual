@@ -29,7 +29,10 @@ import {
   ExternalLink,
   Flame,
   Users,
-  ChevronDown
+  ChevronDown,
+  Edit2,
+  Search,
+  MoreHorizontal
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -99,6 +102,52 @@ const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
 const RECORDATORIOS_PER_PAGE = 10;
 
+// Opciones para los campos editables con select
+const OPCIONES_OCUPACION = ['Estudiante', 'Médico General', 'Residente', 'Especialista'];
+
+const OPCIONES_MOTIVACION = [
+  'Quiero hacer una especialización en el extranjero',
+  'Quiero entender artículos cientificos',
+  'Quiero entender las guías de práctica clínica',
+  'Tengo una ponencia en un simposio internacional',
+  'Otro'
+];
+
+const OPCIONES_NIVEL_INGLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+
+const OPCIONES_ANO_RESIDENCIA = ['1', '2', '3', '4', '5', '6', '7'];
+
+const OPCIONES_COMO_ADQUIRIO_INGLES = [
+  'En un curso de inglés (instituto o academia)',
+  'En un colegio bilingüe',
+  'Viví o estudié en el extranjero',
+  'Aprendizaje autodidacta (por mi cuenta, apps, internet, etc.)',
+  'A través de mi trabajo o práctica profesional',
+  'Combinación de varias fuentes',
+  'Mi pareja habla inglés',
+  'Otro'
+];
+
+const OPCIONES_CUANDO_EMPEZAR = ['En este momento', 'El próximo mes', 'El próximo semestre'];
+
+const OPCIONES_ESPECIALIDAD = [
+  'Anestesiología y Reanimación', 'Alergología', 'Anatomía Patológica', 'Cardiología',
+  'Cirugía General', 'Cirugía Cardiotorácica', 'Cirugía Colorrectal', 'Cirugía de Tórax',
+  'Cirugía Oncológica', 'Cirugía Pediátrica', 'Cirugía Plástica', 'Cirugía Robótica',
+  'Cirugía Vascular', 'Coloproctología', 'Dermatología', 'Endocrinología y Nutrición',
+  'Epidemiología', 'Gastroenterología', 'Genética Médica', 'Geriatría', 'Gerontología Médica',
+  'Gestión de Salud (Administrativo)', 'Ginecología y Obstetricia', 'Hematología', 'Imagenología',
+  'Infectología', 'Inmunología Clínica', 'Laboratorio Clínico', 'Medicina de Emergencias',
+  'Medicina Familiar', 'Medicina Física y Rehabilitación', 'Medicina Hiperbárica',
+  'Medicina Intensiva', 'Medicina Interna', 'Medicina Legal y Forense', 'Medicina Nuclear',
+  'Medicina Paliativa', 'Medicina Preventiva y Salud Pública', 'Medicina del Trabajo',
+  'Nefrología', 'Neumología', 'Neurocirugía', 'Neurología', 'Oftalmología', 'Oncología Médica',
+  'Otorrinolaringología', 'Pediatría', 'Psiquiatría', 'Radiología', 'Reumatología',
+  'Terapia del Dolor', 'Traumatología y Ortopedia', 'Urología'
+];
+
+const OPCIONES_PLAN_PAGO = ['1', '2', '4', '6', '8', '10', '12'];
+
 const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
@@ -159,6 +208,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [comercialSeleccionado, setComercialSeleccionado] = useState(null);
   const [mostrarModalReasignar, setMostrarModalReasignar] = useState(false);
   const [reasignando, setReasignando] = useState(false);
+  
+  // Estados para edición de campos
+  const [editingField, setEditingField] = useState(null); // Campo actualmente en edición
+  const [editValue, setEditValue] = useState(''); // Valor temporal durante edición
+  const [savingField, setSavingField] = useState(null); // Campo que se está guardando
+  const [searchSelectQuery, setSearchSelectQuery] = useState(''); // Búsqueda en selects
+  const [modalTextoCompleto, setModalTextoCompleto] = useState(null); // Modal para ver texto completo
   
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
@@ -251,6 +307,47 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   // Obtener información del comercial actual
   const comercialActual = comerciales.find(c => c.email === lead?.comercial_email);
   const nombreComercialActual = comercialActual?.nombre || lead?.comercial_email?.split('@')[0] || 'Sin asignar';
+
+  // Función para guardar un campo editado
+  const handleSaveField = async (fieldName, value) => {
+    if (!lead?.card_id) return;
+    
+    try {
+      setSavingField(fieldName);
+      
+      const { error } = await supabase
+        .from('leads')
+        .update({ [fieldName]: value || null })
+        .eq('card_id', lead.card_id);
+      
+      if (error) throw error;
+      
+      // Refrescar datos
+      onRefreshData?.();
+      setEditingField(null);
+      setEditValue('');
+      setSearchSelectQuery('');
+    } catch (error) {
+      console.error('Error guardando campo:', error);
+      alert('Error al guardar. Intenta de nuevo.');
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  // Función para iniciar edición de un campo
+  const startEditing = (fieldName, currentValue) => {
+    setEditingField(fieldName);
+    setEditValue(currentValue || '');
+    setSearchSelectQuery('');
+  };
+
+  // Función para cancelar edición
+  const cancelEditing = () => {
+    setEditingField(null);
+    setEditValue('');
+    setSearchSelectQuery('');
+  };
 
   // Handler para confirmar reasignación de comercial
   const handleConfirmarReasignacion = async () => {
@@ -1309,288 +1406,405 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 <div className="flex-1 overflow-y-auto">
                   {subActiveTab === 'informacion' && (
                     <div className="space-y-6">
-                      {/* CONTACTO */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <Phone size={16} className="text-[#1717AF]" />
-                          Contacto
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Teléfono */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <Phone size={18} className="text-slate-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-slate-400 font-medium">Teléfono</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.telefono || 'No disponible'}</p>
-                            </div>
-                            {lead.telefono && (
-                              <button
-                                onClick={() => handleCopy(lead.telefono, 'telefono')}
-                                className={`p-2 rounded-lg transition-all duration-200 ${
-                                  copiedField === 'telefono'
-                                    ? 'bg-emerald-100 text-emerald-600'
-                                    : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                                }`}
-                                title={copiedField === 'telefono' ? '¡Copiado!' : 'Copiar teléfono'}
-                              >
-                                {copiedField === 'telefono' ? <Check size={16} /> : <Copy size={16} />}
-                              </button>
-                            )}
-                          </div>
+                      {/* Componente para campo editable de texto */}
+                      {(() => {
+                        const EditableTextField = ({ fieldName, label, icon: Icon, value, placeholder = 'No especificado', copyable = false }) => {
+                          const isEditing = editingField === fieldName;
+                          const isSaving = savingField === fieldName;
+                          const displayValue = value || placeholder;
+                          const needsTruncate = displayValue.length > 50;
                           
-                          {/* Correo */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <Mail size={18} className="text-slate-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-slate-400 font-medium">Correo</p>
-                              <p className="text-sm font-semibold text-slate-700 truncate">{lead.email || 'No disponible'}</p>
-                            </div>
-                            {lead.email && (
-                              <button
-                                onClick={() => handleCopy(lead.email, 'email')}
-                                className={`p-2 rounded-lg transition-all duration-200 ${
-                                  copiedField === 'email'
-                                    ? 'bg-emerald-100 text-emerald-600'
-                                    : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                                }`}
-                                title={copiedField === 'email' ? '¡Copiado!' : 'Copiar correo'}
-                              >
-                                {copiedField === 'email' ? <Check size={16} /> : <Copy size={16} />}
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Consulta la decisión */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <MessageCircle size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Consulta la decisión</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.consulta_decision || 'No especificado'}</p>
-                            </div>
-                          </div>
-
-                          {/* Referido por (solo si tiene) */}
-                          {lead.referido_por && (
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <Star size={18} className="text-slate-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 font-medium">Referido por</p>
-                                <p className="text-sm font-semibold text-slate-700">{lead.referido_por}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* OCUPACIÓN */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <Briefcase size={16} className="text-[#1717AF]" />
-                          Ocupación
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Ocupación (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <Briefcase size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Ocupación</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.ocupacion || 'No especificada'}</p>
-                            </div>
-                          </div>
-
-                          {/* Si es Estudiante: Universidad */}
-                          {lead.ocupacion === 'Estudiante' && (
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <ClipboardList size={18} className="text-slate-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 font-medium">Universidad</p>
-                                <p className="text-sm font-semibold text-slate-700">{lead.universidad || 'No especificada'}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Si es Médico General: Lugar de trabajo */}
-                          {lead.ocupacion === 'Médico General' && (
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <MapPin size={18} className="text-slate-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
-                                <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Si es Residente: Año de residencia + Lugar de trabajo */}
-                          {lead.ocupacion === 'Residente' && (
-                            <>
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                  <BarChart3 size={18} className="text-slate-600" />
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-400 font-medium">Año de residencia</p>
-                                  <p className="text-sm font-semibold text-slate-700">{lead.ano_residencia || 'No especificado'}</p>
+                          if (isEditing) {
+                            return (
+                              <div className="p-4 bg-slate-50 rounded-2xl border-2 border-[#1717AF]">
+                                <p className="text-xs text-slate-400 font-medium mb-2">{label}</p>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveField(fieldName, editValue);
+                                      if (e.key === 'Escape') cancelEditing();
+                                    }}
+                                    className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
+                                    autoFocus
+                                    placeholder={placeholder}
+                                  />
+                                  <button
+                                    onClick={() => handleSaveField(fieldName, editValue)}
+                                    disabled={isSaving}
+                                    className="px-3 py-2 bg-[#1717AF] text-white text-sm rounded-xl hover:bg-[#1717AF]/90 disabled:opacity-50"
+                                  >
+                                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                  </button>
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="px-3 py-2 bg-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-300"
+                                  >
+                                    <X size={16} />
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                  <MapPin size={18} className="text-slate-600" />
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
-                                  <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
-                                </div>
+                            );
+                          }
+                          
+                          return (
+                            <div 
+                              className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => startEditing(fieldName, value)}
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm flex-shrink-0">
+                                <Icon size={18} className="text-slate-600" />
                               </div>
-                            </>
-                          )}
-
-                          {/* Si es Especialista: Especialidad + Lugar de trabajo */}
-                          {lead.ocupacion === 'Especialista' && (
-                            <>
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                  <Star size={18} className="text-slate-600" />
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-400 font-medium">Especialidad</p>
-                                  <p className="text-sm font-semibold text-slate-700">{lead.especialidad || 'No especificada'}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                  <MapPin size={18} className="text-slate-600" />
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
-                                  <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-slate-400 font-medium">{label}</p>
+                                <div className="flex items-center gap-1">
+                                  <p className={`text-sm font-semibold ${value ? 'text-slate-700' : 'text-slate-400'} line-clamp-2`}>
+                                    {needsTruncate ? displayValue.substring(0, 50) + '...' : displayValue}
+                                  </p>
+                                  {needsTruncate && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setModalTextoCompleto({ label, value: displayValue });
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-[#1717AF]"
+                                    >
+                                      <MoreHorizontal size={14} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* MOTIVACIÓN */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <Star size={16} className="text-[#1717AF]" />
-                          Motivación
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Motivación (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <Star size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Motivación</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.motivacion || 'No especificada'}</p>
-                            </div>
-                          </div>
-
-                          {/* Detalle motivación (solo si motivacion = "Otro") */}
-                          {lead.motivacion === 'Otro' && lead.motivacion_detalle && (
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <MessageCircle size={18} className="text-slate-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 font-medium">Detalle motivación</p>
-                                <p className="text-sm font-semibold text-slate-700">{lead.motivacion_detalle}</p>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {copyable && value && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopy(value, fieldName);
+                                    }}
+                                    className={`p-2 rounded-lg transition-all duration-200 ${
+                                      copiedField === fieldName
+                                        ? 'bg-emerald-100 text-emerald-600'
+                                        : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm'
+                                    }`}
+                                    title={copiedField === fieldName ? '¡Copiado!' : 'Copiar'}
+                                  >
+                                    {copiedField === fieldName ? <Check size={16} /> : <Copy size={16} />}
+                                  </button>
+                                )}
+                                <div className="p-2 text-slate-400">
+                                  <Edit2 size={14} />
+                                </div>
                               </div>
                             </div>
-                          )}
+                          );
+                        };
 
-                          {/* Cuando empezaría (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <Clock size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Cuando empezaría</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.cuando_empezar || 'No especificado'}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* NIVEL DE INGLÉS */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <BarChart3 size={16} className="text-[#1717AF]" />
-                          Nivel de inglés
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Nivel inglés (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <BarChart3 size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Nivel de inglés</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.nivel_ingles || 'No evaluado'}</p>
-                            </div>
-                          </div>
-
-                          {/* Cómo adquirió inglés (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <ClipboardList size={18} className="text-slate-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Cómo adquirió inglés</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.como_adquirio_ingles || 'No especificado'}</p>
-                            </div>
-                          </div>
-
-                          {/* Detalle cómo adquirió inglés (solo si como_adquirio_ingles = "Otro") */}
-                          {lead.como_adquirio_ingles === 'Otro' && lead.como_adquirio_ingles_detalle && (
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl sm:col-span-2">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <MessageCircle size={18} className="text-slate-600" />
+                        // Componente para campo editable con select y búsqueda
+                        const EditableSelectField = ({ fieldName, label, icon: Icon, value, options, placeholder = 'No especificado', enablesDetail = false, detailFieldName = null }) => {
+                          const isEditing = editingField === fieldName;
+                          const isSaving = savingField === fieldName;
+                          const displayValue = value || placeholder;
+                          const needsTruncate = displayValue.length > 50;
+                          
+                          // Filtrar opciones basado en búsqueda
+                          const filteredOptions = options.filter(opt => 
+                            opt.toLowerCase().includes(searchSelectQuery.toLowerCase())
+                          );
+                          
+                          if (isEditing) {
+                            return (
+                              <div className="p-4 bg-slate-50 rounded-2xl border-2 border-[#1717AF]">
+                                <p className="text-xs text-slate-400 font-medium mb-2">{label}</p>
+                                <div className="relative">
+                                  {/* Campo de búsqueda */}
+                                  <div className="relative mb-2">
+                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                      type="text"
+                                      value={searchSelectQuery}
+                                      onChange={(e) => setSearchSelectQuery(e.target.value)}
+                                      placeholder="Buscar..."
+                                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  {/* Lista de opciones */}
+                                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white">
+                                    {filteredOptions.length > 0 ? (
+                                      filteredOptions.map((opt) => (
+                                        <button
+                                          key={opt}
+                                          onClick={() => {
+                                            handleSaveField(fieldName, opt);
+                                            // Si es "Otro" y tiene detailFieldName, limpiar el campo de detalle si el valor anterior no era "Otro"
+                                            if (opt !== 'Otro' && detailFieldName && value === 'Otro') {
+                                              handleSaveField(detailFieldName, null);
+                                            }
+                                          }}
+                                          disabled={isSaving}
+                                          className={`w-full px-3 py-2 text-left text-sm hover:bg-[#1717AF]/10 transition-colors ${
+                                            opt === value ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium' : 'text-slate-700'
+                                          }`}
+                                        >
+                                          {opt}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <p className="px-3 py-2 text-sm text-slate-400">No hay resultados</p>
+                                    )}
+                                  </div>
+                                  {/* Botón cancelar */}
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="mt-2 w-full px-3 py-2 bg-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-300"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-xs text-slate-400 font-medium">Detalle cómo adquirió inglés</p>
-                                <p className="text-sm font-semibold text-slate-700">{lead.como_adquirio_ingles_detalle}</p>
+                            );
+                          }
+                          
+                          return (
+                            <div 
+                              className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group cursor-pointer hover:bg-slate-100 transition-colors"
+                              onClick={() => startEditing(fieldName, value)}
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm flex-shrink-0">
+                                <Icon size={18} className="text-slate-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-slate-400 font-medium">{label}</p>
+                                <div className="flex items-center gap-1">
+                                  <p className={`text-sm font-semibold ${value ? 'text-slate-700' : 'text-slate-400'} line-clamp-2`}>
+                                    {needsTruncate ? displayValue.substring(0, 50) + '...' : displayValue}
+                                  </p>
+                                  {needsTruncate && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setModalTextoCompleto({ label, value: displayValue });
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-[#1717AF]"
+                                    >
+                                      <MoreHorizontal size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="p-2 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Edit2 size={14} />
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          );
+                        };
 
-                      {/* PLAN DE PAGO */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <FileText size={16} className="text-[#1717AF]" />
-                          Plan de pago
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {/* Plan de pago (siempre) */}
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                              <FileText size={18} className="text-slate-600" />
+                        return (
+                          <>
+                            {/* CONTACTO */}
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Phone size={16} className="text-[#1717AF]" />
+                                Contacto
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <EditableTextField 
+                                  fieldName="telefono" 
+                                  label="Teléfono" 
+                                  icon={Phone} 
+                                  value={lead.telefono} 
+                                  placeholder="No disponible"
+                                  copyable={true}
+                                />
+                                <EditableTextField 
+                                  fieldName="email" 
+                                  label="Correo" 
+                                  icon={Mail} 
+                                  value={lead.email} 
+                                  placeholder="No disponible"
+                                  copyable={true}
+                                />
+                                <EditableTextField 
+                                  fieldName="consulta_decision" 
+                                  label="Consulta la decisión" 
+                                  icon={MessageCircle} 
+                                  value={lead.consulta_decision}
+                                />
+                                <EditableTextField 
+                                  fieldName="referido_por" 
+                                  label="Referido por" 
+                                  icon={Star} 
+                                  value={lead.referido_por}
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-medium">Plan de pago</p>
-                              <p className="text-sm font-semibold text-slate-700">{lead.plan_pago || 'No especificado'}</p>
+
+                            {/* OCUPACIÓN */}
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Briefcase size={16} className="text-[#1717AF]" />
+                                Ocupación
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <EditableSelectField 
+                                  fieldName="ocupacion" 
+                                  label="Ocupación" 
+                                  icon={Briefcase} 
+                                  value={lead.ocupacion}
+                                  options={OPCIONES_OCUPACION}
+                                />
+                                
+                                {/* Campos condicionales según ocupación */}
+                                {lead.ocupacion === 'Estudiante' && (
+                                  <EditableTextField 
+                                    fieldName="universidad" 
+                                    label="Universidad" 
+                                    icon={ClipboardList} 
+                                    value={lead.universidad}
+                                  />
+                                )}
+                                
+                                {lead.ocupacion === 'Médico General' && (
+                                  <EditableTextField 
+                                    fieldName="lugar_trabajo" 
+                                    label="Lugar de trabajo" 
+                                    icon={MapPin} 
+                                    value={lead.lugar_trabajo}
+                                  />
+                                )}
+                                
+                                {lead.ocupacion === 'Residente' && (
+                                  <>
+                                    <EditableSelectField 
+                                      fieldName="ano_residencia" 
+                                      label="Año de residencia" 
+                                      icon={BarChart3} 
+                                      value={lead.ano_residencia}
+                                      options={OPCIONES_ANO_RESIDENCIA}
+                                    />
+                                    <EditableTextField 
+                                      fieldName="lugar_trabajo" 
+                                      label="Lugar de trabajo" 
+                                      icon={MapPin} 
+                                      value={lead.lugar_trabajo}
+                                    />
+                                  </>
+                                )}
+                                
+                                {lead.ocupacion === 'Especialista' && (
+                                  <>
+                                    <EditableSelectField 
+                                      fieldName="especialidad" 
+                                      label="Especialidad" 
+                                      icon={Star} 
+                                      value={lead.especialidad}
+                                      options={OPCIONES_ESPECIALIDAD}
+                                    />
+                                    <EditableTextField 
+                                      fieldName="lugar_trabajo" 
+                                      label="Lugar de trabajo" 
+                                      icon={MapPin} 
+                                      value={lead.lugar_trabajo}
+                                    />
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </div>
+
+                            {/* MOTIVACIÓN */}
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Star size={16} className="text-[#1717AF]" />
+                                Motivación
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <EditableSelectField 
+                                  fieldName="motivacion" 
+                                  label="Motivación" 
+                                  icon={Star} 
+                                  value={lead.motivacion}
+                                  options={OPCIONES_MOTIVACION}
+                                  enablesDetail={true}
+                                  detailFieldName="motivacion_detalle"
+                                />
+                                
+                                {/* Detalle motivación solo si motivacion = "Otro" */}
+                                {lead.motivacion === 'Otro' && (
+                                  <EditableTextField 
+                                    fieldName="motivacion_detalle" 
+                                    label="Detalle motivación" 
+                                    icon={MessageCircle} 
+                                    value={lead.motivacion_detalle}
+                                  />
+                                )}
+                                
+                                <EditableSelectField 
+                                  fieldName="cuando_empezar" 
+                                  label="Cuando empezaría" 
+                                  icon={Clock} 
+                                  value={lead.cuando_empezar}
+                                  options={OPCIONES_CUANDO_EMPEZAR}
+                                />
+                              </div>
+                            </div>
+
+                            {/* NIVEL DE INGLÉS */}
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <BarChart3 size={16} className="text-[#1717AF]" />
+                                Nivel de inglés
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <EditableSelectField 
+                                  fieldName="nivel_ingles" 
+                                  label="Nivel de inglés" 
+                                  icon={BarChart3} 
+                                  value={lead.nivel_ingles}
+                                  options={OPCIONES_NIVEL_INGLES}
+                                />
+                                <EditableSelectField 
+                                  fieldName="como_adquirio_ingles" 
+                                  label="Cómo adquirió inglés" 
+                                  icon={ClipboardList} 
+                                  value={lead.como_adquirio_ingles}
+                                  options={OPCIONES_COMO_ADQUIRIO_INGLES}
+                                  enablesDetail={true}
+                                  detailFieldName="como_adquirio_ingles_detalle"
+                                />
+                                
+                                {/* Detalle solo si como_adquirio_ingles = "Otro" */}
+                                {lead.como_adquirio_ingles === 'Otro' && (
+                                  <EditableTextField 
+                                    fieldName="como_adquirio_ingles_detalle" 
+                                    label="Detalle cómo adquirió" 
+                                    icon={MessageCircle} 
+                                    value={lead.como_adquirio_ingles_detalle}
+                                  />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* PLAN DE PAGO */}
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <FileText size={16} className="text-[#1717AF]" />
+                                Plan de pago
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <EditableSelectField 
+                                  fieldName="plan_pago" 
+                                  label="Plan de pago" 
+                                  icon={FileText} 
+                                  value={lead.plan_pago}
+                                  options={OPCIONES_PLAN_PAGO}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -2519,6 +2733,38 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 </button>
               </div>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal para ver texto completo */}
+      {modalTextoCompleto && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-[60]"
+            onClick={() => setModalTextoCompleto(null)}
+          />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md bg-white rounded-2xl shadow-2xl z-[61] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">{modalTextoCompleto.label}</h3>
+              <button
+                onClick={() => setModalTextoCompleto(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                {modalTextoCompleto.value}
+              </p>
+            </div>
+            <button
+              onClick={() => setModalTextoCompleto(null)}
+              className="w-full mt-4 py-3 rounded-xl bg-[#1717AF] text-white font-medium hover:bg-[#1717AF]/90 transition-colors"
+            >
+              Cerrar
+            </button>
           </div>
         </>
       )}
