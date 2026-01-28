@@ -213,9 +213,9 @@ export default function Dashboard() {
     let fechaFin = null;
 
     if (selectedDia) {
-      // Día tiene formato: "2025-01-28" - filtrar solo ese día
-      fechaInicio = selectedDia;
-      fechaFin = selectedDia;
+      // Día tiene formato: "2025-01-28" - filtrar desde inicio hasta fin del día
+      fechaInicio = `${selectedDia}T00:00:00`;
+      fechaFin = `${selectedDia}T23:59:59`;
     } else if (selectedPeriodo) {
       // Periodo tiene formato: "2025-01-07_2025-01-14"
       const [inicio, fin] = selectedPeriodo.split('_');

@@ -224,7 +224,7 @@ const LeadsTable = ({
                           {lead.nombre || 'Sin nombre'}
                         </p>
                         <p className={`text-xs truncate max-w-[140px] ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
-                          {lead.pais || 'País no especificado'}
+                          {lead.comercial_email ? lead.comercial_email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Sin comercial'}
                         </p>
                       </div>
                     </div>
