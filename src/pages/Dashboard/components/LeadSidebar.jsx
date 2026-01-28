@@ -221,6 +221,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [searchSelectQuery, setSearchSelectQuery] = useState(''); // Búsqueda en selects
   const [modalTextoCompleto, setModalTextoCompleto] = useState(null); // Modal para ver texto completo
   const [localLeadData, setLocalLeadData] = useState({}); // Datos locales para actualización inmediata
+  const [isComposing, setIsComposing] = useState(false); // Para manejar tildes correctamente
   
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
@@ -1121,7 +1122,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         type="text"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        onKeyUp={(e) => {
+                        onCompositionStart={() => setIsComposing(true)}
+                        onCompositionEnd={() => setIsComposing(false)}
+                        onKeyDown={(e) => {
+                          if (isComposing) return;
                           if (e.key === 'Enter') handleSaveField('nombre', editValue);
                           if (e.key === 'Escape') cancelEditing();
                         }}
@@ -1486,7 +1490,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                     type="text"
                                     value={editValue}
                                     onChange={(e) => setEditValue(e.target.value)}
-                                    onKeyUp={(e) => {
+                                    onCompositionStart={() => setIsComposing(true)}
+                                    onCompositionEnd={() => setIsComposing(false)}
+                                    onKeyDown={(e) => {
+                                      if (isComposing) return;
                                       if (e.key === 'Enter') handleSaveField(fieldName, editValue);
                                       if (e.key === 'Escape') cancelEditing();
                                     }}
