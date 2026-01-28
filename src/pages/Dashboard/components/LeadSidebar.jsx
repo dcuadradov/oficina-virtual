@@ -26,7 +26,8 @@ import {
   CalendarDays,
   Bell,
   RotateCcw,
-  ExternalLink
+  ExternalLink,
+  Flame
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -146,6 +147,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [urlBooking, setUrlBooking] = useState(null);
   const [loadingUrls, setLoadingUrls] = useState(false);
   
+  // Estados para lead HOT 🔥
+  const [isHot, setIsHot] = useState(false);
+  const [togglingHot, setTogglingHot] = useState(false);
+  
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
   const [resumenIA, setResumenIA] = useState(null);
@@ -204,6 +209,35 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setResumenIAFecha(null);
     }
   }, [lead?.card_id, lead?.resumen_ia, lead?.resumen_ia_fecha]);
+
+  // Inicializar estado HOT cuando cambia el lead
+  useEffect(() => {
+    setIsHot(lead?.is_hot || false);
+  }, [lead?.card_id, lead?.is_hot]);
+
+  // Función para toggle de lead HOT 🔥
+  const handleToggleHot = async () => {
+    if (!lead?.card_id || togglingHot) return;
+
+    try {
+      setTogglingHot(true);
+      const newValue = !isHot;
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ is_hot: newValue })
+        .eq('card_id', lead.card_id);
+
+      if (error) throw error;
+
+      setIsHot(newValue);
+      onRefreshData?.();
+    } catch (error) {
+      console.error('Error actualizando estado hot:', error);
+    } finally {
+      setTogglingHot(false);
+    }
+  };
 
   // Función para generar resumen con IA
   const handleGenerarResumen = async () => {
@@ -882,6 +916,20 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               <div className="flex items-center gap-2">
                 {/* Acciones rápidas */}
                 <div className="flex items-center gap-1 mr-2">
+                  {/* Marcar como HOT 🔥 */}
+                  <button
+                    onClick={handleToggleHot}
+                    disabled={togglingHot}
+                    className={`p-2.5 rounded-xl transition-all duration-200 ${
+                      isHot
+                        ? 'text-orange-600 bg-gradient-to-br from-orange-100 to-red-100 shadow-md shadow-orange-200 ring-2 ring-orange-300'
+                        : 'text-slate-400 bg-slate-50 hover:bg-orange-50 hover:text-orange-500'
+                    }`}
+                    title={isHot ? "Quitar marca de lead caliente" : "Marcar como lead caliente"}
+                  >
+                    <Flame size={20} className={togglingHot ? 'animate-pulse' : ''} />
+                  </button>
+                  
                   {/* Marcar como pendiente */}
                   {onMarcarNoRevisado && (
                     <button
