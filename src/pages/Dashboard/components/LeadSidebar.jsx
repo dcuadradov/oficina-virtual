@@ -287,10 +287,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         throw new Error('Error al reasignar');
       }
 
-      // Actualizar el lead en Supabase
+      // Actualizar el lead en Supabase - incluyendo el nuevo comercial
       const { error: updateError } = await supabase
         .from('leads')
         .update({ 
+          comercial_email: comercialSeleccionado.email,
           estado_gestion: 'sin_gestionar',
           revisado: false,
           fecha_asignacion: new Date().toISOString()
