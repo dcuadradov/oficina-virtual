@@ -254,9 +254,9 @@ export default function Dashboard() {
         statsQuery = statsQuery.eq('comercial_email', userEmail);
       }
 
-      // Aplicar filtros de fecha
+      // Aplicar filtros de fecha (por fecha de creación del lead)
       if (fechaInicio && fechaFin) {
-        statsQuery = statsQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+        statsQuery = statsQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       }
 
       const { data: statsData, error: statsError } = await statsQuery;
@@ -322,9 +322,9 @@ export default function Dashboard() {
       }
       // Si puede ver todos y no hay comercial seleccionado, traer todos los leads
 
-      // Aplicar filtros de fecha
+      // Aplicar filtros de fecha (por fecha de creación del lead)
       if (fechaInicio && fechaFin) {
-        query = query.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+        query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       }
 
       // Aplicar filtro por estado si está activo
