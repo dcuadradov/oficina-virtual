@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [selectedComercial, setSelectedComercial] = useState(null);
   const [selectedMes, setSelectedMes] = useState(null);
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
+  const [selectedDia, setSelectedDia] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Estado para etapas del funnel (cargadas desde config_fases)
@@ -211,7 +212,11 @@ export default function Dashboard() {
     let fechaInicio = null;
     let fechaFin = null;
 
-    if (selectedPeriodo) {
+    if (selectedDia) {
+      // Día tiene formato: "2025-01-28" - filtrar solo ese día
+      fechaInicio = selectedDia;
+      fechaFin = selectedDia;
+    } else if (selectedPeriodo) {
       // Periodo tiene formato: "2025-01-07_2025-01-14"
       const [inicio, fin] = selectedPeriodo.split('_');
       fechaInicio = inicio;
@@ -226,7 +231,7 @@ export default function Dashboard() {
     }
 
     return { fechaInicio, fechaFin };
-  }, [selectedMes, selectedPeriodo]);
+  }, [selectedDia, selectedMes, selectedPeriodo]);
 
   // Función para obtener estadísticas globales (KPIs)
   const fetchStats = useCallback(async () => {
@@ -535,12 +540,21 @@ export default function Dashboard() {
   const handleMesChange = (mes) => {
     setSelectedMes(mes);
     setSelectedPeriodo(null); // Limpiar periodo cuando se selecciona mes
+    setSelectedDia(null); // Limpiar día cuando se selecciona mes
     setCurrentPage(0);
   };
 
   const handlePeriodoChange = (periodo) => {
     setSelectedPeriodo(periodo);
     setSelectedMes(null); // Limpiar mes cuando se selecciona periodo
+    setSelectedDia(null); // Limpiar día cuando se selecciona periodo
+    setCurrentPage(0);
+  };
+
+  const handleDiaChange = (dia) => {
+    setSelectedDia(dia);
+    setSelectedMes(null); // Limpiar mes cuando se selecciona día
+    setSelectedPeriodo(null); // Limpiar periodo cuando se selecciona día
     setCurrentPage(0);
   };
 
@@ -659,6 +673,8 @@ export default function Dashboard() {
                   onMesChange={handleMesChange}
                   selectedPeriodo={selectedPeriodo}
                   onPeriodoChange={handlePeriodoChange}
+                  selectedDia={selectedDia}
+                  onDiaChange={handleDiaChange}
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -672,7 +688,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || searchQuery) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -682,6 +698,7 @@ export default function Dashboard() {
                       {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
                       {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
+                      {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
                 </span>
                 <button
                       onClick={() => {
@@ -690,6 +707,7 @@ export default function Dashboard() {
                         setSelectedComercial(null);
                         setSelectedMes(null);
                         setSelectedPeriodo(null);
+                        setSelectedDia(null);
                         setSearchQuery('');
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"

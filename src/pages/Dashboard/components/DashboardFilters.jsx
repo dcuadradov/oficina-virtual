@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, ChevronDown, X, Search } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
 
 /**
  * Genera periodos de martes a martes para un rango de fechas (solo hasta el actual)
@@ -84,6 +84,8 @@ const DashboardFilters = ({
   onMesChange,
   selectedPeriodo,
   onPeriodoChange,
+  selectedDia,
+  onDiaChange,
   showComercialFilter = false,
   showOnlyComercial = false,
   searchQuery = '',
@@ -92,6 +94,8 @@ const DashboardFilters = ({
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
   const [periodoOpen, setPeriodoOpen] = useState(false);
+  const [diaOpen, setDiaOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const searchTimeoutRef = useRef(null);
 
@@ -142,6 +146,7 @@ const DashboardFilters = ({
         setComercialOpen(false);
         setMesOpen(false);
         setPeriodoOpen(false);
+        setDiaOpen(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -157,6 +162,94 @@ const DashboardFilters = ({
   // Obtener label del periodo seleccionado
   const selectedPeriodoLabel = periodOptions.find(p => p.value === selectedPeriodo)?.label || 'Todos los periodos';
   
+  // Obtener label del día seleccionado
+  const selectedDiaLabel = useMemo(() => {
+    if (!selectedDia) return 'Todos los días';
+    const date = new Date(selectedDia + 'T12:00:00');
+    return date.toLocaleDateString('es-ES', { 
+      weekday: 'short', 
+      day: 'numeric', 
+      month: 'short' 
+    });
+  }, [selectedDia]);
+
+  // Generar días del calendario
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    
+    // Primer día del mes
+    const firstDay = new Date(year, month, 1);
+    // Último día del mes
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Día de la semana del primer día (0 = domingo, ajustar para lunes = 0)
+    let startDayOfWeek = firstDay.getDay() - 1;
+    if (startDayOfWeek < 0) startDayOfWeek = 6;
+    
+    const days = [];
+    
+    // Días del mes anterior para completar la primera semana
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      days.push({
+        day: prevMonthLastDay - i,
+        isCurrentMonth: false,
+        date: new Date(year, month - 1, prevMonthLastDay - i)
+      });
+    }
+    
+    // Días del mes actual
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      days.push({
+        day: d,
+        isCurrentMonth: true,
+        date: new Date(year, month, d)
+      });
+    }
+    
+    // Días del siguiente mes para completar la última semana
+    const remainingDays = 42 - days.length; // 6 filas x 7 días
+    for (let d = 1; d <= remainingDays; d++) {
+      days.push({
+        day: d,
+        isCurrentMonth: false,
+        date: new Date(year, month + 1, d)
+      });
+    }
+    
+    return days;
+  }, [calendarMonth]);
+
+  // Verificar si una fecha es hoy
+  const isToday = (date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // Verificar si una fecha es futura
+  const isFutureDate = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date > today;
+  };
+
+  // Verificar si una fecha es la seleccionada
+  const isSelectedDate = (date) => {
+    if (!selectedDia) return false;
+    const selected = new Date(selectedDia + 'T12:00:00');
+    return date.getDate() === selected.getDate() && 
+           date.getMonth() === selected.getMonth() && 
+           date.getFullYear() === selected.getFullYear();
+  };
+
+  // Formatear fecha para el value
+  const formatDateValue = (date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       {/* Campo de búsqueda - oculto si showOnlyComercial */}
@@ -419,6 +512,152 @@ const DashboardFilters = ({
                 </div>
             ))}
           </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de Día con Calendario - oculto si showOnlyComercial */}
+      {!showOnlyComercial && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDiaOpen(!diaOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              // Resetear calendario al mes actual o al mes del día seleccionado
+              if (selectedDia) {
+                setCalendarMonth(new Date(selectedDia + 'T12:00:00'));
+              } else {
+                setCalendarMonth(new Date());
+              }
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedDia
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <CalendarDays size={16} />
+            <span>{selectedDiaLabel}</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${diaOpen ? 'rotate-180' : ''}`} />
+            {selectedDia && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDiaChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {diaOpen && (
+            <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-50">
+              {/* Header del calendario */}
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="text-sm font-semibold text-slate-700">
+                  {calendarMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const nextMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+                    // No permitir ir a meses futuros
+                    if (nextMonth <= new Date()) {
+                      setCalendarMonth(nextMonth);
+                    }
+                  }}
+                  disabled={new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1) > new Date()}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1) > new Date()
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : 'hover:bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+              
+              {/* Días de la semana */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map(day => (
+                  <div key={day} className="text-center text-xs font-medium text-slate-400 py-1">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Días del mes */}
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((dayInfo, index) => {
+                  const isFuture = isFutureDate(dayInfo.date);
+                  const isSelected = isSelectedDate(dayInfo.date);
+                  const isTodayDate = isToday(dayInfo.date);
+                  
+                  return (
+                    <button
+                      key={index}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isFuture && dayInfo.isCurrentMonth) {
+                          onDiaChange(formatDateValue(dayInfo.date));
+                          setDiaOpen(false);
+                        }
+                      }}
+                      disabled={isFuture || !dayInfo.isCurrentMonth}
+                      className={`
+                        w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200
+                        ${!dayInfo.isCurrentMonth ? 'text-slate-300 cursor-not-allowed' : ''}
+                        ${isFuture && dayInfo.isCurrentMonth ? 'text-slate-300 cursor-not-allowed' : ''}
+                        ${dayInfo.isCurrentMonth && !isFuture && !isSelected && !isTodayDate ? 'text-slate-700 hover:bg-slate-100' : ''}
+                        ${isTodayDate && !isSelected ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-300' : ''}
+                        ${isSelected ? 'bg-[#1717AF] text-white shadow-md shadow-[#1717AF]/30' : ''}
+                      `}
+                    >
+                      {dayInfo.day}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Botones de acción rápida */}
+              <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDiaChange(null);
+                    setDiaOpen(false);
+                  }}
+                  className="flex-1 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Todos los días
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const today = new Date();
+                    onDiaChange(formatDateValue(today));
+                    setDiaOpen(false);
+                  }}
+                  className="flex-1 py-2 text-xs font-medium text-[#1717AF] bg-[#1717AF]/10 hover:bg-[#1717AF]/20 rounded-lg transition-colors"
+                >
+                  Hoy
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
