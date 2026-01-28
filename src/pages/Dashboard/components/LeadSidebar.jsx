@@ -1455,6 +1455,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                     value={editValue}
                                     onChange={(e) => setEditValue(e.target.value)}
                                     onKeyDown={(e) => {
+                                      // Ignorar si está componiendo caracteres (tildes, etc.)
+                                      if (e.isComposing || e.key === 'Dead') return;
                                       if (e.key === 'Enter') handleSaveField(fieldName, editValue);
                                       if (e.key === 'Escape') cancelEditing();
                                     }}
