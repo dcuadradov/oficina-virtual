@@ -481,7 +481,7 @@ export default function Dashboard() {
       fetchStats();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, searchQuery]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery]);
 
   // Efecto para recarga automática cada 3 minutos
   useEffect(() => {
