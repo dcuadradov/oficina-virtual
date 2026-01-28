@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
-// Etapas del funnel para los chips de filtro
-const etapasFunnel = [
-  { id: 'Sin contacto', label: 'Sin contacto' },
+// Etapas del funnel por defecto (fallback si no se cargan de la BD)
+const etapasFunnelDefault = [
+  { id: 'Validación de contacto', label: 'Validación de contacto' },
   { id: 'Perfilamiento', label: 'Perfilamiento' },
   { id: 'Pitch agendado', label: 'Pitch agendado' },
   { id: 'Pitch', label: 'Pitch' },
@@ -62,6 +62,7 @@ const statusStyles = {
 const LeadsTable = ({ 
   leads = [], 
   statsData = {},
+  etapasFunnel = { etapas: [], grupos: [] },
   onOpenModal, 
   onOpenReminder, 
   onMarcarNoRevisado,
@@ -78,6 +79,27 @@ const LeadsTable = ({
   onPrevPage,
   isEmbedded = false
 }) => {
+  // Extraer etapas y grupos del prop
+  const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
+  
+  // Estado para el tab activo del funnel (inicializar con el primer grupo)
+  const [activeFunnelTab, setActiveFunnelTab] = useState(null);
+  
+  // Si no hay tab activo y hay grupos, seleccionar el primero
+  React.useEffect(() => {
+    if (!activeFunnelTab && todosLosGrupos.length > 0) {
+      setActiveFunnelTab(todosLosGrupos[0].id);
+    }
+  }, [todosLosGrupos, activeFunnelTab]);
+  
+  // Usar etapas de la BD o fallback al default
+  const etapasAUsar = todasLasEtapas.length > 0 ? todasLasEtapas : etapasFunnelDefault;
+  
+  // Filtrar etapas según el tab seleccionado
+  const etapasParaMostrar = etapasAUsar.filter(e => {
+    if (!activeFunnelTab) return true;
+    return e.grupo === activeFunnelTab;
+  });
   
   const { porEtapa = {} } = statsData;
 
@@ -87,13 +109,33 @@ const LeadsTable = ({
       {/* Header de la tabla */}
       <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
         <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Gestión de Leads</h2>
+          {/* Título y Tabs */}
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-slate-800">Funnel</h2>
+            
+            {/* Tabs dinámicos */}
+            {todosLosGrupos.length > 1 && (
+              <div className="flex items-center bg-slate-100 rounded-lg p-1">
+                {todosLosGrupos.map((grupo) => (
+                  <button
+                    key={grupo.id}
+                    onClick={() => setActiveFunnelTab(grupo.id)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                      activeFunnelTab === grupo.id
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {grupo.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           
           {/* Chips de filtro por etapa del funnel */}
           <div className="flex flex-wrap gap-2">
-            {etapasFunnel.map((etapa) => {
+            {etapasParaMostrar.map((etapa) => {
               // Obtener conteo desde statsData (datos globales)
               const count = porEtapa[etapa.id] || 0;
               return (

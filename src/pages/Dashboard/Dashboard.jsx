@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import DashboardStats from './components/DashboardStats';
 import DashboardFilters from './components/DashboardFilters';
@@ -13,6 +13,7 @@ const LEADS_PER_PAGE = 50;
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { cardId: urlCardId } = useParams();
   
   // Estados para KPIs (datos globales)
   const [statsData, setStatsData] = useState({
@@ -41,6 +42,9 @@ export default function Dashboard() {
   const [selectedMes, setSelectedMes] = useState(null);
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Estado para etapas del funnel (cargadas desde config_fases)
+  const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
   
   // Estado para tabs (Tabla / Mis Pitch)
   const [activeView, setActiveView] = useState('tabla');
@@ -131,6 +135,77 @@ export default function Dashboard() {
     }
   }, [puedeVerTodos]);
 
+  // Función para cargar etapas del funnel desde config_fases
+  const fetchEtapasFunnel = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_fases')
+        .select('etapa_funnel_agrupada, orden_funnel, grupo_funnel, nombre_grupo_funnel, orden_grupo_funnel')
+        .not('etapa_funnel_agrupada', 'is', null)
+        .neq('etapa_funnel_agrupada', 'No mostrar');
+
+      if (error) throw error;
+
+      // Agrupar por etapa_funnel_agrupada y tomar los valores de configuración
+      const etapasMap = new Map();
+      const gruposMap = new Map();
+      
+      data.forEach(d => {
+        // Etapas
+        if (!etapasMap.has(d.etapa_funnel_agrupada)) {
+          etapasMap.set(d.etapa_funnel_agrupada, {
+            orden: d.orden_funnel || 99,
+            grupo: d.grupo_funnel || 'gestion'
+          });
+        }
+        
+        // Grupos (tabs)
+        const grupoKey = d.grupo_funnel || 'gestion';
+        if (!gruposMap.has(grupoKey)) {
+          gruposMap.set(grupoKey, {
+            id: grupoKey,
+            nombre: d.nombre_grupo_funnel || grupoKey,
+            orden: d.orden_grupo_funnel || 99
+          });
+        }
+      });
+
+      // Convertir etapas a array y ordenar
+      const etapasFormateadas = Array.from(etapasMap.entries())
+        .map(([etapa, config]) => ({
+          id: etapa,
+          label: etapa,
+          shortLabel: getShortLabel(etapa),
+          orden: config.orden,
+          grupo: config.grupo
+        }))
+        .sort((a, b) => a.orden - b.orden);
+
+      // Convertir grupos a array y ordenar
+      const gruposFormateados = Array.from(gruposMap.values())
+        .sort((a, b) => a.orden - b.orden);
+
+      setEtapasFunnel({ etapas: etapasFormateadas, grupos: gruposFormateados });
+    } catch (error) {
+      console.error('Error cargando etapas del funnel:', error.message);
+    }
+  }, []);
+
+  // Helper para obtener etiquetas cortas
+  const getShortLabel = (etapa) => {
+    const shortLabels = {
+      'Validación de contacto': 'Validación',
+      'Perfilamiento': 'Perfil',
+      'Pitch agendado': 'Agendado',
+      'Pitch': 'Pitch',
+      'Posible matrícula': 'Posible',
+      'Pendiente de pago': 'Pago',
+      '¡Nueva matrícula!': '¡Matrícula!',
+      'Matrícula caída': 'Caída'
+    };
+    return shortLabels[etapa] || etapa.substring(0, 10);
+  };
+
   // Parsear filtros de fecha
   const parseDateFilters = useCallback(() => {
     let fechaInicio = null;
@@ -161,58 +236,50 @@ export default function Dashboard() {
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      // Query base para estado_gestion
-      let estadoQuery = supabase
+      // Query única para obtener estado_gestion y etapa_funnel
+      let statsQuery = supabase
         .from('leads')
-        .select('estado_gestion, fecha_gestion')
-        .neq('etapa_funnel', 'No mostrar');
-
-      // Query base para etapa_funnel
-      let etapaQuery = supabase
-        .from('leads')
-        .select('etapa_funnel, fecha_gestion')
+        .select('estado_gestion, etapa_funnel, fecha_gestion')
         .neq('etapa_funnel', 'No mostrar');
 
       // Aplicar filtro de comercial
       if (puedeVerTodos && selectedComercial) {
-        estadoQuery = estadoQuery.eq('comercial_email', selectedComercial);
-        etapaQuery = etapaQuery.eq('comercial_email', selectedComercial);
+        statsQuery = statsQuery.eq('comercial_email', selectedComercial);
       } else if (!puedeVerTodos) {
-        estadoQuery = estadoQuery.eq('comercial_email', userEmail);
-        etapaQuery = etapaQuery.eq('comercial_email', userEmail);
+        statsQuery = statsQuery.eq('comercial_email', userEmail);
       }
-      // Si puede ver todos y no hay comercial seleccionado, no filtrar por email
 
       // Aplicar filtros de fecha
       if (fechaInicio && fechaFin) {
-        estadoQuery = estadoQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
-        etapaQuery = etapaQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
+        statsQuery = statsQuery.gte('fecha_gestion', fechaInicio).lte('fecha_gestion', fechaFin);
       }
 
-      const [{ data: estadoData, error: estadoError }, { data: etapaData, error: etapaError }] = await Promise.all([
-        estadoQuery,
-        etapaQuery
-      ]);
+      const { data: statsData, error: statsError } = await statsQuery;
 
-      if (estadoError) throw estadoError;
-      if (etapaError) throw etapaError;
+      if (statsError) throw statsError;
 
-      // Procesar conteos por estado
+      const allLeads = statsData || [];
+
+      // Procesar conteos por estado (siempre sobre todos los leads)
       const porEstado = {};
-      (estadoData || []).forEach(lead => {
+      allLeads.forEach(lead => {
         const estado = lead.estado_gestion || 'sin_gestionar';
         porEstado[estado] = (porEstado[estado] || 0) + 1;
       });
 
-      // Procesar conteos por etapa
+      // Procesar conteos por etapa (aplicando filtro de gestión activo)
       const porEtapa = {};
-      (etapaData || []).forEach(lead => {
+      allLeads.forEach(lead => {
+        // Si hay un filtro de gestión activo, solo contar leads que coincidan
+        if (activeFilter && activeFilter !== 'todos') {
+          if (lead.estado_gestion !== activeFilter) return;
+        }
         const etapa = lead.etapa_funnel || 'Sin etapa';
         porEtapa[etapa] = (porEtapa[etapa] || 0) + 1;
       });
 
       setStatsData({
-        total: (estadoData || []).length,
+        total: allLeads.length,
         porEstado,
         porEtapa
       });
@@ -220,7 +287,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -363,11 +430,45 @@ export default function Dashboard() {
   useEffect(() => {
     if (userEmail) {
       fetchComerciales();
+      fetchEtapasFunnel();
       fetchStats();
       fetchLeads(false, 0);
       verificarRecordatoriosVencidos(); // Verificar al cargar
     }
   }, [userEmail]);
+
+  // Efecto para abrir sidebar cuando hay cardId en la URL
+  useEffect(() => {
+    const abrirLeadDesdeURL = async () => {
+      if (!urlCardId || !userEmail) return;
+      
+      try {
+        // Buscar el lead por card_id
+        const { data: lead, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('card_id', urlCardId)
+          .single();
+
+        if (error) {
+          console.error('Lead no encontrado:', urlCardId);
+          return;
+        }
+
+        if (lead) {
+          // Abrir el sidebar con el lead
+          handleOpenSidebar(lead);
+        }
+      } catch (error) {
+        console.error('Error cargando lead desde URL:', error);
+      }
+    };
+
+    // Esperar a que se carguen los datos iniciales
+    if (!loading && userEmail) {
+      abrirLeadDesdeURL();
+    }
+  }, [urlCardId, userEmail, loading]);
 
   // Efecto para recargar cuando cambian los filtros
   useEffect(() => {
@@ -602,6 +703,7 @@ export default function Dashboard() {
             <LeadsTable 
                   leads={leads}
                   statsData={statsData}
+                  etapasFunnel={etapasFunnel}
                   onOpenModal={handleOpenSidebar}
                   onOpenReminder={(lead) => handleOpenSidebar(lead, 'recordatorio')}
                   onMarcarNoRevisado={handleMarcarNoRevisado}
@@ -650,6 +752,7 @@ export default function Dashboard() {
         isOpen={sidebarOpen}
         onClose={handleCloseSidebar}
         initialTab={initialTab}
+        etapasFunnel={etapasFunnel}
         onMarcarNoRevisado={handleMarcarNoRevisado}
         onRefreshData={() => {
           fetchStats();

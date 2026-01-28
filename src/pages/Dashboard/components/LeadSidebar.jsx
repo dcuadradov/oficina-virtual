@@ -31,9 +31,9 @@ import {
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
 
-// Configuración del stepper del funnel
-const funnelSteps = [
-  { id: 'Sin contacto', label: 'Sin contacto', shortLabel: 'Contacto' },
+// Configuración del stepper del funnel (fallback si no se cargan de BD)
+const funnelStepsDefault = [
+  { id: 'Validación de contacto', label: 'Validación de contacto', shortLabel: 'Validación' },
   { id: 'Perfilamiento', label: 'Perfilamiento', shortLabel: 'Perfil' },
   { id: 'Pitch agendado', label: 'Pitch agendado', shortLabel: 'Agendado' },
   { id: 'Pitch', label: 'Pitch', shortLabel: 'Pitch' },
@@ -96,10 +96,14 @@ const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
 const RECORDATORIOS_PER_PAGE = 10;
 
-const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRevisado, onRefreshData }) => {
+const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  
+  // Usar etapas de la BD o fallback al default
+  const etapasFromProp = etapasFunnel?.etapas || [];
+  const funnelSteps = etapasFromProp.length > 0 ? etapasFromProp : funnelStepsDefault;
   
   // Estados para recordatorios
   const [recordatorios, setRecordatorios] = useState([]);
@@ -2037,4 +2041,5 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
 };
 
 export default LeadSidebar;
+
 
