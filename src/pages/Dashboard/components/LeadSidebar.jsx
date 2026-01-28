@@ -101,6 +101,7 @@ const RECORDATORIOS_PER_PAGE = 10;
 
 const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   
@@ -1279,164 +1280,390 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           {/* Contenido del tab - con scroll */}
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'info' && (
-              <div className="space-y-6">
-                {/* Datos de contacto */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Teléfono */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <Phone size={18} className="text-slate-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-400 font-medium">Teléfono</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.telefono || 'No disponible'}</p>
-                    </div>
-                    {lead.telefono && (
-                      <button
-                        onClick={() => handleCopy(lead.telefono, 'telefono')}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          copiedField === 'telefono'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                        }`}
-                        title={copiedField === 'telefono' ? '¡Copiado!' : 'Copiar teléfono'}
-                      >
-                        {copiedField === 'telefono' ? (
-                          <Check size={16} />
-                        ) : (
-                          <Copy size={16} />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Correo */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <Mail size={18} className="text-slate-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-400 font-medium">Correo</p>
-                      <p className="text-sm font-semibold text-slate-700 truncate">{lead.email || 'No disponible'}</p>
-                    </div>
-                    {lead.email && (
-                      <button
-                        onClick={() => handleCopy(lead.email, 'email')}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          copiedField === 'email'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                        }`}
-                        title={copiedField === 'email' ? '¡Copiado!' : 'Copiar correo'}
-                      >
-                        {copiedField === 'email' ? (
-                          <Check size={16} />
-                        ) : (
-                          <Copy size={16} />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* País */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <MapPin size={18} className="text-slate-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-medium">País</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.pais || 'No especificado'}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Nivel de inglés */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <BarChart3 size={18} className="text-slate-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-medium">Nivel de inglés</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.nivel_ingles || 'No evaluado'}</p>
-                    </div>
-                  </div>
+              <div className="flex flex-col h-full">
+                {/* Sub-tabs */}
+                <div className="flex gap-2 mb-4 flex-shrink-0">
+                  <button
+                    onClick={() => setSubActiveTab('informacion')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      subActiveTab === 'informacion'
+                        ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Información
+                  </button>
+                  <button
+                    onClick={() => setSubActiveTab('resumen-ia')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      subActiveTab === 'resumen-ia'
+                        ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Resumen IA
+                  </button>
                 </div>
 
-                {/* Motivación */}
-                <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Star size={18} className="text-amber-500" />
-                    <h4 className="font-semibold text-slate-700">Motivación</h4>
-                  </div>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    {lead.motivacion || 'El cliente no ha especificado su motivación para aprender inglés.'}
-                  </p>
-                </div>
+                {/* Contenido del sub-tab */}
+                <div className="flex-1 overflow-y-auto">
+                  {subActiveTab === 'informacion' && (
+                    <div className="space-y-6">
+                      {/* CONTACTO */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <Phone size={16} className="text-[#1717AF]" />
+                          Contacto
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Teléfono */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <Phone size={18} className="text-slate-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-slate-400 font-medium">Teléfono</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.telefono || 'No disponible'}</p>
+                            </div>
+                            {lead.telefono && (
+                              <button
+                                onClick={() => handleCopy(lead.telefono, 'telefono')}
+                                className={`p-2 rounded-lg transition-all duration-200 ${
+                                  copiedField === 'telefono'
+                                    ? 'bg-emerald-100 text-emerald-600'
+                                    : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
+                                }`}
+                                title={copiedField === 'telefono' ? '¡Copiado!' : 'Copiar teléfono'}
+                              >
+                                {copiedField === 'telefono' ? <Check size={16} /> : <Copy size={16} />}
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* Correo */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <Mail size={18} className="text-slate-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-slate-400 font-medium">Correo</p>
+                              <p className="text-sm font-semibold text-slate-700 truncate">{lead.email || 'No disponible'}</p>
+                            </div>
+                            {lead.email && (
+                              <button
+                                onClick={() => handleCopy(lead.email, 'email')}
+                                className={`p-2 rounded-lg transition-all duration-200 ${
+                                  copiedField === 'email'
+                                    ? 'bg-emerald-100 text-emerald-600'
+                                    : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
+                                }`}
+                                title={copiedField === 'email' ? '¡Copiado!' : 'Copiar correo'}
+                              >
+                                {copiedField === 'email' ? <Check size={16} /> : <Copy size={16} />}
+                              </button>
+                            )}
+                          </div>
 
-                {/* Resumen IA */}
-                <div className="p-5 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl border border-violet-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={18} className="text-violet-500" />
-                    <h4 className="font-semibold text-slate-700">Resumen inteligente</h4>
-                    <span className="text-[10px] font-medium text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">
-                      IA
-                    </span>
-                  </div>
-                  
-                  {resumenIA ? (
-                    <div className="space-y-2">
-                      <div className="w-full min-h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                        {resumenIA}
+                          {/* Consulta la decisión */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <MessageCircle size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Consulta la decisión</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.consulta_decision || 'No especificado'}</p>
+                            </div>
+                          </div>
+
+                          {/* Referido por (solo si tiene) */}
+                          {lead.referido_por && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <Star size={18} className="text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 font-medium">Referido por</p>
+                                <p className="text-sm font-semibold text-slate-700">{lead.referido_por}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {resumenIAFecha && (
-                        <p className="text-[11px] text-violet-400 italic text-right">
-                          Generado el {new Date(resumenIAFecha).toLocaleDateString('es-ES', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric'
-                          })} a las {new Date(resumenIAFecha).toLocaleTimeString('es-ES', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-400 flex items-center justify-center">
-                      {generandoResumen ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 size={16} className="animate-spin" />
-                          Generando resumen...
-                        </span>
-                      ) : (
-                        'Haz clic en "Generar" para crear un resumen con IA'
-                      )}
+
+                      {/* OCUPACIÓN */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <Briefcase size={16} className="text-[#1717AF]" />
+                          Ocupación
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Ocupación (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <Briefcase size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Ocupación</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.ocupacion || 'No especificada'}</p>
+                            </div>
+                          </div>
+
+                          {/* Si es Estudiante: Universidad */}
+                          {lead.ocupacion === 'Estudiante' && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <ClipboardList size={18} className="text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 font-medium">Universidad</p>
+                                <p className="text-sm font-semibold text-slate-700">{lead.universidad || 'No especificada'}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Si es Médico General: Lugar de trabajo */}
+                          {lead.ocupacion === 'Médico General' && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <MapPin size={18} className="text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
+                                <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Si es Residente: Año de residencia + Lugar de trabajo */}
+                          {lead.ocupacion === 'Residente' && (
+                            <>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                  <BarChart3 size={18} className="text-slate-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 font-medium">Año de residencia</p>
+                                  <p className="text-sm font-semibold text-slate-700">{lead.ano_residencia || 'No especificado'}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                  <MapPin size={18} className="text-slate-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
+                                  <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Si es Especialista: Especialidad + Lugar de trabajo */}
+                          {lead.ocupacion === 'Especialista' && (
+                            <>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                  <Star size={18} className="text-slate-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 font-medium">Especialidad</p>
+                                  <p className="text-sm font-semibold text-slate-700">{lead.especialidad || 'No especificada'}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                  <MapPin size={18} className="text-slate-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 font-medium">Lugar de trabajo</p>
+                                  <p className="text-sm font-semibold text-slate-700">{lead.lugar_trabajo || 'No especificado'}</p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* MOTIVACIÓN */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <Star size={16} className="text-[#1717AF]" />
+                          Motivación
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Motivación (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <Star size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Motivación</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.motivacion || 'No especificada'}</p>
+                            </div>
+                          </div>
+
+                          {/* Detalle motivación (solo si motivacion = "Otro") */}
+                          {lead.motivacion === 'Otro' && lead.motivacion_detalle && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <MessageCircle size={18} className="text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 font-medium">Detalle motivación</p>
+                                <p className="text-sm font-semibold text-slate-700">{lead.motivacion_detalle}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Cuando empezaría (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <Clock size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Cuando empezaría</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.cuando_empezar || 'No especificado'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* NIVEL DE INGLÉS */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <BarChart3 size={16} className="text-[#1717AF]" />
+                          Nivel de inglés
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Nivel inglés (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <BarChart3 size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Nivel de inglés</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.nivel_ingles || 'No evaluado'}</p>
+                            </div>
+                          </div>
+
+                          {/* Cómo adquirió inglés (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <ClipboardList size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Cómo adquirió inglés</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.como_adquirio_ingles || 'No especificado'}</p>
+                            </div>
+                          </div>
+
+                          {/* Detalle cómo adquirió inglés (solo si como_adquirio_ingles = "Otro") */}
+                          {lead.como_adquirio_ingles === 'Otro' && lead.como_adquirio_ingles_detalle && (
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl sm:col-span-2">
+                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <MessageCircle size={18} className="text-slate-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 font-medium">Detalle cómo adquirió inglés</p>
+                                <p className="text-sm font-semibold text-slate-700">{lead.como_adquirio_ingles_detalle}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* PLAN DE PAGO */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <FileText size={16} className="text-[#1717AF]" />
+                          Plan de pago
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Plan de pago (siempre) */}
+                          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                              <FileText size={18} className="text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 font-medium">Plan de pago</p>
+                              <p className="text-sm font-semibold text-slate-700">{lead.plan_pago || 'No especificado'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  
-                  <div className="flex justify-end mt-3">
-                    <button 
-                      onClick={handleGenerarResumen}
-                      disabled={generandoResumen}
-                      className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-violet-200 flex items-center gap-2 ${
-                        generandoResumen 
-                          ? 'bg-violet-400 cursor-not-allowed' 
-                          : 'bg-violet-600 hover:bg-violet-700'
-                      }`}
-                    >
-                      {generandoResumen ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Generando...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={14} />
-                          {resumenIA ? 'Regenerar' : 'Generar'}
-                        </>
-                      )}
-                    </button>
-                  </div>
+
+                  {subActiveTab === 'resumen-ia' && (
+                    <div className="space-y-6">
+                      {/* Resumen IA */}
+                      <div className="p-5 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl border border-violet-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles size={18} className="text-violet-500" />
+                          <h4 className="font-semibold text-slate-700">Resumen inteligente</h4>
+                          <span className="text-[10px] font-medium text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">
+                            IA
+                          </span>
+                        </div>
+                        
+                        {resumenIA ? (
+                          <div className="space-y-2">
+                            <div className="w-full min-h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                              {resumenIA}
+                            </div>
+                            {resumenIAFecha && (
+                              <p className="text-[11px] text-violet-400 italic text-right">
+                                Generado el {new Date(resumenIAFecha).toLocaleDateString('es-ES', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })} a las {new Date(resumenIAFecha).toLocaleTimeString('es-ES', {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-400 flex items-center justify-center">
+                            {generandoResumen ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 size={16} className="animate-spin" />
+                                Generando resumen...
+                              </span>
+                            ) : (
+                              'Haz clic en "Generar" para crear un resumen con IA'
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-end mt-3">
+                          <button 
+                            onClick={handleGenerarResumen}
+                            disabled={generandoResumen}
+                            className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-violet-200 flex items-center gap-2 ${
+                              generandoResumen 
+                                ? 'bg-violet-400 cursor-not-allowed' 
+                                : 'bg-violet-600 hover:bg-violet-700'
+                            }`}
+                          >
+                            {generandoResumen ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                Generando...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={14} />
+                                {resumenIA ? 'Regenerar' : 'Generar'}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
