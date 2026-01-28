@@ -148,6 +148,11 @@ const OPCIONES_ESPECIALIDAD = [
 
 const OPCIONES_PLAN_PAGO = ['1', '2', '4', '6', '8', '10', '12'];
 
+const OPCIONES_CONSULTA_DECISION = [
+  'Si, debe consultar con alguien más',
+  'No consulta con nadie más'
+];
+
 const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
@@ -1651,8 +1656,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <EditableTextField fieldName="telefono" label="Teléfono" icon={Phone} placeholder="No disponible" copyable={true} />
                                 <EditableTextField fieldName="email" label="Correo" icon={Mail} placeholder="No disponible" copyable={true} />
-                                <EditableTextField fieldName="consulta_decision" label="Consulta la decisión" icon={MessageCircle} />
-                                <EditableTextField fieldName="referido_por" label="Referido por" icon={Star} />
+                                <EditableSelectField fieldName="consulta_decision" label="Consulta la decisión" icon={MessageCircle} options={OPCIONES_CONSULTA_DECISION} />
+                                {getFieldValue('referido_por') && (
+                                  <EditableTextField fieldName="referido_por" label="Referido por" icon={Star} />
+                                )}
                               </div>
                             </div>
 
