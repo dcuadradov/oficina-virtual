@@ -758,6 +758,8 @@ export default function Dashboard() {
           fetchStats();
           fetchLeads(true, currentPage);
         }}
+        comerciales={comerciales}
+        puedeVerTodos={puedeVerTodos}
       />
     </div>
   );

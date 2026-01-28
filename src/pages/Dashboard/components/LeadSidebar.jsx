@@ -27,7 +27,9 @@ import {
   Bell,
   RotateCcw,
   ExternalLink,
-  Flame
+  Flame,
+  Users,
+  ChevronDown
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -97,7 +99,7 @@ const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
 const RECORDATORIOS_PER_PAGE = 10;
 
-const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData }) => {
+const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
@@ -150,6 +152,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   // Estados para lead HOT 🔥
   const [isHot, setIsHot] = useState(false);
   const [togglingHot, setTogglingHot] = useState(false);
+  
+  // Estados para reasignación de comercial 👥
+  const [comercialDropdownOpen, setComercialDropdownOpen] = useState(false);
+  const [comercialSeleccionado, setComercialSeleccionado] = useState(null);
+  const [mostrarModalReasignar, setMostrarModalReasignar] = useState(false);
+  const [reasignando, setReasignando] = useState(false);
   
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
@@ -238,6 +246,89 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setTogglingHot(false);
     }
   };
+
+  // Obtener información del comercial actual
+  const comercialActual = comerciales.find(c => c.email === lead?.comercial_email);
+  const nombreComercialActual = comercialActual?.nombre || lead?.comercial_email?.split('@')[0] || 'Sin asignar';
+
+  // Handler para confirmar reasignación de comercial
+  const handleConfirmarReasignacion = async () => {
+    if (!comercialSeleccionado || !lead?.card_id) return;
+
+    try {
+      setReasignando(true);
+      
+      // Obtener datos actualizados del lead desde la base de datos
+      const { data: leadActualizado } = await supabase
+        .from('leads')
+        .select('respond_io_url')
+        .eq('card_id', lead.card_id)
+        .single();
+      
+      // Enviar al webhook de n8n
+      const payload = {
+        card_id: lead.card_id,
+        lead_nombre: lead.nombre,
+        comercial_anterior_email: lead.comercial_email,
+        comercial_anterior_nombre: nombreComercialActual,
+        comercial_nuevo_email: comercialSeleccionado.email,
+        comercial_nuevo_nombre: comercialSeleccionado.nombre,
+        usuario_que_reasigna: userEmail,
+        respond_io_url: leadActualizado?.respond_io_url || lead.respond_io_url || null
+      };
+
+      const response = await fetch('https://api.mdenglish.us/webhook/reasignar-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al reasignar');
+      }
+
+      // Actualizar el lead en Supabase
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({ 
+          estado_gestion: 'sin_gestionar',
+          revisado: false,
+          fecha_asignacion: new Date().toISOString()
+        })
+        .eq('card_id', lead.card_id);
+
+      if (updateError) {
+        console.error('Error actualizando estado del lead:', updateError);
+      }
+
+      // Cerrar modales y refrescar
+      setMostrarModalReasignar(false);
+      setComercialDropdownOpen(false);
+      setComercialSeleccionado(null);
+      
+      // Refrescar datos
+      onRefreshData?.();
+      
+      alert(`Lead reasignado exitosamente a ${comercialSeleccionado.nombre}`);
+
+    } catch (error) {
+      console.error('Error reasignando lead:', error);
+      alert('No se pudo reasignar el lead. Intenta nuevamente.');
+    } finally {
+      setReasignando(false);
+    }
+  };
+
+  // Cerrar dropdown de comerciales al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.comercial-dropdown')) {
+        setComercialDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Función para generar resumen con IA
   const handleGenerarResumen = async () => {
@@ -898,7 +989,64 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                   <h2 className="text-xl font-bold text-slate-800">
                     {lead.nombre || 'Sin nombre'}
                   </h2>
-                  <p className="text-sm text-slate-500 flex items-center gap-2 mt-0.5">
+                  
+                  {/* Comercial asignado con dropdown de reasignación */}
+                  <div className="relative comercial-dropdown mt-1">
+                    {puedeVerTodos && comerciales.length > 0 ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setComercialDropdownOpen(!comercialDropdownOpen);
+                          }}
+                          className="text-sm text-slate-500 flex items-center gap-1.5 hover:text-[#1717AF] transition-colors"
+                        >
+                          <Users size={14} />
+                          <span>De: {nombreComercialActual}</span>
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${comercialDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        
+                        {/* Dropdown de comerciales */}
+                        {comercialDropdownOpen && (
+                          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
+                            <div className="px-4 py-2 border-b border-slate-100">
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Reasignar a:</p>
+                            </div>
+                            {comerciales
+                              .filter(c => c.email !== lead?.comercial_email)
+                              .map((comercial) => (
+                                <button
+                                  key={comercial.email}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setComercialSeleccionado(comercial);
+                                    setMostrarModalReasignar(true);
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 ${
+                                    comercialSeleccionado?.email === comercial.email
+                                      ? 'bg-[#1717AF]/10 text-[#1717AF]'
+                                      : 'text-slate-600'
+                                  }`}
+                                >
+                                  <div className="font-medium">{comercial.nombre}</div>
+                                  <div className="text-xs text-slate-400 truncate">{comercial.email}</div>
+                                </button>
+                              ))}
+                            {comerciales.filter(c => c.email !== lead?.comercial_email).length === 0 && (
+                              <p className="px-4 py-3 text-sm text-slate-400 text-center">No hay otros comerciales disponibles</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500 flex items-center gap-1.5">
+                        <Users size={14} />
+                        <span>De: {nombreComercialActual}</span>
+                      </p>
+                    )}
+                  </div>
+                  
+                  <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
                     <Briefcase size={14} />
                     {lead.ocupacion || 'Ocupación no especificada'}
                   </p>
@@ -2077,6 +2225,68 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     </>
                   ) : (
                     'Sí, cancelar'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal de confirmación para reasignar lead */}
+      {mostrarModalReasignar && comercialSeleccionado && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => {
+              setMostrarModalReasignar(false);
+              setComercialSeleccionado(null);
+            }}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-md">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 text-center mx-4">
+              {/* Ícono */}
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#1717AF] to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                <Users size={40} className="text-white" />
+              </div>
+              
+              {/* Título */}
+              <h3 className="text-xl font-bold text-slate-800 mb-3">
+                ¿Reasignar lead?
+              </h3>
+              
+              {/* Mensaje */}
+              <p className="text-slate-600 mb-6">
+                ¿Estás seguro que quieres reasignar el lead de{' '}
+                <span className="font-semibold text-slate-800">{nombreComercialActual}</span>{' '}
+                a{' '}
+                <span className="font-semibold text-[#1717AF]">{comercialSeleccionado.nombre}</span>?
+              </p>
+              
+              {/* Botones */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setMostrarModalReasignar(false);
+                    setComercialSeleccionado(null);
+                  }}
+                  disabled={reasignando}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition-all duration-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarReasignacion}
+                  disabled={reasignando}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#1717AF] to-indigo-600 text-white font-semibold hover:from-[#1414A0] hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                >
+                  {reasignando ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Reasignando...
+                    </>
+                  ) : (
+                    'Sí, reasignar'
                   )}
                 </button>
               </div>
