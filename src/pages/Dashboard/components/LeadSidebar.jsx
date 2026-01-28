@@ -221,7 +221,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [searchSelectQuery, setSearchSelectQuery] = useState(''); // Búsqueda en selects
   const [modalTextoCompleto, setModalTextoCompleto] = useState(null); // Modal para ver texto completo
   const [localLeadData, setLocalLeadData] = useState({}); // Datos locales para actualización inmediata
-  const [isComposing, setIsComposing] = useState(false); // Para manejar tildes correctamente
   
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
@@ -327,8 +326,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   };
 
   // Obtener información del comercial actual
-  const comercialActual = comerciales.find(c => c.email === lead?.comercial_email);
-  const nombreComercialActual = comercialActual?.nombre || lead?.comercial_email?.split('@')[0] || 'Sin asignar';
+  const comercialEmailActual = getFieldValue('comercial_email') || lead?.comercial_email;
+  const comercialActual = comerciales.find(c => c.email === comercialEmailActual);
+  const nombreComercialActual = comercialActual?.nombre || comercialEmailActual?.split('@')[0] || 'Sin asignar';
 
   // Función para guardar un campo editado
   const handleSaveField = async (fieldName, value) => {
@@ -430,6 +430,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       if (updateError) {
         console.error('Error actualizando estado del lead:', updateError);
       }
+
+      // Actualización optimista inmediata del comercial
+      setLocalLeadData(prev => ({ 
+        ...prev, 
+        comercial_email: comercialSeleccionado.email 
+      }));
 
       // Cerrar modales y refrescar
       setMostrarModalReasignar(false);
@@ -1122,15 +1128,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         type="text"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        onCompositionStart={() => setIsComposing(true)}
-                        onCompositionEnd={() => setIsComposing(false)}
-                        onKeyDown={(e) => {
-                          if (isComposing) return;
-                          if (e.key === 'Enter') handleSaveField('nombre', editValue);
-                          if (e.key === 'Escape') cancelEditing();
-                        }}
                         className="flex-1 text-xl font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/30"
                         autoFocus
+                        placeholder="Nombre del lead"
                       />
                       <button
                         onClick={() => handleSaveField('nombre', editValue)}
@@ -1490,14 +1490,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                     type="text"
                                     value={editValue}
                                     onChange={(e) => setEditValue(e.target.value)}
-                                    onCompositionStart={() => setIsComposing(true)}
-                                    onCompositionEnd={() => setIsComposing(false)}
-                                    onKeyDown={(e) => {
-                                      if (isComposing) return;
-                                      if (e.key === 'Enter') handleSaveField(fieldName, editValue);
-                                      if (e.key === 'Escape') cancelEditing();
-                                    }}
                                     className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                    placeholder={placeholder}
                                     autoFocus
                                     placeholder={placeholder}
                                   />
