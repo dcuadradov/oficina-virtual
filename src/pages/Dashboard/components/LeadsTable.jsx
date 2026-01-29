@@ -459,7 +459,7 @@ const LeadsTable = ({
                   </td>
 
                   {/* Seguimiento */}
-                  <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-4 px-4">
                     {(() => {
                       const seguimiento = ultimosSeguimientos[lead.card_id];
                       return (

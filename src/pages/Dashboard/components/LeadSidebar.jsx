@@ -182,7 +182,7 @@ const FASES_LISTO_AGENDAR = ['339756287', '340855086'];
 // Fases donde se muestra el banner de "Pitch agendado"
 const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
-const RECORDATORIOS_PER_PAGE = 10;
+const RECORDATORIOS_PER_PAGE = 50;
 
 // Opciones para los campos editables con select
 const OPCIONES_OCUPACION = ['Estudiante', 'Médico General', 'Residente', 'Especialista'];
@@ -337,6 +337,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   };
   
   const recordatoriosContainerRef = useRef(null);
+  const seguimientoInputRef = useRef(null);
   const userEmail = localStorage.getItem('user_email');
   const userName = localStorage.getItem('user_name') || 'Usuario';
 
@@ -795,12 +796,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     }
   };
 
-  // Manejar scroll para infinite scroll (con flex-col-reverse, scrollTop negativo indica arriba)
+  // Manejar scroll para infinite scroll (con flex-col-reverse)
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Con flex-col-reverse: scrollTop cercano a -(scrollHeight - clientHeight) = arriba (mensajes antiguos)
-    // Cargar más cuando esté cerca del tope (scroll hacia arriba)
-    if (Math.abs(scrollTop) + clientHeight >= scrollHeight - 100) {
+    // Con flex-col-reverse el scroll empieza en 0 y va negativo hacia arriba
+    // Detectamos si está cerca del tope (mensajes antiguos)
+    const isNearTop = scrollTop <= -scrollHeight + clientHeight + 150;
+    if (isNearTop && !loadingRecordatorios && hasMoreRecordatorios) {
       loadMoreRecordatorios();
     }
   };
@@ -814,6 +816,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setFiltroEtapa(null);
       setFiltroFase(null);
       fetchRecordatorios(0, true);
+      
+      // Scroll al input después de un breve delay para que se renderice
+      setTimeout(() => {
+        seguimientoInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatorios]);
 
@@ -2099,7 +2106,15 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         </div>
                       )}
                       
-                      {/* Mensaje de fin de lista (arriba) */}
+                      {/* Botón para cargar más o mensaje de fin de lista */}
+                      {hasMoreRecordatorios && recordatorios.length > 0 && !loadingRecordatorios && (
+                        <button
+                          onClick={loadMoreRecordatorios}
+                          className="w-full py-2 text-center text-xs text-[#1717AF] hover:text-[#02214A] font-medium hover:bg-slate-50 rounded-lg transition-colors"
+                        >
+                          Cargar mensajes anteriores
+                        </button>
+                      )}
                       {!hasMoreRecordatorios && recordatorios.length > 0 && (
                         <p className="text-center text-xs text-slate-400 py-2">
                           Inicio del historial
@@ -2110,7 +2125,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 </div>
                 
                 {/* Campo para nuevo mensaje */}
-                <div className="border-t border-slate-100 pt-4">
+                <div ref={seguimientoInputRef} className="border-t border-slate-100 pt-4 flex-shrink-0">
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
