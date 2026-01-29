@@ -314,47 +314,6 @@ const LeadsTable = ({
               </th>
             </tr>
           </thead>
-          
-          {/* Dropdown portal - fuera del overflow */}
-          {dropdownWhatsAppOpen && (
-            <div 
-              className="fixed bg-white rounded-xl shadow-xl border border-slate-200 py-1 min-w-[140px]"
-              style={{ 
-                zIndex: 9999, 
-                top: dropdownPosition.top,
-                right: dropdownPosition.right
-              }}
-            >
-              <button
-                onClick={() => { setFiltroWhatsApp('todos'); setDropdownWhatsAppOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                  filtroWhatsApp === 'todos' ? 'text-slate-700 font-medium bg-slate-50' : 'text-slate-600'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-slate-300"></span>
-                Todos
-              </button>
-              <button
-                onClick={() => { setFiltroWhatsApp('abierta'); setDropdownWhatsAppOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                  filtroWhatsApp === 'abierta' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Ventana abierta
-              </button>
-              <button
-                onClick={() => { setFiltroWhatsApp('cerrada'); setDropdownWhatsAppOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                  filtroWhatsApp === 'cerrada' ? 'text-amber-600 font-medium bg-amber-50' : 'text-slate-600'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                Ventana cerrada
-              </button>
-            </div>
-          )}
-          
           <tbody className="divide-y divide-slate-50">
             {leads
               .filter((lead) => {
@@ -581,6 +540,46 @@ const LeadsTable = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* Dropdown portal - fuera de la tabla para evitar overflow issues */}
+      {dropdownWhatsAppOpen && (
+        <div 
+          className="fixed bg-white rounded-xl shadow-xl border border-slate-200 py-1 min-w-[140px]"
+          style={{ 
+            zIndex: 9999, 
+            top: dropdownPosition.top,
+            right: dropdownPosition.right
+          }}
+        >
+          <button
+            onClick={() => { setFiltroWhatsApp('todos'); setDropdownWhatsAppOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+              filtroWhatsApp === 'todos' ? 'text-slate-700 font-medium bg-slate-50' : 'text-slate-600'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+            Todos
+          </button>
+          <button
+            onClick={() => { setFiltroWhatsApp('abierta'); setDropdownWhatsAppOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+              filtroWhatsApp === 'abierta' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Ventana abierta
+          </button>
+          <button
+            onClick={() => { setFiltroWhatsApp('cerrada'); setDropdownWhatsAppOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+              filtroWhatsApp === 'cerrada' ? 'text-amber-600 font-medium bg-amber-50' : 'text-slate-600'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+            Ventana cerrada
+          </button>
         </div>
       )}
     </div>
