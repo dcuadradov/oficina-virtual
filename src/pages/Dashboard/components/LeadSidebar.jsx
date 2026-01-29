@@ -1978,54 +1978,35 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             )}
 
             {activeTab === 'seguimiento' && (() => {
-              // Obtener etapas y fases únicas de los comentarios
-              const etapasUnicas = [...new Set(recordatorios.map(c => c.etapa_funnel).filter(Boolean))];
+              // Obtener fases únicas de los comentarios
               const fasesUnicas = [...new Set(recordatorios.map(c => c.fase).filter(Boolean))];
               
-              // Filtrar comentarios
+              // Filtrar comentarios solo por fase
               const comentariosFiltrados = recordatorios.filter(c => {
-                if (filtroEtapa && c.etapa_funnel !== filtroEtapa) return false;
                 if (filtroFase && c.fase !== filtroFase) return false;
                 return true;
               });
               
               return (
               <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
-                {/* Filtros sutiles */}
-                {(etapasUnicas.length > 0 || fasesUnicas.length > 0) && (
+                {/* Filtro por fase */}
+                {fasesUnicas.length > 0 && (
                   <div className="flex-shrink-0 mb-3 flex flex-wrap gap-2">
-                    {/* Filtro por etapa */}
-                    {etapasUnicas.length > 0 && (
-                      <select
-                        value={filtroEtapa || ''}
-                        onChange={(e) => setFiltroEtapa(e.target.value || null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                      >
-                        <option value="">Todas las etapas</option>
-                        {etapasUnicas.map(etapa => (
-                          <option key={etapa} value={etapa}>{etapa}</option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      value={filtroFase || ''}
+                      onChange={(e) => setFiltroFase(e.target.value || null)}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
+                    >
+                      <option value="">Todas las fases</option>
+                      {fasesUnicas.map(fase => (
+                        <option key={fase} value={fase}>{fase}</option>
+                      ))}
+                    </select>
                     
-                    {/* Filtro por fase */}
-                    {fasesUnicas.length > 0 && (
-                      <select
-                        value={filtroFase || ''}
-                        onChange={(e) => setFiltroFase(e.target.value || null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                      >
-                        <option value="">Todas las fases</option>
-                        {fasesUnicas.map(fase => (
-                          <option key={fase} value={fase}>{fase}</option>
-                        ))}
-                      </select>
-                    )}
-                    
-                    {/* Botón limpiar filtros */}
-                    {(filtroEtapa || filtroFase) && (
+                    {/* Botón limpiar filtro */}
+                    {filtroFase && (
                       <button
-                        onClick={() => { setFiltroEtapa(null); setFiltroFase(null); }}
+                        onClick={() => setFiltroFase(null)}
                         className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                       >
                         Limpiar
@@ -2066,34 +2047,36 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         return (
                           <div 
                             key={comentario.id || index}
-                            className="bg-slate-50 rounded-2xl p-4 border border-slate-100 hover:border-slate-200 transition-all duration-200"
+                            className="bg-white rounded-xl border border-slate-100 overflow-hidden hover:border-slate-200 transition-all duration-200"
+                            style={{ borderLeft: '3px solid #10b981' }}
                           >
-                            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                              {comentario.texto}
-                            </p>
+                            {/* Contenido del mensaje */}
+                            <div className="p-4 pb-3">
+                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                <span className="font-semibold text-slate-600">Seguimiento: </span>
+                                {comentario.texto}
+                              </p>
+                            </div>
                             
-                            {/* Badge de fase y etapa (si existe) */}
-                            {(comentario.fase || comentario.etapa_funnel) && (
-                              <div className="mt-3 mb-2 flex flex-wrap gap-2">
-                                {comentario.etapa_funnel && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 text-xs font-medium rounded-lg">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    {comentario.etapa_funnel}
-                                  </span>
-                                )}
-                                {comentario.fase && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-lg">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                    {comentario.fase}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center justify-end gap-2 text-xs text-slate-400 mt-2">
-                              <span>{formatearFechaRecordatorio(comentario.created_at)}</span>
-                              <span className="text-slate-300">•</span>
-                              <span className="font-medium text-slate-500">{nombreAutor}</span>
+                            {/* Footer con fase, fecha y autor */}
+                            <div className="px-4 py-2.5 bg-slate-50/50 flex items-center gap-4 text-xs">
+                              {/* Fase */}
+                              {comentario.fase && (
+                                <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                  {comentario.fase}
+                                </span>
+                              )}
+                              
+                              {/* Fecha */}
+                              <span className="text-slate-400">
+                                {formatearFechaRecordatorio(comentario.created_at)}
+                              </span>
+                              
+                              {/* Autor */}
+                              <span className="font-medium text-slate-500 ml-auto">
+                                {nombreAutor}
+                              </span>
                             </div>
                           </div>
                         );
