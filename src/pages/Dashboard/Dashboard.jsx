@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([]);
   const [totalLeads, setTotalLeads] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
+  const [ultimosSeguimientos, setUltimosSeguimientos] = useState({});
   
   // Estados de UI
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,11 @@ export default function Dashboard() {
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
+
+  // Función para abrir el sidebar en el tab de seguimiento
+  const handleOpenSeguimiento = (lead) => {
+    handleOpenSidebar(lead, 'seguimiento');
+  };
 
   // Función para abrir el sidebar con un lead (tab opcional)
   const handleOpenSidebar = async (lead, tab = 'info') => {
@@ -147,7 +153,7 @@ export default function Dashboard() {
         .neq('etapa_funnel_agrupada', 'No mostrar');
 
       if (error) throw error;
-
+      
       // Agrupar por etapa_funnel_agrupada y tomar los valores de configuración
       const etapasMap = new Map();
       const gruposMap = new Map();
@@ -361,6 +367,27 @@ export default function Dashboard() {
       setLeads(data || []);
       setTotalLeads(count || 0);
       setCurrentPage(page);
+      
+      // Cargar últimos seguimientos para los leads cargados
+      if (data && data.length > 0) {
+        const cardIds = data.map(lead => lead.card_id);
+        const { data: comentarios, error: errorComentarios } = await supabase
+          .from('comentarios')
+          .select('lead_id, texto, created_at')
+          .in('lead_id', cardIds)
+          .order('created_at', { ascending: false });
+        
+        if (!errorComentarios && comentarios) {
+          // Agrupar por lead_id y tomar solo el último
+          const ultimosMap = {};
+          comentarios.forEach(c => {
+            if (!ultimosMap[c.lead_id]) {
+              ultimosMap[c.lead_id] = c;
+            }
+          });
+          setUltimosSeguimientos(ultimosMap);
+        }
+      }
       
     } catch (error) {
       console.error('Error cargando leads:', error.message);
@@ -754,10 +781,12 @@ export default function Dashboard() {
                   etapasFunnel={etapasFunnel}
                   onOpenModal={handleOpenSidebar}
                   onOpenReminder={(lead) => handleOpenSidebar(lead, 'recordatorio')}
+                  onOpenSeguimiento={handleOpenSeguimiento}
                   onMarcarNoRevisado={handleMarcarNoRevisado}
                   activeEtapa={activeEtapa}
                   onEtapaChange={handleEtapaChange}
                   activeFilter={activeFilter}
+                  ultimosSeguimientos={ultimosSeguimientos}
                   currentPage={currentPage}
                   totalPages={totalPages}
                   totalLeads={totalLeads}

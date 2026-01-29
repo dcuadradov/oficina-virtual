@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame } from 'lucide-react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame, Plus } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 /**
@@ -118,9 +118,31 @@ const getTimeAgo = (dateString) => {
   return `${Math.floor(diffDays / 365)} años`;
 };
 
-// Función para formatear fecha de asignación: "16 Dic 2025 05:00 pm"
-const formatFechaAsignacion = (dateString) => {
-  if (!dateString) return '-';
+// Función para calcular tiempo detallado (para seguimiento)
+const getTimeAgoDetailed = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const remainingHours = diffHours % 24;
+  const remainingMins = diffMins % 60;
+
+  if (diffDays >= 1) {
+    return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''} ${remainingHours}h y ${remainingMins}min`;
+  }
+  if (diffHours >= 1) {
+    return `Hace ${diffHours}h y ${remainingMins}min`;
+  }
+  return `Hace ${diffMins}min`;
+};
+
+// Función para formatear fecha en 2 líneas: { fecha: "16 Dic 2025", hora: "05:00 pm" }
+const formatFecha2Lineas = (dateString) => {
+  if (!dateString) return { fecha: '-', hora: '' };
   
   const date = new Date(dateString);
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -134,7 +156,10 @@ const formatFechaAsignacion = (dateString) => {
   const ampm = horas >= 12 ? 'pm' : 'am';
   horas = horas % 12 || 12;
   
-  return `${dia} ${mes} ${año} ${horas}:${minutos} ${ampm}`;
+  return {
+    fecha: `${dia} ${mes} ${año}`,
+    hora: `${horas}:${minutos} ${ampm}`
+  };
 };
 
 // Mapear estado_gestion de BD a estilos visuales
@@ -151,11 +176,13 @@ const LeadsTable = ({
   statsData = {},
   etapasFunnel = { etapas: [], grupos: [] },
   onOpenModal, 
-  onOpenReminder, 
+  onOpenReminder,
+  onOpenSeguimiento,
   onMarcarNoRevisado,
   activeEtapa, 
   onEtapaChange,
   activeFilter,
+  ultimosSeguimientos = {},
   // Props de paginación
   currentPage = 0,
   totalPages = 1,
@@ -281,12 +308,11 @@ const LeadsTable = ({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-100">
-              <th className="text-left py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">Actualizado</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Creación</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Actualización</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Teléfono</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Fase</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En gestión</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En fase</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
                 <div className="flex items-center justify-end gap-3">
                   <span>Acciones</span>
@@ -375,14 +401,29 @@ const LeadsTable = ({
                   }`}
                   style={isHot ? { boxShadow: 'inset 4px 0 0 0 #f97316' } : {}}
                 >
-                  {/* Asignación con indicador de estado */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      {/* Indicador de estado */}
-                      <div className={`w-2 h-8 rounded-full ${statusStyles[status] || statusStyles['sin_gestionar']} shadow-sm`} />
-                      
-                      <span className={`text-xs ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
-                        {formatFechaAsignacion(lead.fecha_asignacion)}
+                  {/* Creación - 2 líneas */}
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-10 rounded-full ${statusStyles[status] || statusStyles['sin_gestionar']} shadow-sm`} />
+                      <div className="flex flex-col">
+                        <span className={`text-xs ${noRevisado ? 'text-slate-600 font-medium' : 'text-slate-500'}`}>
+                          {formatFecha2Lineas(lead.created_at).fecha}
+                        </span>
+                        <span className={`text-xs ${noRevisado ? 'text-slate-500' : 'text-slate-400'}`}>
+                          {formatFecha2Lineas(lead.created_at).hora}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Actualización - 2 líneas */}
+                  <td className="py-4 px-4">
+                    <div className="flex flex-col">
+                      <span className={`text-xs ${noRevisado ? 'text-slate-600 font-medium' : 'text-slate-500'}`}>
+                        {formatFecha2Lineas(lead.updated_at).fecha}
+                      </span>
+                      <span className={`text-xs ${noRevisado ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {formatFecha2Lineas(lead.updated_at).hora}
                       </span>
                     </div>
                   </td>
@@ -417,31 +458,45 @@ const LeadsTable = ({
                     </div>
                   </td>
 
-                  {/* Teléfono */}
-                  <td className="py-4 px-4">
-                    <span className={`text-sm tabular-nums ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600 font-medium'}`}>
-                      {lead.telefono || '-'}
-                    </span>
+                  {/* Seguimiento */}
+                  <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const seguimiento = ultimosSeguimientos[lead.card_id];
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            {seguimiento ? (
+                              <>
+                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`}>
+                                  {seguimiento.texto}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  <span className="font-bold text-slate-600">{getTimeAgoDetailed(seguimiento.created_at)}</span>
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-sm text-slate-400 italic">Este lead no tiene seguimiento</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenSeguimiento?.(lead);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#1717AF] hover:bg-[#1717AF]/10 transition-all duration-200 flex-shrink-0"
+                            title="Agregar seguimiento"
+                          >
+                            <Plus size={16} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </td>
 
-                  {/* Fase */}
+                  {/* Etapa */}
                   <td className="py-4 px-4">
                     <span className={`text-sm ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600'}`}>
-                        {lead.fase_nombre_pipefy || 'Sin fase'}
-                      </span>
-                  </td>
-
-                  {/* Tiempo en gestión */}
-                  <td className="py-4 px-4 hidden lg:table-cell">
-                    <span className={`text-sm ${noRevisado ? 'text-slate-700 font-bold' : 'text-slate-500 font-medium'}`}>
-                        {getTimeAgo(lead.created_at)}
-                      </span>
-                  </td>
-
-                  {/* Tiempo en fase */}
-                  <td className="py-4 px-4 hidden lg:table-cell">
-                    <span className={`text-sm ${noRevisado ? 'text-slate-700 font-bold' : 'text-slate-500 font-medium'}`}>
-                      {getTimeAgo(lead.updated_at)}
+                      {lead.fase_nombre_pipefy || 'Sin etapa'}
                     </span>
                   </td>
 
@@ -495,6 +550,18 @@ const LeadsTable = ({
                           <RotateCcw size={18} strokeWidth={2} />
                         </button>
                       )}
+
+                      {/* Indicador HOT */}
+                      <div
+                        className={`p-2.5 rounded-xl ${
+                          isHot
+                            ? 'text-orange-500'
+                            : 'text-slate-200'
+                        }`}
+                        title={isHot ? "Lead HOT" : "Lead normal"}
+                      >
+                        <Flame size={18} strokeWidth={2} fill={isHot ? 'currentColor' : 'none'} />
+                      </div>
 
                       {/* Flecha */}
                       <ChevronRight size={16} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
