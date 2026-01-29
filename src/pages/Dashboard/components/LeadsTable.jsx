@@ -175,9 +175,17 @@ const LeadsTable = ({
   // Estado para filtro de ventana WhatsApp
   const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
   
+  // Estado para filtro de leads HOT
+  const [filtroHot, setFiltroHot] = useState(false);
+  
   // Toggle del filtro WhatsApp (click en el mismo lo desactiva)
   const handleFiltroWhatsApp = (filtro) => {
     setFiltroWhatsApp(prev => prev === filtro ? 'todos' : filtro);
+  };
+  
+  // Toggle del filtro HOT
+  const handleFiltroHot = () => {
+    setFiltroHot(prev => !prev);
   };
   
   // Si no hay tab activo y hay grupos, seleccionar el primero
@@ -266,26 +274,46 @@ const LeadsTable = ({
                 <div className="flex items-center justify-end gap-3">
                   <span>Acciones</span>
                   
-                  {/* Filtros de ventana WhatsApp - círculos */}
-                  <div className="flex items-center gap-1.5">
+                  {/* Filtros: WhatsApp abierta, WhatsApp cerrada, HOT */}
+                  <div className="flex items-center gap-1">
+                    {/* WhatsApp verde - Ventana abierta */}
                     <button
                       onClick={() => handleFiltroWhatsApp('abierta')}
-                      className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                      className={`p-1 rounded-lg transition-all duration-200 ${
                         filtroWhatsApp === 'abierta'
-                          ? 'bg-emerald-500 ring-2 ring-emerald-300 ring-offset-1'
-                          : 'bg-emerald-200 hover:bg-emerald-300'
+                          ? 'text-emerald-500'
+                          : 'text-emerald-300 hover:text-emerald-400'
                       }`}
                       title="Ventana abierta (< 24h)"
-                    />
+                    >
+                      <MessageCircle size={20} fill={filtroWhatsApp === 'abierta' ? 'currentColor' : 'none'} />
+                    </button>
+                    
+                    {/* WhatsApp naranja - Ventana cerrada */}
                     <button
                       onClick={() => handleFiltroWhatsApp('cerrada')}
-                      className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                      className={`p-1 rounded-lg transition-all duration-200 ${
                         filtroWhatsApp === 'cerrada'
-                          ? 'bg-amber-500 ring-2 ring-amber-300 ring-offset-1'
-                          : 'bg-amber-200 hover:bg-amber-300'
+                          ? 'text-amber-500'
+                          : 'text-amber-300 hover:text-amber-400'
                       }`}
                       title="Ventana cerrada (> 24h)"
-                    />
+                    >
+                      <MessageCircle size={20} fill={filtroWhatsApp === 'cerrada' ? 'currentColor' : 'none'} />
+                    </button>
+                    
+                    {/* Fuego - Leads HOT */}
+                    <button
+                      onClick={handleFiltroHot}
+                      className={`p-1 rounded-lg transition-all duration-200 ${
+                        filtroHot
+                          ? 'text-orange-500'
+                          : 'text-orange-300 hover:text-orange-400'
+                      }`}
+                      title="Leads HOT"
+                    >
+                      <Flame size={20} fill={filtroHot ? 'currentColor' : 'none'} />
+                    </button>
                   </div>
                 </div>
               </th>
@@ -294,6 +322,9 @@ const LeadsTable = ({
           <tbody className="divide-y divide-slate-50">
             {leads
               .filter((lead) => {
+                // Filtro de leads HOT
+                if (filtroHot && lead.is_hot !== true) return false;
+                
                 // Filtro de ventana WhatsApp
                 if (filtroWhatsApp === 'todos') return true;
                 
