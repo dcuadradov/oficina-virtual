@@ -33,24 +33,15 @@ const formatLastConnection = (ultimaConexion) => {
     return 'Conectado ahora';
   }
   
-  // Formatear fecha corta
-  const fechaCorta = lastConnection.toLocaleDateString('es-ES', { 
-    day: 'numeric', 
-    month: 'short'
-  });
-  
   // Formatear tiempo transcurrido
   let tiempoTranscurrido = '';
   if (diffHours >= 1) {
-    tiempoTranscurrido = `${diffHours}h`;
-    if (remainingMinutes > 0) {
-      tiempoTranscurrido += ` ${remainingMinutes}min`;
-    }
+    tiempoTranscurrido = `${diffHours}h y ${remainingMinutes}min`;
   } else {
     tiempoTranscurrido = `${diffMinutes}min`;
   }
   
-  return `Inactivo ${fechaCorta} hace ${tiempoTranscurrido}`;
+  return `Inactivo. Última conexión hace ${tiempoTranscurrido}`;
 };
 
 /**
