@@ -458,16 +458,16 @@ const LeadsTable = ({
                     </div>
                   </td>
 
-                  {/* Seguimiento */}
-                  <td className="py-4 px-4">
+                  {/* Seguimiento - ancho amplio con truncado */}
+                  <td className="py-4 px-4 max-w-[320px]">
                     {(() => {
                       const seguimiento = ultimosSeguimientos[lead.card_id];
                       return (
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 max-w-[280px]">
                             {seguimiento ? (
                               <>
-                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`}>
+                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`} title={seguimiento.texto}>
                                   {seguimiento.texto}
                                 </p>
                                 <p className="text-xs text-slate-400">
