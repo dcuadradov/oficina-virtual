@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame, ChevronDown, Filter } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 /**
@@ -172,6 +172,22 @@ const LeadsTable = ({
   // Estado para el tab activo del funnel (inicializar con el primer grupo)
   const [activeFunnelTab, setActiveFunnelTab] = useState(null);
   
+  // Estado para filtro de ventana WhatsApp
+  const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
+  const [dropdownWhatsAppOpen, setDropdownWhatsAppOpen] = useState(false);
+  const dropdownWhatsAppRef = useRef(null);
+  
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownWhatsAppRef.current && !dropdownWhatsAppRef.current.contains(event.target)) {
+        setDropdownWhatsAppOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
   // Si no hay tab activo y hay grupos, seleccionar el primero
   React.useEffect(() => {
     if (!activeFunnelTab && todosLosGrupos.length > 0) {
@@ -254,11 +270,84 @@ const LeadsTable = ({
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Fase</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En gestión</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En fase</th>
-              <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">Acciones</th>
+              <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
+                <div className="flex items-center justify-end gap-2" ref={dropdownWhatsAppRef}>
+                  <span>Acciones</span>
+                  
+                  {/* Dropdown filtro WhatsApp */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setDropdownWhatsAppOpen(!dropdownWhatsAppOpen)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                        filtroWhatsApp !== 'todos'
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                      title="Filtrar por ventana WhatsApp"
+                    >
+                      <MessageCircle size={12} />
+                      {filtroWhatsApp === 'todos' && 'WA'}
+                      {filtroWhatsApp === 'abierta' && '< 24h'}
+                      {filtroWhatsApp === 'cerrada' && '> 24h'}
+                      <ChevronDown size={10} className={`transition-transform ${dropdownWhatsAppOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {dropdownWhatsAppOpen && (
+                      <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 min-w-[140px]">
+                        <button
+                          onClick={() => { setFiltroWhatsApp('todos'); setDropdownWhatsAppOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                            filtroWhatsApp === 'todos' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                          Todos
+                        </button>
+                        <button
+                          onClick={() => { setFiltroWhatsApp('abierta'); setDropdownWhatsAppOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                            filtroWhatsApp === 'abierta' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          Ventana abierta
+                        </button>
+                        <button
+                          onClick={() => { setFiltroWhatsApp('cerrada'); setDropdownWhatsAppOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                            filtroWhatsApp === 'cerrada' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                          Ventana cerrada
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {leads.map((lead, index) => {
+            {leads
+              .filter((lead) => {
+                // Filtro de ventana WhatsApp
+                if (filtroWhatsApp === 'todos') return true;
+                
+                const timestamp = lead.timestamp_ultimo_mensaje_whatsapp;
+                if (!timestamp) {
+                  // Sin timestamp = ventana cerrada
+                  return filtroWhatsApp === 'cerrada';
+                }
+                
+                const diffHoras = (new Date() - new Date(timestamp)) / (1000 * 60 * 60);
+                const ventanaAbierta = diffHoras < 24;
+                
+                if (filtroWhatsApp === 'abierta') return ventanaAbierta;
+                if (filtroWhatsApp === 'cerrada') return !ventanaAbierta;
+                return true;
+              })
+              .map((lead, index) => {
               // Usar el campo estado_gestion directamente de la BD
               const status = lead.estado_gestion || 'sin_gestionar';
               const noRevisado = lead.revisado === false;
