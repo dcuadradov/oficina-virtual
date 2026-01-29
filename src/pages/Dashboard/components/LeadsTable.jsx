@@ -205,6 +205,13 @@ const LeadsTable = ({
   });
   
   const { porEtapa = {} } = statsData;
+  
+  // Calcular conteo por grupo (suma de etapas de cada grupo)
+  const conteoPorGrupo = todosLosGrupos.reduce((acc, grupo) => {
+    const etapasDelGrupo = etapasAUsar.filter(e => e.grupo === grupo.id);
+    acc[grupo.id] = etapasDelGrupo.reduce((sum, etapa) => sum + (porEtapa[etapa.id] || 0), 0);
+    return acc;
+  }, {});
 
   return (
     <div className={isEmbedded ? '' : 'bg-white/70 backdrop-blur-sm rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden'}>
@@ -216,22 +223,32 @@ const LeadsTable = ({
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-semibold text-slate-800">Funnel</h2>
             
-            {/* Tabs dinámicos */}
+            {/* Tabs dinámicos con contador */}
             {todosLosGrupos.length > 1 && (
               <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                {todosLosGrupos.map((grupo) => (
-                  <button
-                    key={grupo.id}
-                    onClick={() => setActiveFunnelTab(grupo.id)}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                      activeFunnelTab === grupo.id
-                        ? 'bg-white text-[#1717AF] shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {grupo.nombre}
-                  </button>
-                ))}
+                {todosLosGrupos.map((grupo) => {
+                  const count = conteoPorGrupo[grupo.id] || 0;
+                  return (
+                    <button
+                      key={grupo.id}
+                      onClick={() => setActiveFunnelTab(grupo.id)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                        activeFunnelTab === grupo.id
+                          ? 'bg-white text-[#1717AF] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {grupo.nombre}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                        activeFunnelTab === grupo.id
+                          ? 'bg-[#1717AF]/10 text-[#1717AF]'
+                          : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
