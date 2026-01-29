@@ -175,18 +175,33 @@ const LeadsTable = ({
   // Estado para filtro de ventana WhatsApp
   const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
   const [dropdownWhatsAppOpen, setDropdownWhatsAppOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const dropdownWhatsAppRef = useRef(null);
+  const dropdownButtonRef = useRef(null);
   
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownWhatsAppRef.current && !dropdownWhatsAppRef.current.contains(event.target)) {
+      if (dropdownWhatsAppRef.current && !dropdownWhatsAppRef.current.contains(event.target) &&
+          dropdownButtonRef.current && !dropdownButtonRef.current.contains(event.target)) {
         setDropdownWhatsAppOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+  
+  // Calcular posición del dropdown cuando se abre
+  const handleToggleDropdown = () => {
+    if (!dropdownWhatsAppOpen && dropdownButtonRef.current) {
+      const rect = dropdownButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right
+      });
+    }
+    setDropdownWhatsAppOpen(!dropdownWhatsAppOpen);
+  };
   
   // Si no hay tab activo y hay grupos, seleccionar el primero
   React.useEffect(() => {
@@ -275,13 +290,16 @@ const LeadsTable = ({
                   <span>Acciones</span>
                   
                   {/* Dropdown filtro WhatsApp */}
-                  <div className="relative">
+                  <div className="relative" ref={dropdownWhatsAppRef}>
                     <button
-                      onClick={() => setDropdownWhatsAppOpen(!dropdownWhatsAppOpen)}
+                      ref={dropdownButtonRef}
+                      onClick={handleToggleDropdown}
                       className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${
-                        filtroWhatsApp !== 'todos'
+                        filtroWhatsApp === 'abierta'
                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          : filtroWhatsApp === 'cerrada'
+                            ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       }`}
                       title="Filtrar por ventana WhatsApp"
                     >
@@ -291,43 +309,52 @@ const LeadsTable = ({
                       {filtroWhatsApp === 'cerrada' && '> 24h'}
                       <ChevronDown size={10} className={`transition-transform ${dropdownWhatsAppOpen ? 'rotate-180' : ''}`} />
                     </button>
-                    
-                    {dropdownWhatsAppOpen && (
-                      <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 min-w-[140px]">
-                        <button
-                          onClick={() => { setFiltroWhatsApp('todos'); setDropdownWhatsAppOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                            filtroWhatsApp === 'todos' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
-                          }`}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-slate-300"></span>
-                          Todos
-                        </button>
-                        <button
-                          onClick={() => { setFiltroWhatsApp('abierta'); setDropdownWhatsAppOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                            filtroWhatsApp === 'abierta' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
-                          }`}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          Ventana abierta
-                        </button>
-                        <button
-                          onClick={() => { setFiltroWhatsApp('cerrada'); setDropdownWhatsAppOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
-                            filtroWhatsApp === 'cerrada' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
-                          }`}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                          Ventana cerrada
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </th>
             </tr>
           </thead>
+          
+          {/* Dropdown portal - fuera del overflow */}
+          {dropdownWhatsAppOpen && (
+            <div 
+              className="fixed bg-white rounded-xl shadow-xl border border-slate-200 py-1 min-w-[140px]"
+              style={{ 
+                zIndex: 9999, 
+                top: dropdownPosition.top,
+                right: dropdownPosition.right
+              }}
+            >
+              <button
+                onClick={() => { setFiltroWhatsApp('todos'); setDropdownWhatsAppOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                  filtroWhatsApp === 'todos' ? 'text-slate-700 font-medium bg-slate-50' : 'text-slate-600'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                Todos
+              </button>
+              <button
+                onClick={() => { setFiltroWhatsApp('abierta'); setDropdownWhatsAppOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                  filtroWhatsApp === 'abierta' ? 'text-emerald-600 font-medium bg-emerald-50' : 'text-slate-600'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Ventana abierta
+              </button>
+              <button
+                onClick={() => { setFiltroWhatsApp('cerrada'); setDropdownWhatsAppOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 ${
+                  filtroWhatsApp === 'cerrada' ? 'text-amber-600 font-medium bg-amber-50' : 'text-slate-600'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                Ventana cerrada
+              </button>
+            </div>
+          )}
+          
           <tbody className="divide-y divide-slate-50">
             {leads
               .filter((lead) => {
