@@ -27,6 +27,8 @@ const formatLastConnection = (ultimaConexion) => {
   const diffMs = now - lastConnection;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
   const remainingMinutes = diffMinutes % 60;
   
   if (diffMinutes < 2) {
@@ -35,9 +37,14 @@ const formatLastConnection = (ultimaConexion) => {
   
   // Formatear tiempo transcurrido
   let tiempoTranscurrido = '';
-  if (diffHours >= 1) {
+  if (diffDays >= 1) {
+    // Más de 24 horas: mostrar días, horas y minutos
+    tiempoTranscurrido = `${diffDays} día${diffDays > 1 ? 's' : ''}, ${remainingHours}h y ${remainingMinutes}min`;
+  } else if (diffHours >= 1) {
+    // Entre 1 y 24 horas: mostrar horas y minutos
     tiempoTranscurrido = `${diffHours}h y ${remainingMinutes}min`;
   } else {
+    // Menos de 1 hora: solo minutos
     tiempoTranscurrido = `${diffMinutes}min`;
   }
   
