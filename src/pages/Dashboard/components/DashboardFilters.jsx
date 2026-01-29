@@ -2,6 +2,19 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
 
 /**
+ * Determina si un usuario está conectado basado en su última conexión
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {boolean} true si conectado (menos de 2 minutos)
+ */
+const isUserOnline = (ultimaConexion) => {
+  if (!ultimaConexion) return false;
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMinutes = (now - lastConnection) / (1000 * 60);
+  return diffMinutes < 2;
+};
+
+/**
  * Genera periodos de martes a martes para un rango de fechas (solo hasta el actual)
  * @param {number} monthsBack - Meses hacia atrás
  * @returns {Array} Lista de periodos
@@ -331,23 +344,29 @@ const DashboardFilters = ({
                 Todos los comerciales
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {comerciales.map((comercial) => (
-                <button
-                  key={comercial.email}
-                  onClick={() => {
-                    onComercialChange(comercial.email);
-                    setComercialOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                    selectedComercial === comercial.email
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="font-medium">{comercial.nombre}</div>
-                  <div className="text-xs text-slate-400 truncate">{comercial.email}</div>
-                </button>
-              ))}
+              {comerciales.map((comercial) => {
+                const online = isUserOnline(comercial.ultima_conexion);
+                return (
+                  <button
+                    key={comercial.email}
+                    onClick={() => {
+                      onComercialChange(comercial.email);
+                      setComercialOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                      selectedComercial === comercial.email
+                        ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <span className="font-medium">{comercial.nombre}</span>
+                    </div>
+                    <div className="text-xs text-slate-400 truncate ml-4">{comercial.email}</div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

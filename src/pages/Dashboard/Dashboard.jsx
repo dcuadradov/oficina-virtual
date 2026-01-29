@@ -116,12 +116,13 @@ export default function Dashboard() {
     if (!puedeVerTodos) return;
     
     try {
-      // Obtener usuarios del módulo comercial
+      // Obtener usuarios del módulo comercial (incluir ultima_conexion)
       const { data, error } = await supabase
         .from('usuarios')
         .select(`
           email,
           nombre,
+          ultima_conexion,
           usuarios_modulos!inner (
             modulo_id
           )
@@ -482,6 +483,35 @@ export default function Dashboard() {
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
   }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery]);
+
+  // Heartbeat: actualizar última conexión cada 30 segundos
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const actualizarConexion = async () => {
+      try {
+        await supabase
+          .from('usuarios')
+          .update({ ultima_conexion: new Date().toISOString() })
+          .eq('email', userEmail);
+        
+        // También refrescar lista de comerciales para actualizar estados online
+        if (puedeVerTodos) {
+          fetchComerciales();
+        }
+      } catch (error) {
+        console.error('Error actualizando conexión:', error);
+      }
+    };
+
+    // Actualizar inmediatamente al cargar
+    actualizarConexion();
+
+    // Actualizar cada 30 segundos
+    const heartbeatInterval = setInterval(actualizarConexion, 30000);
+
+    return () => clearInterval(heartbeatInterval);
+  }, [userEmail, puedeVerTodos, fetchComerciales]);
 
   // Efecto para recarga automática cada 3 minutos
   useEffect(() => {
