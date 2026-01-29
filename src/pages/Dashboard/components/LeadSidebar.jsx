@@ -37,6 +37,88 @@ import {
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
 
+/**
+ * Calcula las horas restantes de la ventana de 24h de WhatsApp
+ * @param {string} timestamp - timestamp_ultimo_mensaje_whatsapp
+ * @returns {object} { horasRestantes: number, activo: boolean }
+ */
+const calcularTiempoWhatsApp = (timestamp) => {
+  if (!timestamp) return { horasRestantes: null, activo: false };
+  
+  const ultimoMensaje = new Date(timestamp);
+  const ahora = new Date();
+  const diffMs = ahora - ultimoMensaje;
+  const diffHoras = diffMs / (1000 * 60 * 60);
+  
+  if (diffHoras >= 24) {
+    return { horasRestantes: 0, activo: false };
+  }
+  
+  const horasRestantes = Math.ceil(24 - diffHoras);
+  return { horasRestantes, activo: true };
+};
+
+/**
+ * Componente botón de WhatsApp con contador de ventana 24h
+ */
+const WhatsAppButtonSidebar = ({ lead, size = 20 }) => {
+  const [tiempoWhatsApp, setTiempoWhatsApp] = useState(() => 
+    calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp)
+  );
+
+  useEffect(() => {
+    // Recalcular cuando cambie el timestamp
+    setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    
+    // Actualizar cada minuto
+    const interval = setInterval(() => {
+      setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, [lead.timestamp_ultimo_mensaje_whatsapp]);
+
+  const tieneUrl = !!lead.respond_io_url;
+  const { horasRestantes, activo } = tiempoWhatsApp;
+  const mostrarContador = horasRestantes !== null;
+
+  return (
+    <button
+      onClick={() => tieneUrl && window.open(lead.respond_io_url, '_blank')}
+      disabled={!tieneUrl}
+      className={`relative p-2.5 rounded-xl transition-all duration-200 ${
+        tieneUrl 
+          ? activo
+            ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+            : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+          : 'text-slate-300 bg-slate-50 cursor-not-allowed'
+      }`}
+      title={
+        !tieneUrl 
+          ? "Sin conversación disponible" 
+          : activo 
+            ? `Ventana activa: ${horasRestantes}h restantes` 
+            : "Ventana de 24h expirada"
+      }
+    >
+      <MessageCircle size={size} />
+      
+      {/* Badge contador */}
+      {mostrarContador && tieneUrl && (
+        <span 
+          className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
+            activo 
+              ? 'bg-emerald-500 text-white' 
+              : 'bg-red-500 text-white'
+          }`}
+        >
+          {horasRestantes}
+        </span>
+      )}
+    </button>
+  );
+};
+
 // Configuración del stepper del funnel (fallback si no se cargan de BD)
 const funnelStepsDefault = [
   { id: 'Validación de contacto', label: 'Validación de contacto', shortLabel: 'Validación' },
@@ -1306,18 +1388,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     </button>
                   )}
                   
-                  <button
-                    onClick={() => lead.respond_io_url && window.open(lead.respond_io_url, '_blank')}
-                    disabled={!lead.respond_io_url}
-                    className={`p-2.5 rounded-xl transition-all duration-200 ${
-                      lead.respond_io_url 
-                        ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' 
-                        : 'text-slate-300 bg-slate-50 cursor-not-allowed'
-                    }`}
-                    title="Ir a la conversación de WhatsApp"
-                  >
-                    <MessageCircle size={20} />
-                  </button>
+                  {/* WhatsApp con contador de ventana 24h */}
+                  <WhatsAppButtonSidebar lead={lead} size={20} />
                 </div>
                 
                 {/* Botón cerrar */}

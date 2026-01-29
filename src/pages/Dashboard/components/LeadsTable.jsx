@@ -1,6 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
+
+/**
+ * Calcula las horas restantes de la ventana de 24h de WhatsApp
+ * @param {string} timestamp - timestamp_ultimo_mensaje_whatsapp
+ * @returns {object} { horasRestantes: number, activo: boolean }
+ */
+const calcularTiempoWhatsApp = (timestamp) => {
+  if (!timestamp) return { horasRestantes: null, activo: false };
+  
+  const ultimoMensaje = new Date(timestamp);
+  const ahora = new Date();
+  const diffMs = ahora - ultimoMensaje;
+  const diffHoras = diffMs / (1000 * 60 * 60);
+  
+  if (diffHoras >= 24) {
+    return { horasRestantes: 0, activo: false };
+  }
+  
+  const horasRestantes = Math.ceil(24 - diffHoras);
+  return { horasRestantes, activo: true };
+};
+
+/**
+ * Componente botón de WhatsApp con contador de ventana 24h
+ */
+const WhatsAppButton = ({ lead, size = 18 }) => {
+  const [tiempoWhatsApp, setTiempoWhatsApp] = useState(() => 
+    calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp)
+  );
+
+  useEffect(() => {
+    // Recalcular cuando cambie el timestamp
+    setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    
+    // Actualizar cada minuto
+    const interval = setInterval(() => {
+      setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, [lead.timestamp_ultimo_mensaje_whatsapp]);
+
+  const tieneUrl = !!lead.respond_io_url;
+  const { horasRestantes, activo } = tiempoWhatsApp;
+  const mostrarContador = horasRestantes !== null;
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        if (tieneUrl) {
+          window.open(lead.respond_io_url, '_blank');
+        }
+      }}
+      disabled={!tieneUrl}
+      className={`relative p-2.5 rounded-xl transition-all duration-200 ${
+        tieneUrl 
+          ? activo
+            ? 'text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
+            : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
+          : 'text-slate-200 cursor-not-allowed'
+      }`}
+      title={
+        !tieneUrl 
+          ? "Sin conversación disponible" 
+          : activo 
+            ? `Ventana activa: ${horasRestantes}h restantes` 
+            : "Ventana de 24h expirada"
+      }
+    >
+      <MessageCircle size={size} strokeWidth={2} />
+      
+      {/* Badge contador */}
+      {mostrarContador && tieneUrl && (
+        <span 
+          className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
+            activo 
+              ? 'bg-emerald-500 text-white' 
+              : 'bg-red-500 text-white'
+          }`}
+        >
+          {horasRestantes}
+        </span>
+      )}
+    </button>
+  );
+};
 
 // Etapas del funnel por defecto (fallback si no se cargan de la BD)
 const etapasFunnelDefault = [
@@ -261,24 +348,8 @@ const LeadsTable = ({
                   {/* Acciones */}
                   <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
-                      {/* WhatsApp */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (lead.respond_io_url) {
-                            window.open(lead.respond_io_url, '_blank');
-                          }
-                        }}
-                        disabled={!lead.respond_io_url}
-                        className={`p-2.5 rounded-xl transition-all duration-200 ${
-                          lead.respond_io_url 
-                            ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer' 
-                            : 'text-slate-200 cursor-not-allowed'
-                        }`}
-                        title={lead.respond_io_url ? "Ir a la conversación de WhatsApp" : "Sin conversación disponible"}
-                      >
-                        <MessageCircle size={18} strokeWidth={2} />
-                      </button>
+                      {/* WhatsApp con contador de ventana 24h */}
+                      <WhatsAppButton lead={lead} size={18} />
 
                       {/* Modal Info */}
                       <button
