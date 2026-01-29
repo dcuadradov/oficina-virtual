@@ -15,6 +15,39 @@ const isUserOnline = (ultimaConexion) => {
 };
 
 /**
+ * Formatea la última conexión de manera legible
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {string} Texto formateado
+ */
+const formatLastConnection = (ultimaConexion) => {
+  if (!ultimaConexion) return 'Sin datos';
+  
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMs = now - lastConnection;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMinutes < 2) {
+    return 'Conectado ahora';
+  } else if (diffMinutes < 60) {
+    return `Hace ${diffMinutes} min`;
+  } else if (diffHours < 24) {
+    return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
+  } else if (diffDays < 7) {
+    return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''}`;
+  } else {
+    return lastConnection.toLocaleDateString('es-ES', { 
+      day: 'numeric', 
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+};
+
+/**
  * Genera periodos de martes a martes para un rango de fechas (solo hasta el actual)
  * @param {number} monthsBack - Meses hacia atrás
  * @returns {Array} Lista de periodos
@@ -346,6 +379,7 @@ const DashboardFilters = ({
               <div className="h-px bg-slate-100 my-1" />
               {comerciales.map((comercial) => {
                 const online = isUserOnline(comercial.ultima_conexion);
+                const connectionStatus = formatLastConnection(comercial.ultima_conexion);
                 return (
                   <button
                     key={comercial.email}
@@ -363,7 +397,9 @@ const DashboardFilters = ({
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                       <span className="font-medium">{comercial.nombre}</span>
                     </div>
-                    <div className="text-xs text-slate-400 truncate ml-4">{comercial.email}</div>
+                    <div className={`text-xs ml-4 ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {connectionStatus}
+                    </div>
                   </button>
                 );
               })}
