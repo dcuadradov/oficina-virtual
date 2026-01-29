@@ -27,24 +27,30 @@ const formatLastConnection = (ultimaConexion) => {
   const diffMs = now - lastConnection;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const remainingMinutes = diffMinutes % 60;
   
   if (diffMinutes < 2) {
     return 'Conectado ahora';
-  } else if (diffMinutes < 60) {
-    return `Hace ${diffMinutes} min`;
-  } else if (diffHours < 24) {
-    return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
-  } else if (diffDays < 7) {
-    return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''}`;
-  } else {
-    return lastConnection.toLocaleDateString('es-ES', { 
-      day: 'numeric', 
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   }
+  
+  // Formatear fecha corta
+  const fechaCorta = lastConnection.toLocaleDateString('es-ES', { 
+    day: 'numeric', 
+    month: 'short'
+  });
+  
+  // Formatear tiempo transcurrido
+  let tiempoTranscurrido = '';
+  if (diffHours >= 1) {
+    tiempoTranscurrido = `${diffHours}h`;
+    if (remainingMinutes > 0) {
+      tiempoTranscurrido += ` ${remainingMinutes}min`;
+    }
+  } else {
+    tiempoTranscurrido = `${diffMinutes}min`;
+  }
+  
+  return `Inactivo ${fechaCorta} hace ${tiempoTranscurrido}`;
 };
 
 /**
