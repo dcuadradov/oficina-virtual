@@ -109,7 +109,7 @@ const WhatsAppButtonSidebar = ({ lead, size = 20 }) => {
           className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
             activo 
               ? 'bg-emerald-500 text-white' 
-              : 'bg-red-500 text-white'
+              : 'bg-amber-200 text-amber-700'
           }`}
         >
           {horasRestantes}

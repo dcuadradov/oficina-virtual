@@ -79,7 +79,7 @@ const WhatsAppButton = ({ lead, size = 18 }) => {
           className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
             activo 
               ? 'bg-emerald-500 text-white' 
-              : 'bg-red-500 text-white'
+              : 'bg-amber-200 text-amber-700'
           }`}
         >
           {horasRestantes}
