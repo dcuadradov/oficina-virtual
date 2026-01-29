@@ -30,7 +30,7 @@ export default function Dashboard() {
   // Estados de UI
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('sin_gestionar');
+  const [activeFilter, setActiveFilter] = useState('todos');
   const [activeEtapa, setActiveEtapa] = useState(null);
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
