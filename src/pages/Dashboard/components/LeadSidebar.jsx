@@ -1988,38 +1988,42 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               });
               
               return (
-              <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
+              <div className="space-y-4">
                 {/* Filtro por fase */}
-                {fasesUnicas.length > 0 && (
-                  <div className="flex-shrink-0 mb-3 flex flex-wrap gap-2">
-                    <select
-                      value={filtroFase || ''}
-                      onChange={(e) => setFiltroFase(e.target.value || null)}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                    >
-                      <option value="">Todas las fases</option>
-                      {fasesUnicas.map(fase => (
-                        <option key={fase} value={fase}>{fase}</option>
-                      ))}
-                    </select>
-                    
-                    {/* Botón limpiar filtro */}
-                    {filtroFase && (
-                      <button
-                        onClick={() => setFiltroFase(null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-100">
+                  {fasesUnicas.length > 0 ? (
+                    <>
+                      <select
+                        value={filtroFase || ''}
+                        onChange={(e) => setFiltroFase(e.target.value || null)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
                       >
-                        Limpiar
-                      </button>
-                    )}
-                  </div>
-                )}
+                        <option value="">Todas las fases</option>
+                        {fasesUnicas.map(fase => (
+                          <option key={fase} value={fase}>{fase}</option>
+                        ))}
+                      </select>
+                      
+                      {/* Botón limpiar filtro */}
+                      {filtroFase && (
+                        <button
+                          onClick={() => setFiltroFase(null)}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        >
+                          Limpiar
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-400">Historial de seguimientos</span>
+                  )}
+                </div>
                 
-                {/* Lista de seguimientos con scroll - estilo WhatsApp */}
+                {/* Lista de seguimientos */}
                 <div 
                   ref={recordatoriosContainerRef}
                   onScroll={handleScroll}
-                  className="flex-1 overflow-y-auto flex flex-col-reverse gap-4 pr-2 mb-4"
+                  className="space-y-3"
                 >
                   {comentariosFiltrados.length === 0 && !loadingRecordatorios ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -2027,10 +2031,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         <MessageCircle size={28} className="text-slate-400" />
                       </div>
                       <h3 className="text-lg font-semibold text-slate-700 mb-2">
-                        {(filtroEtapa || filtroFase) ? 'Sin resultados' : 'Sin seguimiento'}
+                        {filtroFase ? 'Sin resultados' : 'Sin seguimiento'}
                       </h3>
                       <p className="text-sm text-slate-400">
-                        {(filtroEtapa || filtroFase) 
+                        {filtroFase 
                           ? 'No hay mensajes con los filtros seleccionados' 
                           : 'Aún no hay mensajes de seguimiento para este lead'}
                       </p>
@@ -2108,7 +2112,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 </div>
                 
                 {/* Campo para nuevo mensaje */}
-                <div ref={seguimientoInputRef} className="border-t border-slate-100 pt-4 flex-shrink-0">
+                <div ref={seguimientoInputRef} className="border-t border-slate-100 pt-4 mt-4">
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
