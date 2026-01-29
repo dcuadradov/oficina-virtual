@@ -1540,7 +1540,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                     className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
                                     placeholder={placeholder}
                                     autoFocus
-                                    placeholder={placeholder}
                                   />
                                   <button
                                     onClick={() => handleSaveField(fieldName, editValue)}
