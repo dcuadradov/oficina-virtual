@@ -176,14 +176,16 @@ const LeadsTable = ({
   const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
   const [dropdownWhatsAppOpen, setDropdownWhatsAppOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
-  const dropdownWhatsAppRef = useRef(null);
   const dropdownButtonRef = useRef(null);
+  const dropdownMenuRef = useRef(null);
   
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownWhatsAppRef.current && !dropdownWhatsAppRef.current.contains(event.target) &&
-          dropdownButtonRef.current && !dropdownButtonRef.current.contains(event.target)) {
+      const clickedOutsideButton = dropdownButtonRef.current && !dropdownButtonRef.current.contains(event.target);
+      const clickedOutsideMenu = dropdownMenuRef.current && !dropdownMenuRef.current.contains(event.target);
+      
+      if (clickedOutsideButton && clickedOutsideMenu) {
         setDropdownWhatsAppOpen(false);
       }
     };
@@ -286,11 +288,11 @@ const LeadsTable = ({
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En gestión</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider hidden lg:table-cell">En fase</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
-                <div className="flex items-center justify-end gap-2" ref={dropdownWhatsAppRef}>
+                <div className="flex items-center justify-end gap-2">
                   <span>Acciones</span>
                   
                   {/* Dropdown filtro WhatsApp */}
-                  <div className="relative" ref={dropdownWhatsAppRef}>
+                  <div className="relative">
                     <button
                       ref={dropdownButtonRef}
                       onClick={handleToggleDropdown}
@@ -546,6 +548,7 @@ const LeadsTable = ({
       {/* Dropdown portal - fuera de la tabla para evitar overflow issues */}
       {dropdownWhatsAppOpen && (
         <div 
+          ref={dropdownMenuRef}
           className="fixed bg-white rounded-xl shadow-xl border border-slate-200 py-1 min-w-[140px]"
           style={{ 
             zIndex: 9999, 
