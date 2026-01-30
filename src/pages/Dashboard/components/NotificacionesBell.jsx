@@ -144,7 +144,11 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
+  // Ref para guardar el contador anterior (para detectar nuevas notificaciones)
+  const contadorAnteriorRef = useRef(null);
+
   // Fetch contador de nuevas (solo estado "nuevo", no "visto")
+  // Si el contador aumenta, reproduce el sonido inmediatamente
   const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
@@ -156,29 +160,22 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         .eq('estado_lectura', 'nuevo');
 
       if (error) throw error;
-      setContadorNuevas(count || 0);
+      
+      const nuevoContador = count || 0;
+      
+      // Si el contador aumentó (y no es la carga inicial), reproducir sonido
+      if (contadorAnteriorRef.current !== null && nuevoContador > contadorAnteriorRef.current) {
+        console.log(`🔔 Nuevas notificaciones: ${contadorAnteriorRef.current} → ${nuevoContador}`);
+        playNotificationSound();
+      }
+      
+      // Actualizar ref y estado al mismo tiempo
+      contadorAnteriorRef.current = nuevoContador;
+      setContadorNuevas(nuevoContador);
     } catch (error) {
       console.error('Error fetching contador:', error);
     }
   }, [userEmail]);
-  
-  // Efecto para detectar cambios en el contador y reproducir sonido
-  const contadorPrevioRef = useRef(null);
-  useEffect(() => {
-    // Ignorar el primer render (carga inicial)
-    if (contadorPrevioRef.current === null) {
-      contadorPrevioRef.current = contadorNuevas;
-      return;
-    }
-    
-    // Si el contador aumentó, reproducir sonido
-    if (contadorNuevas > contadorPrevioRef.current) {
-      console.log(`🔔 Nuevas notificaciones: ${contadorPrevioRef.current} → ${contadorNuevas}`);
-      playNotificationSound();
-    }
-    
-    contadorPrevioRef.current = contadorNuevas;
-  }, [contadorNuevas]);
 
   // Cargar más notificaciones (infinite scroll)
   const loadMore = () => {
