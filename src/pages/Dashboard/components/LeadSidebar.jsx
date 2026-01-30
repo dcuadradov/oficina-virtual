@@ -32,7 +32,9 @@ import {
   ChevronDown,
   Edit2,
   Search,
-  MoreHorizontal
+  MoreHorizontal,
+  AlertCircle,
+  RefreshCcw
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -309,6 +311,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [resumenIA, setResumenIA] = useState(null);
   const [resumenIAFecha, setResumenIAFecha] = useState(null);
   
+  // Estados para cambio de fase
+  const [faseDropdownOpen, setFaseDropdownOpen] = useState(false);
+  const [cambiandoFase, setCambiandoFase] = useState(false);
+  const [faseLocal, setFaseLocal] = useState(null); // Fase local para actualización inmediata
+  const [toastMessage, setToastMessage] = useState(null); // Toast de confirmación
+  
   // Determinar si mostrar botón de agendar basado en la fase del lead
   const mostrarBotonAgendar = lead?.fase_id_pipefy && FASES_LISTO_AGENDAR.includes(String(lead.fase_id_pipefy));
   
@@ -370,6 +378,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     setIsHot(lead?.is_hot || false);
   }, [lead?.card_id, lead?.is_hot]);
 
+  // Inicializar fase local cuando cambia el lead
+  useEffect(() => {
+    setFaseLocal(lead?.fase_nombre_pipefy || null);
+  }, [lead?.card_id, lead?.fase_nombre_pipefy]);
+
   // Sincronizar datos locales cuando cambia el lead
   useEffect(() => {
     if (lead) {
@@ -406,6 +419,44 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       console.error('Error actualizando estado hot:', error);
     } finally {
       setTogglingHot(false);
+    }
+  };
+
+  // Función para cambiar la fase del lead
+  const handleCambiarFase = async (nuevaFase) => {
+    if (!lead?.card_id || cambiandoFase || nuevaFase === faseLocal) return;
+    
+    setCambiandoFase(true);
+    setFaseDropdownOpen(false);
+    
+    // Actualización optimista
+    const faseAnterior = faseLocal;
+    setFaseLocal(nuevaFase);
+    
+    try {
+      const response = await fetch('https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: lead.card_id,
+          fase_destino: nuevaFase
+        })
+      });
+      
+      if (!response.ok) throw new Error('Error en webhook');
+      
+      // Mostrar toast de éxito
+      setToastMessage(`Fase actualizada a "${nuevaFase}"`);
+      setTimeout(() => setToastMessage(null), 3000);
+      
+    } catch (error) {
+      console.error('Error cambiando fase:', error);
+      // Revertir si hay error
+      setFaseLocal(faseAnterior);
+      setToastMessage('Error al cambiar la fase');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setCambiandoFase(false);
     }
   };
 
@@ -1407,12 +1458,43 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     <Briefcase size={14} />
                     {lead.ocupacion || 'Ocupación no especificada'}
                   </p>
-                  {/* Badge de estado */}
-                  <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full ${statusBadge.bg}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
-                    <span className={`text-xs font-semibold ${statusBadge.text}`}>
-                      {statusBadge.label}
-                    </span>
+                  {/* Dropdown de fase */}
+                  <div className="relative mt-2">
+                    <button
+                      onClick={() => setFaseDropdownOpen(!faseDropdownOpen)}
+                      disabled={cambiandoFase}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+                        cambiandoFase 
+                          ? 'bg-slate-100 text-slate-400 cursor-wait'
+                          : 'bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/20 cursor-pointer'
+                      }`}
+                    >
+                      {cambiandoFase ? (
+                        <RefreshCcw size={12} className="animate-spin" />
+                      ) : (
+                        <ChevronDown size={12} className={`transition-transform ${faseDropdownOpen ? 'rotate-180' : ''}`} />
+                      )}
+                      {faseLocal || lead.fase_nombre_pipefy || 'Sin fase'}
+                    </button>
+                    
+                    {/* Dropdown de fases */}
+                    {faseDropdownOpen && (
+                      <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
+                        {funnelSteps.map((fase) => (
+                          <button
+                            key={fase.id}
+                            onClick={() => handleCambiarFase(fase.label || fase.id)}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                              (faseLocal || lead.fase_nombre_pipefy) === (fase.label || fase.id)
+                                ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            {fase.label || fase.id}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2864,6 +2946,24 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             </button>
           </div>
         </>
+      )}
+
+      {/* Toast de confirmación */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] animate-fade-in">
+          <div className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 ${
+            toastMessage.includes('Error') 
+              ? 'bg-rose-600 text-white' 
+              : 'bg-emerald-600 text-white'
+          }`}>
+            {toastMessage.includes('Error') ? (
+              <AlertCircle size={18} />
+            ) : (
+              <Check size={18} />
+            )}
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+        </div>
       )}
     </>
   );

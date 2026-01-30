@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, RotateCcw, Flame, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 /**
@@ -169,6 +169,121 @@ const statusStyles = {
   'sin_gestionar': 'bg-gradient-to-r from-amber-400 to-orange-400 shadow-amber-200',
   'matriculado': 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-blue-200',
   'caido': 'bg-slate-300',
+};
+
+// Componente para la celda de fase con dropdown
+const FaseCell = ({ lead, funnelSteps, noRevisado }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [cambiando, setCambiando] = useState(false);
+  const [faseLocal, setFaseLocal] = useState(lead.fase_nombre_pipefy);
+  const [toast, setToast] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Sincronizar con el lead
+  useEffect(() => {
+    setFaseLocal(lead.fase_nombre_pipefy);
+  }, [lead.fase_nombre_pipefy]);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCambiarFase = async (nuevaFase) => {
+    if (cambiando || nuevaFase === faseLocal) return;
+    
+    setCambiando(true);
+    setIsOpen(false);
+    
+    const faseAnterior = faseLocal;
+    setFaseLocal(nuevaFase);
+    
+    try {
+      const response = await fetch('https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: lead.card_id,
+          fase_destino: nuevaFase
+        })
+      });
+      
+      if (!response.ok) throw new Error('Error en webhook');
+      
+      setToast({ type: 'success', message: `Fase actualizada` });
+      setTimeout(() => setToast(null), 3000);
+      
+    } catch (error) {
+      console.error('Error cambiando fase:', error);
+      setFaseLocal(faseAnterior);
+      setToast({ type: 'error', message: 'Error al cambiar fase' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setCambiando(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        disabled={cambiando}
+        className={`text-sm px-2 py-1 rounded-lg transition-all duration-200 flex items-center gap-1 ${
+          cambiando 
+            ? 'text-slate-400 cursor-wait'
+            : noRevisado 
+              ? 'text-slate-800 font-bold hover:bg-slate-100' 
+              : 'text-slate-600 hover:bg-slate-100'
+        }`}
+      >
+        {cambiando ? (
+          <RotateCcw size={12} className="animate-spin" />
+        ) : (
+          <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        )}
+        {faseLocal || 'Sin etapa'}
+      </button>
+      
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
+          {funnelSteps.map((fase) => (
+            <button
+              key={fase.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCambiarFase(fase.label || fase.id);
+              }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                faseLocal === (fase.label || fase.id)
+                  ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                  : 'text-slate-700'
+              }`}
+            >
+              {fase.label || fase.id}
+            </button>
+          ))}
+        </div>
+      )}
+      
+      {/* Toast mini */}
+      {toast && (
+        <div className={`absolute left-0 -top-10 z-50 px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+          toast.type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const LeadsTable = ({ 
@@ -502,11 +617,13 @@ const LeadsTable = ({
                     })()}
                   </td>
 
-                  {/* Etapa */}
-                  <td className="py-4 px-4">
-                    <span className={`text-sm ${noRevisado ? 'text-slate-800 font-bold' : 'text-slate-600'}`}>
-                      {lead.fase_nombre_pipefy || 'Sin etapa'}
-                    </span>
+                  {/* Etapa con dropdown */}
+                  <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                    <FaseCell 
+                      lead={lead} 
+                      funnelSteps={etapasAUsar} 
+                      noRevisado={noRevisado} 
+                    />
                   </td>
 
                   {/* Acciones */}
