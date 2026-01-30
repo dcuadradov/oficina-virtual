@@ -43,6 +43,16 @@ export default function App() {
           </ProtectedRoute>
         } 
       />
+      
+      {/* Dashboard con lead específico (abre sidebar automáticamente) */}
+      <Route 
+        path="/dashboard/:cardId" 
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
 
       {/* Si entran a cualquier otro lado, mandar al home (el guardia decidirá si entran o no) */}
       <Route path="*" element={<Navigate to="/home" replace />} />
