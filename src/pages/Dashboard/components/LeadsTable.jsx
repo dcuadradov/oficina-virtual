@@ -179,6 +179,7 @@ const LeadsTable = ({
   onOpenReminder,
   onOpenSeguimiento,
   onMarcarNoRevisado,
+  onToggleHot,
   activeEtapa, 
   onEtapaChange,
   activeFilter,
@@ -559,17 +560,21 @@ const LeadsTable = ({
                         </button>
                       )}
 
-                      {/* Indicador HOT */}
-                      <div
-                        className={`p-2.5 rounded-xl ${
+                      {/* Toggle HOT */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleHot?.(lead);
+                        }}
+                        className={`p-2.5 rounded-xl transition-all duration-200 ${
                           isHot
-                            ? 'text-orange-500'
-                            : 'text-slate-200'
+                            ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50'
+                            : 'text-slate-300 hover:text-orange-400 hover:bg-orange-50'
                         }`}
-                        title={isHot ? "Lead HOT" : "Lead normal"}
+                        title={isHot ? "Quitar HOT" : "Marcar como HOT"}
                       >
                         <Flame size={18} strokeWidth={2} fill={isHot ? 'currentColor' : 'none'} />
-                      </div>
+                      </button>
 
                       {/* Flecha */}
                       <ChevronRight size={16} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />

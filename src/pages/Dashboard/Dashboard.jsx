@@ -109,6 +109,33 @@ export default function Dashboard() {
     }
   };
 
+  // Función para toggle HOT desde la tabla
+  const handleToggleHot = async (lead) => {
+    const nuevoEstado = !lead.is_hot;
+    
+    // Actualización optimista
+    setLeads(prevLeads => 
+      prevLeads.map(l => 
+        l.card_id === lead.card_id ? { ...l, is_hot: nuevoEstado } : l
+      )
+    );
+    
+    try {
+      await supabase
+        .from('leads')
+        .update({ is_hot: nuevoEstado })
+        .eq('card_id', lead.card_id);
+    } catch (error) {
+      console.error('Error al cambiar estado HOT:', error);
+      // Revertir si hay error
+      setLeads(prevLeads => 
+        prevLeads.map(l => 
+          l.card_id === lead.card_id ? { ...l, is_hot: lead.is_hot } : l
+        )
+      );
+    }
+  };
+
   // Función para cerrar el sidebar
   const handleCloseSidebar = () => {
     setSidebarOpen(false);
@@ -861,6 +888,7 @@ export default function Dashboard() {
                   onOpenReminder={(lead) => handleOpenSidebar(lead, 'recordatorio')}
                   onOpenSeguimiento={handleOpenSeguimiento}
                   onMarcarNoRevisado={handleMarcarNoRevisado}
+                  onToggleHot={handleToggleHot}
                   activeEtapa={activeEtapa}
                   onEtapaChange={handleEtapaChange}
                   activeFilter={activeFilter}
