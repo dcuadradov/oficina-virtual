@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Calendar, Flame, RotateCcw, UserPlus, Clock, ExternalLink, Users, AlertCircle } from 'lucide-react';
+import { Bell, Calendar, CalendarPlus, CalendarClock, Flame, RotateCcw, UserPlus, Clock, ExternalLink, Users, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
 // Mapeo de íconos por nombre
 const ICONOS = {
   calendar: Calendar,
+  'calendar-plus': CalendarPlus,
+  'calendar-clock': CalendarClock,
   flame: Flame,
   refresh: RotateCcw,
   user: UserPlus,
