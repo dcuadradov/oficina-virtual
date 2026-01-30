@@ -421,10 +421,10 @@ export default function Dashboard() {
     try {
       const ahora = new Date().toISOString();
       
-      // 1. Buscar recordatorios programados que ya vencieron
+      // 1. Buscar recordatorios programados que ya vencieron (incluir datos del lead)
       const { data: vencidos, error: errorBuscar } = await supabase
         .from('recordatorios')
-        .select('id, lead_id')
+        .select('id, lead_id, autor_email')
         .eq('estado', 'Programado')
         .lt('fecha_programada', ahora);
       
@@ -445,7 +445,16 @@ export default function Dashboard() {
         // 3. Obtener lead_ids únicos afectados
         const leadIdsUnicos = [...new Set(vencidos.map(r => r.lead_id))];
         
-        // 4. Marcar todos los leads afectados como NO revisados y actualizar fecha_asignacion
+        // 4. Obtener datos de los leads para las notificaciones
+        const { data: leadsData } = await supabase
+          .from('leads')
+          .select('card_id, nombre, comercial_email')
+          .in('card_id', leadIdsUnicos);
+        
+        const leadsMap = {};
+        leadsData?.forEach(l => { leadsMap[l.card_id] = l; });
+        
+        // 5. Marcar todos los leads afectados como NO revisados y actualizar fecha_asignacion
         await supabase
           .from('leads')
           .update({ 
@@ -454,7 +463,50 @@ export default function Dashboard() {
           })
           .in('card_id', leadIdsUnicos);
         
-        // 5. Para cada lead, verificar si tiene otros recordatorios activos
+        // 6. Crear notificaciones para cada recordatorio vencido
+        try {
+          // Obtener config de notificación
+          const { data: configNotif } = await supabase
+            .from('config_notificaciones')
+            .select('id, descripcion_template')
+            .eq('tipo', 'Recordatorio programado por ti')
+            .eq('activo', true)
+            .single();
+          
+          if (configNotif) {
+            // Crear notificaciones para cada recordatorio (evitar duplicados por lead)
+            const notificacionesCreadas = new Set();
+            const notificacionesParaInsertar = [];
+            
+            for (const rec of vencidos) {
+              const leadInfo = leadsMap[rec.lead_id];
+              if (leadInfo && !notificacionesCreadas.has(rec.lead_id)) {
+                const descripcion = configNotif.descripcion_template
+                  .replace('{{nombre}}', leadInfo.nombre || 'Lead');
+                
+                notificacionesParaInsertar.push({
+                  config_id: configNotif.id,
+                  card_id: rec.lead_id,
+                  comercial_email: leadInfo.comercial_email,
+                  nombre_lead: leadInfo.nombre,
+                  descripcion: descripcion,
+                  datos_extra: { tipo: 'recordatorio_vencido' }
+                });
+                
+                notificacionesCreadas.add(rec.lead_id);
+              }
+            }
+            
+            if (notificacionesParaInsertar.length > 0) {
+              await supabase.from('notificaciones').insert(notificacionesParaInsertar);
+              console.log(`🔔 Creadas ${notificacionesParaInsertar.length} notificaciones de recordatorios`);
+            }
+          }
+        } catch (notifErr) {
+          console.error('Error creando notificaciones de recordatorios:', notifErr);
+        }
+        
+        // 7. Para cada lead, verificar si tiene otros recordatorios activos
         for (const leadId of leadIdsUnicos) {
           const { count } = await supabase
             .from('recordatorios')
