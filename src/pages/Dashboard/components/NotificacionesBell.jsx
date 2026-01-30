@@ -289,7 +289,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
+          className="fixed sm:absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-16 sm:top-full mt-2 w-[calc(100vw-32px)] sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
           style={{ maxHeight: '480px' }}
         >
           {/* Header */}

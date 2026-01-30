@@ -661,8 +661,9 @@ export default function Dashboard() {
       {/* --- HEADER --- */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-slate-200/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#02214A] to-[#1717AF] flex items-center justify-center shadow-lg shadow-[#02214A]/20">
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Logo OV - oculto en mobile */}
+            <div className="hidden sm:flex w-10 h-10 rounded-2xl bg-gradient-to-br from-[#02214A] to-[#1717AF] items-center justify-center shadow-lg shadow-[#02214A]/20">
               <span className="text-white font-bold text-lg font-bookman">OV</span>
             </div>
             <div>
