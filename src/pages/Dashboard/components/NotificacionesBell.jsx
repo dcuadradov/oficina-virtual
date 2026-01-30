@@ -19,20 +19,8 @@ const ICONOS = {
 // Número de notificaciones por página
 const NOTIFICACIONES_PER_PAGE = 10;
 
-/**
- * Reproduce un sonido de notificación usando un Audio element (más simple y rápido)
- */
-const playNotificationSound = () => {
-  try {
-    // Crear un beep simple usando un data URI de audio
-    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZaYl5KMhHp0d3+Ij5SWl5WRi4N7dXZ9hYySlpeTkYmBenZ3foeOk5aTkYeCenZ4gIiQlJWTj4eBenZ5goqRlJOPjIF5dXmCio+TkpCLgXl1eYKKj5KRjoqAdnV6g4uQkY+MhX53eICHjZCPjYmDfHd5f4aNj46MiIN8d3l/hYuOjYuIg3x3eX+Fi42Mi4eDfHd5f4WLjIuKhoJ7d3l/hYuMi4qGgnt3eX+Fi4yLioaCe3d5f4WLjIuKhoJ7d3l/hYqLioqGgnt3eX+EiouKiYWBe3d5f4SKi4qJhYF7d3l/hIqLiomFgXt3eX+EiouKiYWBe3d5f4SKi4qJhYF7eHmAhIqKiYmFgXt4eYCEioqJiYWBe3h5gISKiomJhYF7eHmAhIqJiYmFgHt4eYCEiomJiYWAe3h5gISKiYmJhYB7eHmAhIqJiYmFgHt4eYCEiYmJiIV/e3h5gISJiYmIhX97eHmAhImJiYiFf3t4eYCEiYmJiIV/e3h5gISJiYiIhX97eHl/hImJiIiFf3t4eX+EiYmIiIV/e3h5f4SJiYiIhH97eHl/hImIiIiEf3t4eX+EiYiIiIR/e3h5f4SJiIiIhH97eHl/hImIiIiEf3t4eX+EiIiIh4R+e3h5f4SIiIiHhH57eHl/hIiIiIeEfnt4eX+EiIiIh4R+e3h5f4SIiIeHhH57eHl/hIiIh4eEfnt3eX+EiIiHh4R+e3d5f4SIiIeHhH57d3l/g4iHh4eEfnt3eX+DiIeHh4R+e3d5f4OIh4eHhH57d3l/g4iHh4eEfnt3eX+DiIeHh4N+e3d5f4OIh4eHg357d3h/g4eHh4eDfnt3eH+Dh4eHh4N+e3d4f4OHh4eHg357d3h/g4eHh4eDfnt3eH+Dh4eHhoN+e3d4f4OHh4eGg357d3h/g4eHhoaDfXt3eH+Dh4eGhoN9e3d4f4OHhoaGg317d3h/g4eGhoaDfXt3eH+DhoaGhoN9e3d4f4OGhoaGg317d3h/g4aGhoaDfXt2eH+DhoaGhoN9e3Z4foOGhoaGg317dnh+g4aGhoaDfXt2eH6DhoaGhoN9e3Z4foOGhoaGg317dnh+g4aGhoaDfHt2eH6DhoaGhoN8e3Z4foOGhoaFg3x7dnh+g4aGhoWDfHt2eH6DhoaGhYN8e3Z4foOGhoWFg3x7dnh+g4aGhYWDfHt2eH6DhoWFhYN8e3Z4foOGhYWFg3x7dnh+g4aFhYWDfHt2eH6DhoWFhYN8e3Z3foOFhYWFgnx7dnd+g4WFhYWCfHt2d36DhYWFhYJ8e3Z3foOFhYWFgnx7dnd+g4WFhYWCfHt2d36DhYWFhYJ8e3Z3foOFhYWFgnx7dnd+g4WFhYWCfHt2d36DhYWFhIJ8e3Z3foOFhYWEgnx7dnd+g4WFhYSCfHt2d36DhYWFhIJ8e3Z3foOFhYSEgnx7dnd+g4WFhISCe3t2d36DhYSEhIJ7e3Z3foOFhISEgnt7dnd+g4WEhISCe3t2d36DhYSEhIJ7e3Z3foKEhISEgnt7dnd+goSEhISCe3t2d36ChISEhIJ7e3Z3foKEhISEgnt7dnd+goSEhISCe3t2d36ChISEg4J7e3Z3foKEhISDgnt6dnd+goSEhIOCe3p2d36ChISEg4J7enZ3foKEhISDgnt6dnd+goSEhIOCe3p2dn6ChISEg4J7enZ2fn6EhISDgnt6dnZ+foSEg4OCe3p2dn5+hISDg4J7enZ2fn6Eg4ODgnt6dnZ+foSDg4OCe3p2dn5+hIODg4J7enZ2fn6Eg4ODgnt6dnV+foSDg4OCe3p1dX5+hIODg4J6enV1fn6Eg4ODgnp6dXV+foSDg4OCenp1dX5+hIODgoJ6enV1fn6Eg4OCgnp6dXV+foSDg4KCenp1dX5+g4OCgoJ6enV1fn6Dg4KCgnp6dXV+foODgoKCenp1dX5+g4OCgoJ6enV1fn6Dg4KCgnp6dXV9foODgoKCenp1dX1+g4KCgoJ6enV1fX6DgoKCgnp6dXV9foOCgoKCenp1dX1+g4KCgoJ6enV1fX6DgoKCgnp6dXV9foOCgoKCenl1dX1+g4KCgoJ6eXV1fX6CgoKCgnp5dXV9foKCgoKCenl1dX1+goKCgoJ6eXV1fX6CgoKCgnp5dXV9foKCgoKCenl1dX1+goKCgoJ6eXV1fX6CgoKCgnp5dXV9foKCgoKCenl1dX1+goKCgoF6eXV1fX6CgoKCgXp5dXV9foKCgoKBenl1dX1+goKCgoF6eXV1fX6CgoKCgXp5dXV9foKCgoKBenl1dX1+goKCgYF6eXV0fX6CgoKBgXp5dXR9foKCgoGBenl1dH1+goKCgYF6eXV0fX6CgoKBgXp5dXR9foKCgoGBenl1dH1+goKBgYF6eXV0fX6CgoGBgXp5dXR9foKCgYGBenl1dH1+goKBgYF6eXV0fX6CgoGBgXp5dXR9foKBgYGBenl1dH1+goGBgYF6eXV0fX6CgYGBgXp5dHR9foKBgYGBenl0dH1+goGBgYF6eXR0fX6CgYGBgXp5dHR9foKBgYGBenl0dH19goGBgYF6eXR0fX2CgYGBgXp5dHR9fYKBgYGBenl0dH19goGBgYF6eXR0fX2CgYGBgXp5dHR9fYKBgYGBenh0dH19goGBgYF6eHR0fX2BgYGBgXp4dHR9fYGBgYGBenh0dH19gYGBgYF6eHR0fX2BgYGBgXp4dHR9fYGBgYGBenh0dH19gYGBgYF6eHR0fX2BgYGBgXp4c3R9fYGBgYGBeXhzdH19gYGBgYF5eHN0fX2BgYGBgXl4c3R9fYGBgYGBeXhzdH19gYGBgYF5eHN0fX2BgYGBgXl4c3R9fYGBgYGBeXhzdH19gYGBgYF5eHN0fX2BgYGBgHl4c3R8fYGBgYGAeXhzdHx9gYGBgYB5eHN0fH2BgYGBgHl4c3R8fYGBgYGAeXhzdHx9gYGBgYB5eHN0fH2BgYGBgHl4c3R8fYGBgYCAeXhzdHx9gYGAgIB5eHN0fH2BgYCAgHl4c3R8fYGBgICAeXhzdHx9gYGAgIB5eHN0fH2BgYCAgHl4cnR8fYGBgICAeXhydHx9gYCAgIB5eHJ0fH2BgICAgHl4cnR8fYGAgICAeXhydHx9gYCAgIB5eHJ0fH2BgICAgHl4cnR8fYGAgICAeXhydHx9gYCAgIB5eHJ0fH2AgICAgHl3cnR8fYCAgICAeXdydHx9gICAgIB5d3J0fH2AgICAgHl3cnR8fYCAgICAeXdydHx9gICAgIB5d3J0fH2AgICAgHl3cnR8fYCAgIB/eXdydHx8gICAgH95d3J0fHyAgICAf3l3cnR8fICAgIB/eXdydHx8gICAgH95d3J0fHyAgICAf3l3cnR8fICAgIB/eXdydHx8gICAgH95d3J0fHyAgICAf3l3cnR8fICAgIB/eXdycnx8gICAgH95d3JyfHyAgIB/f3l3cnJ8fICAgH9/eXdycnx8gICAf395d3JyfHyAgIB/f3l3cnJ8fICAgH9/eXdycnx8gICAf395d3JyfHyAgIB/f3l3cnJ8fICAgH9/eXdycnx8gICAf395dnJyfHyAgIB/f3l2cnJ8fICAgH9/eXZycnx8gIB/f395dnJyfHyAgH9/f3l2cnJ8fICAfn9/eXZycnx8gIB+f395dnJyfHyAgH5/f3l2cnJ8fICAfn9/eXZycnx8gIB+f395dnJyfHyAgH5/f3l2cnJ8fICAf39/eXZycnx8gIB/f395dnJyfHyAgH9/f3l2cnJ8fICAf39/eXZycnx8gIB/f395dnJyfHyAgH9/f3l2cnJ8e4CAf39/eXZycnx7gIB/f395dnJyfHuAgH9/f3l2cnJ8e4CAf39/eXZycnx7gIB/f395dnJyfHuAgH9/f3l2cnJ8e4CAf39/eXZycXx7gIB/f395dnJxfHuAgH9/f3l2cnF8e4CAf39/eXZycXx7gIB/f395dnJxfHuAgH9/f3l2cnF8e4CAf39/eXZycXx7gIB/f395dnJxfHuAgH9/f3l2cnF8e4CAf39/eXZycXx7gIB/f395dnJxfHuAgH9/f3l2cnF8e4CAf39/eXZycXt7gIB/f395dnFxe3uAgH9/f3l2cXF7e4CAf39/eXZxcXt7gIB/f395dnFxe3uAgH9/f3l2cXF7e4CAf39/eXZxcXt7gIB/f395dnFxe3uAgH9/f3l2cXF7e4CAf39/eHZxcXt7gIB/f394dnFxe3uAgH9/f3h2cXF7e4CAf39/eHZxcXt7gIB/f394dnFxe3uAgH9/f3h2cXF7e4CAf39/eHZxcXt7gIB/f394dnFxe3uAgH9/f3h2cXF7e4CAf39/eHZxcXt7f4B/f394dnFxe3t/gH9/f3h2cXF7e3+Af39/eHZxcXt7f4B/f394dnFxe3t/gH9/f3h2cXF7e3+Af39/eHVxcXt7f4B/f394dXFxe3t/gH9/f3h1cXF7e3+Af39/eHVxcXt7f4B/f394dXFxe3t/gH9/f3h1cXF7e3+Af39/eHVxcXt7f4B/f394dXFxe3t/gH9/f3h1cXF7e3+Af39/eHVxcXt7f4B/f394dXFxe3t/gH9/f3h1cXF7e3+Af39/eHVxcHt7f4B/f394dXFwe3t/gH9/f3h1cXB7e3+Af39/eHVxcHt7f4B/f394dXFwe3t/gH9/f3h1cXB7e3+Af39/eHVxcHt7f4B/f394dXFwe3t/gH9/f3h1cXB7e3+Af39/eHVxcHt7f39/f394dXFwe3t/f39/f3h1cXB7e39/f39/eHVxcHt7f39/f394dXFwe3t/f39/f3h1cXB7e39/f39/eHVxcHt7f39/f394dXFwe3t/f39/f3h1cXB7e39/f39/eHVxcHt7f39/f394dXFwe3t/f39/f3h1cHB7e39/f39/eHVwcHt7f39/f394dXBwe3t/f39/f3h1cHB7e39/f39/eHVwcHt7f39/f394dXBwe3t/f39/f3h1cHB7e39/f39/eHVwcHt7f39/f394dXBwe3t/f39/f3h1cHB6e39/f39/eHVwcHp7f39/f394dXBwent/f39/f3h1cHB6e39/f39/eHVwcHp7f39/f394dXBwent/f39/f3h1cHB6e39/f39/eHVwcHp7f39/f394dXBwent/f39/f3h0cHB6e39/f39/eHRwcHp7f39/f394dHBwent/f39/f3h0cHB6e39/f39/eHRwcHp7f39/f394dHBwent/f39/f3h0cHB6e39/f39/eHRwcHp7f39/f394dHBwent/f39/f3h0cHB6e39/f39/eHRwcHp7f39/f394dHBwent/f39/f3h0cHB6e39/f35/eHRwcHp7f39/fn94dHBwent/f39+f3h0cHB6e39/f35/eHRwcHp7f39/fn94dHBwent/f39+f3h0cHB6e39/f35/eHRwcHp7f39/fn94dHBwent/f35+f3h0cHB6e39/fn5/eHRwb3p7f39+fn94dHBvent/f35+f3h0cG96e39/fn5/eHRwb3p7f39+fn94dHBvent/f35+f3h0cG96e39/fn5/eHRwb3p7f39+fn94dHBvent/fn5+f3h0cG96e39+fn5/eHRwb3p7f35+fn94dHBvent/fn5+f3h0cG96e39+fn5/eHRwb3p7f35+fn94dHBvent/fn5+f3h0cG96e39+fn5/eHRwb3p7f35+fn94dHBvent+fn5+f3h0cG96e35+fn5/eHRwb3p7fn5+fn94dHBvent+fn5+f3h0cG96e35+fn5/eHRwb3p7fn5+fn94dHBvent+fn5+f3h0cG96e35+fn5/eHRwb3p7fn5+fn94dHBvent+fn5+f3h0cG96e35+fn5/eHRvb3p7fn5+fn94dG9vent+fn5+f3h0b296e35+fn5/eHRvb3p7fn5+fn94dG9vent+fn5+f3h0b296e35+fn5/eHRvb3p7fn5+fn94dG9vent+fn5+f3h0b296e35+fn5/eHRvb3p7fn5+fn94dG9vent+fn5+f3h0b296e35+fn5+eHRvb3p7fn5+fn54dG9vent+fn5+fnh0b296e35+fn5+eHRvb3p7fn5+fn54dG9vent+fn5+fnh0b296e35+fn5+eHRvb3p7fn5+fn54dG9vent+fn5+fnh0b296e35+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54dG9venp+fn5+fnh0b296en5+fn5+eHRvb3p6fn5+fn54c29venp+fn5+fndz');
-    audio.volume = 0.5;
-    audio.play();
-    console.log('🔊 Sonido reproducido');
-  } catch (error) {
-    console.log('No se pudo reproducir sonido:', error);
-  }
-};
+// Variable global para el contador anterior (persistente entre renders)
+let contadorAnteriorGlobal = null;
 
 /**
  * Formatea el tiempo relativo (hace X minutos, horas, días)
@@ -99,11 +87,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Ref para guardar el contador anterior (para detectar nuevas notificaciones)
-  const contadorAnteriorRef = useRef(null);
-
-  // Fetch contador de nuevas (solo estado "nuevo", no "visto")
-  // Si el contador aumenta, reproduce el sonido inmediatamente
+  // Fetch contador + sonido si hay nuevas
   const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
@@ -118,17 +102,46 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       
       const nuevoContador = count || 0;
       
-      // Si el contador aumentó (y no es la carga inicial), reproducir sonido
-      if (contadorAnteriorRef.current !== null && nuevoContador > contadorAnteriorRef.current) {
-        console.log(`🔔 Nuevas notificaciones: ${contadorAnteriorRef.current} → ${nuevoContador}`);
-        playNotificationSound();
+      // Si es carga inicial, solo guardar el contador
+      if (contadorAnteriorGlobal === null) {
+        contadorAnteriorGlobal = nuevoContador;
+        setContadorNuevas(nuevoContador);
+        console.log(`📊 Carga inicial: ${nuevoContador} notificaciones`);
+        return;
       }
       
-      // Actualizar ref y estado al mismo tiempo
-      contadorAnteriorRef.current = nuevoContador;
-      setContadorNuevas(nuevoContador);
+      // Si el contador aumentó, actualizar y sonar
+      if (nuevoContador > contadorAnteriorGlobal) {
+        console.log(`🔔 Nuevas: ${contadorAnteriorGlobal} → ${nuevoContador}`);
+        
+        // 1. Actualizar estado
+        contadorAnteriorGlobal = nuevoContador;
+        setContadorNuevas(nuevoContador);
+        
+        // 2. Reproducir sonido (beep simple)
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 800;
+          gain.gain.value = 0.3;
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+          console.log('🔊 Sonido');
+        } catch (e) {
+          console.log('Sin sonido');
+        }
+      } else {
+        // Solo actualizar si cambió (puede bajar)
+        if (nuevoContador !== contadorAnteriorGlobal) {
+          contadorAnteriorGlobal = nuevoContador;
+          setContadorNuevas(nuevoContador);
+        }
+      }
     } catch (error) {
-      console.error('Error fetching contador:', error);
+      console.error('Error:', error);
     }
   }, [userEmail]);
 
