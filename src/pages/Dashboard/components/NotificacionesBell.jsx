@@ -294,21 +294,20 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, notificaciones]);
 
-  // Fetch inicial del contador
-  useEffect(() => {
-    fetchContador();
-  }, [fetchContador]);
-
   // Heartbeat: polling cada 10 segundos (actualiza contador + sonido si hay nuevas)
+  // También hace el fetch inicial al montarse
   useEffect(() => {
     if (!userEmail) return;
     
-    const heartbeatInterval = setInterval(() => {
-      fetchContador();
-    }, 10000); // 10 segundos
+    // Fetch inicial
+    fetchContador();
+    
+    // Heartbeat cada 10 segundos
+    const heartbeatInterval = setInterval(fetchContador, 10000);
     
     return () => clearInterval(heartbeatInterval);
-  }, [userEmail, fetchContador]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]); // Solo depende de userEmail, no de fetchContador
 
   // Obtener ícono del componente
   const getIcono = (iconoNombre) => {
