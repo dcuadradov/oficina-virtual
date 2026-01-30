@@ -6,6 +6,7 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
+import NotificacionesBell from './components/NotificacionesBell';
 import { LogOut, RefreshCcw, Home, Table, CalendarDays } from 'lucide-react';
 
 // Configuración de paginación
@@ -112,6 +113,24 @@ export default function Dashboard() {
   const handleCloseSidebar = () => {
     setSidebarOpen(false);
     setTimeout(() => setSelectedLead(null), 300);
+  };
+
+  // Función para abrir un lead desde una notificación
+  const handleOpenLeadFromNotification = async (cardId) => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('card_id', cardId)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        handleOpenSidebar(data, 'info');
+      }
+    } catch (error) {
+      console.error('Error abriendo lead desde notificación:', error);
+    }
   };
 
   // Email activo para las consultas (el comercial seleccionado o el usuario actual)
@@ -660,6 +679,12 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Campanita de notificaciones */}
+            <NotificacionesBell 
+              userEmail={userEmail} 
+              onOpenLead={handleOpenLeadFromNotification}
+            />
+            
             <button 
               onClick={() => navigate('/home')}
               className="flex items-center gap-2 text-slate-500 hover:text-[#1717AF] transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100"
@@ -668,13 +693,13 @@ export default function Dashboard() {
               <span className="hidden md:inline">Inicio</span>
             </button>
           
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
-          >
-            <LogOut size={18} />
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
+            >
+              <LogOut size={18} />
               <span className="hidden md:inline">Salir</span>
-          </button>
+            </button>
           </div>
         </div>
       </header>
