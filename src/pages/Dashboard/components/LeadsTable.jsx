@@ -458,8 +458,14 @@ const LeadsTable = ({
                     </div>
                   </td>
 
-                  {/* Seguimiento - ancho amplio con truncado */}
-                  <td className="py-4 px-4 max-w-[320px]">
+                  {/* Seguimiento - ancho amplio con truncado - click abre tab Seguimiento */}
+                  <td 
+                    className="py-4 px-4 max-w-[320px] cursor-pointer hover:bg-slate-50/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenSeguimiento?.(lead);
+                    }}
+                  >
                     {(() => {
                       const seguimiento = ultimosSeguimientos[lead.card_id];
                       return (
