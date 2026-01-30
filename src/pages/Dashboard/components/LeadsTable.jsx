@@ -82,7 +82,7 @@ const WhatsAppButton = ({ lead, size = 18 }) => {
               : 'bg-amber-200 text-amber-700'
           }`}
         >
-          {horasRestantes}
+          {horasRestantes}h
         </span>
       )}
     </button>
