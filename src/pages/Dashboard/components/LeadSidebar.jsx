@@ -932,6 +932,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setTextoRecordatorio('');
       setErrorRecordatorio(null);
       setSubTabRecordatorio('programar'); // Siempre iniciar en "Programar"
+      
+      // Scroll al inicio para el tab de recordatorio
+      setTimeout(() => {
+        if (sidebarContentRef.current) {
+          sidebarContentRef.current.scrollTop = 0;
+        }
+      }, 100);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatoriosCalendario, fetchRecordatorioActivo]);
 
