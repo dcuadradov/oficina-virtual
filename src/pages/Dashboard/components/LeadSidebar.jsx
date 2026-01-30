@@ -338,6 +338,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   
   const recordatoriosContainerRef = useRef(null);
   const seguimientoInputRef = useRef(null);
+  const sidebarContentRef = useRef(null);
   const userEmail = localStorage.getItem('user_email');
   const userName = localStorage.getItem('user_name') || 'Usuario';
 
@@ -819,8 +820,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       
       // Scroll al final para ver mensajes recientes e input
       setTimeout(() => {
+        // Scroll del contenedor de mensajes
         if (recordatoriosContainerRef.current) {
           recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
+        }
+        // Scroll del sidebar (contenedor padre)
+        if (sidebarContentRef.current) {
+          sidebarContentRef.current.scrollTop = sidebarContentRef.current.scrollHeight;
         }
       }, 300);
     }
@@ -1569,7 +1575,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           </div>
 
           {/* Contenido del tab - con scroll */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div ref={sidebarContentRef} className="flex-1 overflow-y-auto p-6">
             {activeTab === 'info' && (
               <div className="flex flex-col h-full">
                 {/* Sub-tabs */}
