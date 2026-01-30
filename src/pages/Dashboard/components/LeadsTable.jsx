@@ -244,44 +244,46 @@ const LeadsTable = ({
     <div className={isEmbedded ? '' : 'bg-white/70 backdrop-blur-sm rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden'}>
       
       {/* Header de la tabla */}
-      <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+      <div className="px-4 sm:px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
         <div className="flex flex-col gap-4">
           {/* Título y Tabs */}
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-slate-800">Funnel</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <h2 className="text-lg font-semibold text-slate-800 flex-shrink-0">Funnel</h2>
             
-            {/* Tabs dinámicos con contador */}
+            {/* Tabs dinámicos con contador - scroll horizontal en mobile */}
             {todosLosGrupos.length > 1 && (
-              <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                {todosLosGrupos.map((grupo) => {
-                  const count = conteoPorGrupo[grupo.id] || 0;
-                  return (
-                    <button
-                      key={grupo.id}
-                      onClick={() => setActiveFunnelTab(grupo.id)}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
-                        activeFunnelTab === grupo.id
-                          ? 'bg-white text-[#1717AF] shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      {grupo.nombre}
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                        activeFunnelTab === grupo.id
-                          ? 'bg-[#1717AF]/10 text-[#1717AF]'
-                          : 'bg-slate-200 text-slate-500'
-                      }`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                <div className="flex items-center bg-slate-100 rounded-lg p-1 min-w-max">
+                  {todosLosGrupos.map((grupo) => {
+                    const count = conteoPorGrupo[grupo.id] || 0;
+                    return (
+                      <button
+                        key={grupo.id}
+                        onClick={() => setActiveFunnelTab(grupo.id)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap ${
+                          activeFunnelTab === grupo.id
+                            ? 'bg-white text-[#1717AF] shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {grupo.nombre}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                          activeFunnelTab === grupo.id
+                            ? 'bg-[#1717AF]/10 text-[#1717AF]'
+                            : 'bg-slate-200 text-slate-500'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
           
           {/* Chips de filtro por etapa del funnel */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {etapasParaMostrar.map((etapa) => {
               // Obtener conteo desde statsData (datos globales)
               const count = porEtapa[etapa.id] || 0;
@@ -289,7 +291,7 @@ const LeadsTable = ({
                 <button
                   key={etapa.id}
                   onClick={() => onEtapaChange?.(activeEtapa === etapa.id ? null : etapa.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
+                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 border ${
                     activeEtapa === etapa.id
                       ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
