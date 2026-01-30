@@ -118,21 +118,11 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         contadorAnteriorGlobal = nuevoContador;
         setContadorNuevas(nuevoContador);
         
-        // 2. Reproducir sonido (beep simple)
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 800;
-          gain.gain.value = 0.3;
-          osc.start();
-          osc.stop(ctx.currentTime + 0.15);
-          console.log('🔊 Sonido');
-        } catch (e) {
-          console.log('Sin sonido');
-        }
+        // 2. Reproducir sonido MP3
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+        console.log('🔊 Sonido');
       } else {
         // Solo actualizar si cambió (puede bajar)
         if (nuevoContador !== contadorAnteriorGlobal) {
