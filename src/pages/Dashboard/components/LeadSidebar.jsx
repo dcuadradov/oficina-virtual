@@ -817,10 +817,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setFiltroFase(null);
       fetchRecordatorios(0, true);
       
-      // Scroll al input después de un breve delay para que se renderice
+      // Scroll al final del contenedor para ver mensajes recientes e input
       setTimeout(() => {
-        seguimientoInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 100);
+        if (recordatoriosContainerRef.current) {
+          recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
+        }
+      }, 200);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatorios]);
 
@@ -1978,71 +1980,44 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             )}
 
             {activeTab === 'seguimiento' && (() => {
-              // Obtener fases únicas de los comentarios
-              const fasesUnicas = [...new Set(recordatorios.map(c => c.fase).filter(Boolean))];
-              
-              // Filtrar comentarios solo por fase
-              const comentariosFiltrados = recordatorios.filter(c => {
-                if (filtroFase && c.fase !== filtroFase) return false;
-                return true;
-              });
-              
               return (
-              <div className="space-y-4">
-                {/* Filtro por fase */}
-                <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-100">
-                  {fasesUnicas.length > 0 ? (
-                    <>
-                      <select
-                        value={filtroFase || ''}
-                        onChange={(e) => setFiltroFase(e.target.value || null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                      >
-                        <option value="">Todas las fases</option>
-                        {fasesUnicas.map(fase => (
-                          <option key={fase} value={fase}>{fase}</option>
-                        ))}
-                      </select>
-                      
-                      {/* Botón limpiar filtro */}
-                      {filtroFase && (
-                        <button
-                          onClick={() => setFiltroFase(null)}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                        >
-                          Limpiar
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-slate-400">Historial de seguimientos</span>
-                  )}
-                </div>
-                
-                {/* Lista de seguimientos */}
+              <div className="flex flex-col" style={{ height: 'calc(100vh - 380px)', minHeight: '300px' }}>
+                {/* Lista de seguimientos - scroll */}
                 <div 
                   ref={recordatoriosContainerRef}
                   onScroll={handleScroll}
-                  className="space-y-3"
+                  className="flex-1 overflow-y-auto space-y-3 pr-1"
                 >
-                  {comentariosFiltrados.length === 0 && !loadingRecordatorios ? (
+                  {recordatorios.length === 0 && !loadingRecordatorios ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                         <MessageCircle size={28} className="text-slate-400" />
                       </div>
                       <h3 className="text-lg font-semibold text-slate-700 mb-2">
-                        {filtroFase ? 'Sin resultados' : 'Sin seguimiento'}
+                        Sin seguimiento
                       </h3>
                       <p className="text-sm text-slate-400">
-                        {filtroFase 
-                          ? 'No hay mensajes con los filtros seleccionados' 
-                          : 'Aún no hay mensajes de seguimiento para este lead'}
+                        Aún no hay mensajes de seguimiento para este lead
                       </p>
                     </div>
                   ) : (
                     <>
-                      {/* Mensajes en orden inverso (más reciente abajo) */}
-                      {comentariosFiltrados.map((comentario, index) => {
+                      {/* Inicio del historial */}
+                      {!hasMoreRecordatorios && recordatorios.length > 0 && (
+                        <p className="text-center text-xs text-slate-400 py-3">
+                          Inicio del historial
+                        </p>
+                      )}
+                      
+                      {/* Loader para cargar más */}
+                      {loadingRecordatorios && (
+                        <div className="flex justify-center py-4">
+                          <Loader2 size={24} className="text-[#1717AF] animate-spin" />
+                        </div>
+                      )}
+                      
+                      {/* Mensajes ordenados cronológicamente: antiguo arriba, reciente abajo */}
+                      {recordatorios.map((comentario, index) => {
                         // Obtener nombre del autor (del join con usuarios o del email)
                         const nombreAutor = comentario.usuarios?.nombre || 
                           (comentario.autor_email === userEmail ? userName : comentario.autor_email?.split('@')[0]) || 
@@ -2085,34 +2060,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           </div>
                         );
                       })}
-                      
-                      {/* Loader para infinite scroll (arriba al cargar más antiguos) */}
-                      {loadingRecordatorios && (
-                        <div className="flex justify-center py-4">
-                          <Loader2 size={24} className="text-[#1717AF] animate-spin" />
-                        </div>
-                      )}
-                      
-                      {/* Botón para cargar más o mensaje de fin de lista */}
-                      {hasMoreRecordatorios && recordatorios.length > 0 && !loadingRecordatorios && (
-                        <button
-                          onClick={loadMoreRecordatorios}
-                          className="w-full py-2 text-center text-xs text-[#1717AF] hover:text-[#02214A] font-medium hover:bg-slate-50 rounded-lg transition-colors"
-                        >
-                          Cargar mensajes anteriores
-                        </button>
-                      )}
-                      {!hasMoreRecordatorios && recordatorios.length > 0 && (
-                        <p className="text-center text-xs text-slate-400 py-2">
-                          Inicio del historial
-                        </p>
-                      )}
                     </>
                   )}
                 </div>
                 
-                {/* Campo para nuevo mensaje */}
-                <div ref={seguimientoInputRef} className="border-t border-slate-100 pt-4 mt-4">
+                {/* Campo para nuevo mensaje - ABAJO (como WhatsApp) */}
+                <div ref={seguimientoInputRef} className="flex-shrink-0 border-t border-slate-100 pt-4 mt-2">
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
