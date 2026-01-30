@@ -20,11 +20,29 @@ const ICONOS = {
 const NOTIFICACIONES_PER_PAGE = 10;
 
 /**
+ * AudioContext global para evitar crear múltiples instancias
+ */
+let audioContextInstance = null;
+
+const getAudioContext = () => {
+  if (!audioContextInstance) {
+    audioContextInstance = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioContextInstance;
+};
+
+/**
  * Reproduce un sonido de notificación usando Web Audio API
  */
-const playNotificationSound = () => {
+const playNotificationSound = async () => {
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioContext = getAudioContext();
+    
+    // Reanudar el contexto si está suspendido (políticas del navegador)
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+    
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
@@ -42,6 +60,8 @@ const playNotificationSound = () => {
     
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.3);
+    
+    console.log('🔊 Sonido reproducido');
   } catch (error) {
     console.log('No se pudo reproducir sonido:', error);
   }
@@ -208,7 +228,15 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   };
 
   // Toggle dropdown
-  const toggleDropdown = () => {
+  const toggleDropdown = async () => {
+    // Inicializar/desbloquear AudioContext al primer click (requerido por navegadores)
+    try {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+    } catch (e) { /* ignorar */ }
+    
     if (!isOpen) {
       setPage(0);
       fetchNotificaciones(0, false);
