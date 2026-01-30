@@ -1261,50 +1261,53 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           
           {/* Header */}
           <div className="flex-shrink-0 px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
               {/* Info del lead */}
-              <div className="flex items-center gap-4">
-                {/* Avatar con bandera */}
-                <div className="relative">
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                {/* Avatar con bandera - oculto en mobile */}
+                <div className="relative hidden sm:block flex-shrink-0">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-3xl shadow-lg">
                     {getCountryFlag(lead.pais)}
                   </div>
                 </div>
                 
                 {/* Nombre y ocupación */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   {editingField === 'nombre' ? (
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        className="flex-1 text-xl font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/30"
+                        className="flex-1 text-lg sm:text-xl font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/30 min-w-0"
                         autoFocus
                         placeholder="Nombre del lead"
                       />
                       <button
                         onClick={() => handleSaveField('nombre', editValue)}
-                        className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90"
+                        className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 flex-shrink-0"
                       >
                         <Check size={14} />
                       </button>
                       <button
                         onClick={cancelEditing}
-                        className="p-1.5 bg-slate-200 text-slate-500 rounded-lg hover:bg-slate-300"
+                        className="p-1.5 bg-slate-200 text-slate-500 rounded-lg hover:bg-slate-300 flex-shrink-0"
                       >
                         <X size={14} />
                       </button>
                     </div>
                   ) : (
                     <h2 
-                      className="text-xl font-bold text-slate-800 cursor-pointer hover:text-[#1717AF] transition-colors group flex items-center gap-2"
+                      className="text-lg sm:text-xl font-bold text-slate-800 cursor-pointer hover:text-[#1717AF] transition-colors group flex items-center gap-2 truncate"
                       onClick={() => startEditing('nombre', getFieldValue('nombre'))}
                     >
-                      {getFieldValue('nombre') || 'Sin nombre'}
-                      <Edit2 size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="truncate">{getFieldValue('nombre') || 'Sin nombre'}</span>
+                      <Edit2 size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                     </h2>
                   )}
+                  
+                  {/* País en mobile (visible solo en mobile) */}
+                  <p className="text-xs text-slate-400 sm:hidden mt-0.5">{lead.pais || 'Sin país'}</p>
                   
                   {/* Comercial asignado con dropdown de reasignación */}
                   <div className="relative comercial-dropdown mt-1">
@@ -1377,49 +1380,49 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               </div>
               
               {/* Acciones y cerrar */}
-              <div className="flex items-center gap-2">
-                {/* Acciones rápidas */}
-                <div className="flex items-center gap-1 mr-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                {/* Acciones rápidas - más compactas en mobile */}
+                <div className="flex items-center gap-0.5 sm:gap-1 sm:mr-2">
                   {/* Marcar como HOT 🔥 */}
                   <button
                     onClick={handleToggleHot}
                     disabled={togglingHot}
-                    className={`p-2.5 rounded-xl transition-all duration-200 ${
+                    className={`p-2 sm:p-2.5 rounded-xl transition-all duration-200 ${
                       isHot
                         ? 'text-orange-600 bg-gradient-to-br from-orange-100 to-red-100 shadow-md shadow-orange-200 ring-2 ring-orange-300'
                         : 'text-slate-400 bg-slate-50 hover:bg-orange-50 hover:text-orange-500'
                     }`}
                     title={isHot ? "Quitar marca de lead caliente" : "Marcar como lead caliente"}
                   >
-                    <Flame size={20} className={togglingHot ? 'animate-pulse' : ''} />
+                    <Flame size={18} className={`sm:w-5 sm:h-5 ${togglingHot ? 'animate-pulse' : ''}`} />
                   </button>
                   
-                  {/* Marcar como pendiente */}
+                  {/* Marcar como pendiente - oculto en mobile muy pequeño */}
                   {onMarcarNoRevisado && (
                     <button
                       onClick={() => lead.revisado !== false && onMarcarNoRevisado(lead)}
                       disabled={lead.revisado === false}
-                      className={`p-2.5 rounded-xl transition-all duration-200 ${
+                      className={`hidden xs:block p-2 sm:p-2.5 rounded-xl transition-all duration-200 ${
                         lead.revisado === false
                           ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
                           : 'text-amber-600 bg-amber-50 hover:bg-amber-100'
                       }`}
                       title={lead.revisado === false ? "Este lead ya está pendiente" : "Marcar como no leído"}
                     >
-                      <RotateCcw size={20} />
+                      <RotateCcw size={18} className="sm:w-5 sm:h-5" />
                     </button>
                   )}
                   
                   {/* WhatsApp con contador de ventana 24h */}
-                  <WhatsAppButtonSidebar lead={lead} size={20} />
+                  <WhatsAppButtonSidebar lead={lead} size={18} />
                 </div>
                 
-                {/* Botón cerrar */}
+                {/* Botón cerrar - siempre visible */}
                 <button
                   onClick={handleClose}
                   className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all duration-200"
                 >
-                  <X size={24} />
+                  <X size={22} className="sm:w-6 sm:h-6" />
                 </button>
               </div>
             </div>
