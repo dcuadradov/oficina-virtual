@@ -78,9 +78,12 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
     },
   ];
 
+  // Filtrar para ocultar "Sin gestionar"
+  const statsVisibles = statsConfig.filter(stat => stat.key !== 'sin_gestionar');
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {statsConfig.map((stat) => {
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {statsVisibles.map((stat) => {
         const Icon = stat.icon;
         const isActive = activeFilter === stat.key;
         
