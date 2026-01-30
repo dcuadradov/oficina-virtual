@@ -568,24 +568,39 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         comercial_email: comercialSeleccionado.email 
       }));
 
-      // Crear notificación para el comercial nuevo
+      // Crear notificación para el comercial nuevo (usando template de config_notificaciones)
       try {
-        const { error: notifError } = await supabase
-          .from('notificaciones')
-          .insert({
-            config_id: '05108c03-420f-44de-8583-fc2c4d2f9dec',
-            card_id: lead.card_id,
-            comercial_email: comercialSeleccionado.email,
-            nombre_lead: lead.nombre,
-            descripcion: `${lead.nombre} te ha sido reasignado por ${userName || userEmail}`,
-            datos_extra: {
-              comercial_anterior: lead.comercial_email,
-              reasignado_por: userEmail
-            }
-          });
+        // Obtener el template de la config
+        const { data: configNotif } = await supabase
+          .from('config_notificaciones')
+          .select('id, descripcion_template')
+          .eq('id', '05108c03-420f-44de-8583-fc2c4d2f9dec')
+          .eq('activo', true)
+          .single();
         
-        if (notifError) {
-          console.error('Error creando notificación de reasignación:', notifError);
+        if (configNotif) {
+          // Reemplazar variables en el template
+          let descripcionFinal = configNotif.descripcion_template
+            .replace('{{nombre}}', lead.nombre || 'Lead')
+            .replace('{{reasignado_por}}', userName || userEmail);
+          
+          const { error: notifError } = await supabase
+            .from('notificaciones')
+            .insert({
+              config_id: configNotif.id,
+              card_id: lead.card_id,
+              comercial_email: comercialSeleccionado.email,
+              nombre_lead: lead.nombre,
+              descripcion: descripcionFinal,
+              datos_extra: {
+                comercial_anterior: lead.comercial_email,
+                reasignado_por: userEmail
+              }
+            });
+          
+          if (notifError) {
+            console.error('Error creando notificación de reasignación:', notifError);
+          }
         }
       } catch (notifErr) {
         console.error('Error creando notificación:', notifErr);
