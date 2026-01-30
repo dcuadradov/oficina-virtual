@@ -132,8 +132,11 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
+  // Ref para comparar contador anterior
+  const contadorAnteriorRef = useRef(0);
+
   // Fetch contador de nuevas (solo estado "nuevo", no "visto")
-  const fetchContador = useCallback(async () => {
+  const fetchContador = useCallback(async (reproducirSonido = true) => {
     if (!userEmail) return;
     
     try {
@@ -144,7 +147,17 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         .eq('estado_lectura', 'nuevo');
 
       if (error) throw error;
-      setContadorNuevas(count || 0);
+      
+      const nuevoContador = count || 0;
+      
+      // Si el contador aumentó, reproducir sonido
+      if (reproducirSonido && nuevoContador > contadorAnteriorRef.current && contadorAnteriorRef.current >= 0) {
+        console.log(`🔔 Nuevas notificaciones detectadas: ${contadorAnteriorRef.current} → ${nuevoContador}`);
+        playNotificationSound();
+      }
+      
+      contadorAnteriorRef.current = nuevoContador;
+      setContadorNuevas(nuevoContador);
     } catch (error) {
       console.error('Error fetching contador:', error);
     }
@@ -267,9 +280,9 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, notificaciones]);
 
-  // Fetch inicial del contador
+  // Fetch inicial del contador (sin sonido al cargar)
   useEffect(() => {
-    fetchContador();
+    fetchContador(false);
   }, [fetchContador]);
 
   // Heartbeat: polling cada 30 segundos como backup del realtime
