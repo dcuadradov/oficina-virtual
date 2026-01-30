@@ -20,6 +20,34 @@ const ICONOS = {
 const NOTIFICACIONES_PER_PAGE = 10;
 
 /**
+ * Reproduce un sonido de notificación usando Web Audio API
+ */
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Configurar el sonido (tipo de onda, frecuencia, duración)
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // La nota A5
+    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.1); // Baja a E5
+    
+    // Volumen suave
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+  } catch (error) {
+    console.log('No se pudo reproducir sonido:', error);
+  }
+};
+
+/**
  * Formatea el tiempo relativo (hace X minutos, horas, días)
  */
 const formatTimeAgo = (timestamp) => {
@@ -243,6 +271,8 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         },
         (payload) => {
           console.log('🔔 Nueva notificación recibida:', payload);
+          // Reproducir sonido de notificación
+          playNotificationSound();
           // Nueva notificación llegó
           fetchContador();
           if (isOpen) {
