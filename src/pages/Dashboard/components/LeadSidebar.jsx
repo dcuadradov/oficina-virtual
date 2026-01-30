@@ -817,12 +817,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setFiltroFase(null);
       fetchRecordatorios(0, true);
       
-      // Scroll al inicio para ver mensajes recientes (están arriba después del reverse)
+      // Scroll al final para ver mensajes recientes e input
       setTimeout(() => {
         if (recordatoriosContainerRef.current) {
-          recordatoriosContainerRef.current.scrollTop = 0;
+          recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
         }
-      }, 200);
+      }, 300);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatorios]);
 
