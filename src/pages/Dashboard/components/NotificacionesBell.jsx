@@ -110,19 +110,18 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         return;
       }
       
-      // Si el contador aumentó, actualizar y sonar
+      // Si el contador aumentó, sonar y actualizar
       if (nuevoContador > contadorAnteriorGlobal) {
         console.log(`🔔 Nuevas: ${contadorAnteriorGlobal} → ${nuevoContador}`);
         
-        // 1. Actualizar estado
-        contadorAnteriorGlobal = nuevoContador;
-        setContadorNuevas(nuevoContador);
-        
-        // 2. Reproducir sonido MP3
+        // 1. Reproducir sonido PRIMERO
         const audio = new Audio('/notification.mp3');
         audio.volume = 0.5;
         audio.play().catch(() => {});
-        console.log('🔊 Sonido');
+        
+        // 2. Actualizar estado DESPUÉS
+        contadorAnteriorGlobal = nuevoContador;
+        setContadorNuevas(nuevoContador);
       } else {
         // Solo actualizar si cambió (puede bajar)
         if (nuevoContador !== contadorAnteriorGlobal) {
