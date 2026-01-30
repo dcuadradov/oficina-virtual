@@ -82,7 +82,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Fetch contador de nuevas
+  // Fetch contador de nuevas (solo estado "nuevo", no "visto")
   const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
@@ -91,7 +91,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         .from('notificaciones')
         .select('id', { count: 'exact', head: true })
         .eq('comercial_email', userEmail)
-        .in('estado_lectura', ['nuevo', 'visto']);
+        .eq('estado_lectura', 'nuevo');
 
       if (error) throw error;
       setContadorNuevas(count || 0);
@@ -330,11 +330,11 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                     <div
                       key={notif.id}
                       onClick={() => handleNotificacionClick(notif)}
-                      className={`px-5 py-4 border-b border-slate-50 cursor-pointer transition-all duration-200 ${
+                      className={`px-5 py-4 border-b border-slate-100 cursor-pointer transition-all duration-200 ${
                         esNuevo 
-                          ? 'bg-blue-50/70 hover:bg-blue-100/70' 
+                          ? 'bg-blue-100 hover:bg-blue-150 border-l-4 border-l-blue-500' 
                           : esVisto 
-                            ? 'bg-slate-50/50 hover:bg-slate-100/50'
+                            ? 'bg-slate-100 hover:bg-slate-150 border-l-4 border-l-slate-300'
                             : 'bg-white hover:bg-slate-50'
                       }`}
                     >
