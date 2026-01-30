@@ -23,6 +23,7 @@ const NOTIFICACIONES_PER_PAGE = 10;
  * AudioContext global para evitar crear múltiples instancias
  */
 let audioContextInstance = null;
+let ultimoSonidoTimestamp = 0;
 
 const getAudioContext = () => {
   if (!audioContextInstance) {
@@ -33,8 +34,19 @@ const getAudioContext = () => {
 
 /**
  * Reproduce un sonido de notificación usando Web Audio API
+ * Incluye protección contra sonidos duplicados (mínimo 2 segundos entre sonidos)
  */
 const playNotificationSound = async () => {
+  const ahora = Date.now();
+  
+  // Evitar sonido duplicado (mínimo 2 segundos entre sonidos)
+  if (ahora - ultimoSonidoTimestamp < 2000) {
+    console.log('🔇 Sonido omitido (muy reciente)');
+    return;
+  }
+  
+  ultimoSonidoTimestamp = ahora;
+  
   try {
     const audioContext = getAudioContext();
     
@@ -132,7 +144,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Ref para comparar contador anterior
+  // Ref para comparar contador anterior (para detectar nuevas notificaciones)
   const contadorAnteriorRef = useRef(0);
 
   // Fetch contador de nuevas (solo estado "nuevo", no "visto")
@@ -285,49 +297,16 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     fetchContador(false);
   }, [fetchContador]);
 
-  // Heartbeat: polling cada 30 segundos como backup del realtime
+  // Heartbeat: polling cada 10 segundos (actualiza contador + sonido si hay nuevas)
   useEffect(() => {
     if (!userEmail) return;
     
     const heartbeatInterval = setInterval(() => {
       fetchContador();
-    }, 30000); // 30 segundos
+    }, 10000); // 10 segundos
     
     return () => clearInterval(heartbeatInterval);
   }, [userEmail, fetchContador]);
-
-  // Suscripción en tiempo real
-  useEffect(() => {
-    if (!userEmail) return;
-
-    const channel = supabase
-      .channel(`notificaciones-${userEmail}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notificaciones',
-          filter: `comercial_email=eq.${userEmail}`
-        },
-        (payload) => {
-          console.log('🔔 Nueva notificación recibida:', payload);
-          // Reproducir sonido de notificación
-          playNotificationSound();
-          // Nueva notificación llegó
-          fetchContador();
-          if (isOpen) {
-            // Si el dropdown está abierto, agregar al inicio
-            setNotificaciones(prev => [payload.new, ...prev]);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userEmail, isOpen, fetchContador]);
 
   // Obtener ícono del componente
   const getIcono = (iconoNombre) => {
