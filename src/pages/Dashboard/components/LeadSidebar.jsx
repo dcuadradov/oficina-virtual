@@ -568,6 +568,29 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         comercial_email: comercialSeleccionado.email 
       }));
 
+      // Crear notificación para el comercial nuevo
+      try {
+        const { error: notifError } = await supabase
+          .from('notificaciones')
+          .insert({
+            config_id: '05108c03-420f-44de-8583-fc2c4d2f9dec',
+            card_id: lead.card_id,
+            comercial_email: comercialSeleccionado.email,
+            nombre_lead: lead.nombre,
+            descripcion: `${lead.nombre} te ha sido reasignado por ${userName || userEmail}`,
+            datos_extra: {
+              comercial_anterior: lead.comercial_email,
+              reasignado_por: userEmail
+            }
+          });
+        
+        if (notifError) {
+          console.error('Error creando notificación de reasignación:', notifError);
+        }
+      } catch (notifErr) {
+        console.error('Error creando notificación:', notifErr);
+      }
+
       // Cerrar modales y refrescar
       setMostrarModalReasignar(false);
       setComercialDropdownOpen(false);
