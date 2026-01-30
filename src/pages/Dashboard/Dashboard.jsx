@@ -421,10 +421,10 @@ export default function Dashboard() {
     try {
       const ahora = new Date().toISOString();
       
-      // 1. Buscar recordatorios programados que ya vencieron (incluir datos del lead)
+      // 1. Buscar recordatorios programados que ya vencieron
       const { data: vencidos, error: errorBuscar } = await supabase
         .from('recordatorios')
-        .select('id, lead_id, autor_email')
+        .select('id, lead_id')
         .eq('estado', 'Programado')
         .lt('fecha_programada', ahora);
       
