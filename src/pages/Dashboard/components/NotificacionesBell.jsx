@@ -144,11 +144,8 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Ref para comparar contador anterior (para detectar nuevas notificaciones)
-  const contadorAnteriorRef = useRef(0);
-
   // Fetch contador de nuevas (solo estado "nuevo", no "visto")
-  const fetchContador = useCallback(async (reproducirSonido = true) => {
+  const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
     try {
@@ -159,21 +156,29 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         .eq('estado_lectura', 'nuevo');
 
       if (error) throw error;
-      
-      const nuevoContador = count || 0;
-      
-      // Si el contador aumentó, reproducir sonido
-      if (reproducirSonido && nuevoContador > contadorAnteriorRef.current && contadorAnteriorRef.current >= 0) {
-        console.log(`🔔 Nuevas notificaciones detectadas: ${contadorAnteriorRef.current} → ${nuevoContador}`);
-        playNotificationSound();
-      }
-      
-      contadorAnteriorRef.current = nuevoContador;
-      setContadorNuevas(nuevoContador);
+      setContadorNuevas(count || 0);
     } catch (error) {
       console.error('Error fetching contador:', error);
     }
   }, [userEmail]);
+  
+  // Efecto para detectar cambios en el contador y reproducir sonido
+  const contadorPrevioRef = useRef(null);
+  useEffect(() => {
+    // Ignorar el primer render (carga inicial)
+    if (contadorPrevioRef.current === null) {
+      contadorPrevioRef.current = contadorNuevas;
+      return;
+    }
+    
+    // Si el contador aumentó, reproducir sonido
+    if (contadorNuevas > contadorPrevioRef.current) {
+      console.log(`🔔 Nuevas notificaciones: ${contadorPrevioRef.current} → ${contadorNuevas}`);
+      playNotificationSound();
+    }
+    
+    contadorPrevioRef.current = contadorNuevas;
+  }, [contadorNuevas]);
 
   // Cargar más notificaciones (infinite scroll)
   const loadMore = () => {
@@ -292,9 +297,9 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, notificaciones]);
 
-  // Fetch inicial del contador (sin sonido al cargar)
+  // Fetch inicial del contador
   useEffect(() => {
-    fetchContador(false);
+    fetchContador();
   }, [fetchContador]);
 
   // Heartbeat: polling cada 10 segundos (actualiza contador + sonido si hay nuevas)
