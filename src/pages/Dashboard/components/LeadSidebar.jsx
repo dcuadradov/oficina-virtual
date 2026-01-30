@@ -817,10 +817,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setFiltroFase(null);
       fetchRecordatorios(0, true);
       
-      // Scroll al final del contenedor para ver mensajes recientes e input
+      // Scroll al inicio para ver mensajes recientes (están arriba después del reverse)
       setTimeout(() => {
         if (recordatoriosContainerRef.current) {
-          recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
+          recordatoriosContainerRef.current.scrollTop = 0;
         }
       }, 200);
     }
@@ -2016,8 +2016,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         </div>
                       )}
                       
-                      {/* Mensajes ordenados cronológicamente: antiguo arriba, reciente abajo */}
-                      {recordatorios.map((comentario, index) => {
+                      {/* Mensajes ordenados: reciente arriba, antiguo abajo */}
+                      {[...recordatorios].reverse().map((comentario, index) => {
                         // Obtener nombre del autor (del join con usuarios o del email)
                         const nombreAutor = comentario.usuarios?.nombre || 
                           (comentario.autor_email === userEmail ? userName : comentario.autor_email?.split('@')[0]) || 
