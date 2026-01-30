@@ -570,11 +570,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
       // Crear notificación para el comercial nuevo (usando template de config_notificaciones)
       try {
-        // Obtener el template de la config
+        // Obtener el template de la config (buscar por tipo, no por UUID)
         const { data: configNotif } = await supabase
           .from('config_notificaciones')
           .select('id, descripcion_template')
-          .eq('id', '05108c03-420f-44de-8583-fc2c4d2f9dec')
+          .eq('tipo', 'Se te ha reasignado un nuevo lead')
           .eq('activo', true)
           .single();
         
