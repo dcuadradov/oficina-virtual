@@ -19,8 +19,65 @@ const ICONOS = {
 // Número de notificaciones por página
 const NOTIFICACIONES_PER_PAGE = 10;
 
-// Variable global para el contador anterior (persistente entre renders)
-let contadorAnteriorGlobal = null;
+/**
+ * AudioContext global para evitar crear múltiples instancias
+ */
+let audioContextInstance = null;
+let ultimoSonidoTimestamp = 0;
+
+const getAudioContext = () => {
+  if (!audioContextInstance) {
+    audioContextInstance = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioContextInstance;
+};
+
+/**
+ * Reproduce un sonido de notificación usando Web Audio API
+ * Incluye protección contra sonidos duplicados (mínimo 2 segundos entre sonidos)
+ */
+const playNotificationSound = async () => {
+  const ahora = Date.now();
+  
+  // Evitar sonido duplicado (mínimo 2 segundos entre sonidos)
+  if (ahora - ultimoSonidoTimestamp < 2000) {
+    console.log('🔇 Sonido omitido (muy reciente)');
+    return;
+  }
+  
+  ultimoSonidoTimestamp = ahora;
+  
+  try {
+    const audioContext = getAudioContext();
+    
+    // Reanudar el contexto si está suspendido (políticas del navegador)
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Configurar el sonido (tipo de onda, frecuencia, duración)
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // La nota A5
+    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.1); // Baja a E5
+    
+    // Volumen suave
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+    
+    console.log('🔊 Sonido reproducido');
+  } catch (error) {
+    console.log('No se pudo reproducir sonido:', error);
+  }
+};
 
 /**
  * Formatea el tiempo relativo (hace X minutos, horas, días)
@@ -87,7 +144,11 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Fetch contador + sonido si hay nuevas
+  // Ref para guardar el contador anterior (para detectar nuevas notificaciones)
+  const contadorAnteriorRef = useRef(null);
+
+  // Fetch contador de nuevas (solo estado "nuevo", no "visto")
+  // Si el contador aumenta, reproduce el sonido inmediatamente
   const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
@@ -102,35 +163,17 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       
       const nuevoContador = count || 0;
       
-      // Si es carga inicial, solo guardar el contador
-      if (contadorAnteriorGlobal === null) {
-        contadorAnteriorGlobal = nuevoContador;
-        setContadorNuevas(nuevoContador);
-        console.log(`📊 Carga inicial: ${nuevoContador} notificaciones`);
-        return;
+      // Si el contador aumentó (y no es la carga inicial), reproducir sonido
+      if (contadorAnteriorRef.current !== null && nuevoContador > contadorAnteriorRef.current) {
+        console.log(`🔔 Nuevas notificaciones: ${contadorAnteriorRef.current} → ${nuevoContador}`);
+        playNotificationSound();
       }
       
-      // Si el contador aumentó, sonar y actualizar
-      if (nuevoContador > contadorAnteriorGlobal) {
-        console.log(`🔔 Nuevas: ${contadorAnteriorGlobal} → ${nuevoContador}`);
-        
-        // 1. Reproducir sonido PRIMERO
-        const audio = new Audio('/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-        
-        // 2. Actualizar estado DESPUÉS
-        contadorAnteriorGlobal = nuevoContador;
-        setContadorNuevas(nuevoContador);
-      } else {
-        // Solo actualizar si cambió (puede bajar)
-        if (nuevoContador !== contadorAnteriorGlobal) {
-          contadorAnteriorGlobal = nuevoContador;
-          setContadorNuevas(nuevoContador);
-        }
-      }
+      // Actualizar ref y estado al mismo tiempo
+      contadorAnteriorRef.current = nuevoContador;
+      setContadorNuevas(nuevoContador);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching contador:', error);
     }
   }, [userEmail]);
 
@@ -251,8 +294,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, notificaciones]);
 
-  // Heartbeat: polling cada 10 segundos (actualiza contador + sonido si hay nuevas)
-  // También hace el fetch inicial al montarse
+  // Fetch inicial + Heartbeat cada 10 segundos (UN SOLO useEffect)
   useEffect(() => {
     if (!userEmail) return;
     
@@ -264,7 +306,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     
     return () => clearInterval(heartbeatInterval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail]); // Solo depende de userEmail, no de fetchContador
+  }, [userEmail]);
 
   // Obtener ícono del componente
   const getIcono = (iconoNombre) => {
