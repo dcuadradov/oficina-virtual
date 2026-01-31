@@ -61,16 +61,41 @@ const calcularTiempoWhatsApp = (timestamp) => {
 };
 
 /**
- * Mapa de colores para el stepper dinámico
+ * Mapa de colores para el stepper dinámico (por nombre o hex)
  */
 const STEPPER_COLORS = {
-  azul: { bg: 'bg-[#1717AF]', bgLight: 'bg-blue-100', text: 'text-[#1717AF]', line: 'bg-[#1717AF]' },
-  verde: { bg: 'bg-emerald-500', bgLight: 'bg-emerald-100', text: 'text-emerald-600', line: 'bg-emerald-400' },
-  verde_oscuro: { bg: 'bg-green-700', bgLight: 'bg-green-100', text: 'text-green-700', line: 'bg-green-600' },
-  amarillo: { bg: 'bg-yellow-500', bgLight: 'bg-yellow-100', text: 'text-yellow-600', line: 'bg-yellow-400' },
-  naranja: { bg: 'bg-orange-500', bgLight: 'bg-orange-100', text: 'text-orange-600', line: 'bg-orange-400' },
-  rojo: { bg: 'bg-red-500', bgLight: 'bg-red-100', text: 'text-red-600', line: 'bg-red-400' },
-  gris: { bg: 'bg-slate-300', bgLight: 'bg-slate-100', text: 'text-slate-400', line: 'bg-slate-200' }
+  // Por nombre
+  azul: { hex: '#1717AF', bgLight: 'bg-blue-100' },
+  verde: { hex: '#22C55E', bgLight: 'bg-emerald-100' },
+  verde_oscuro: { hex: '#15803D', bgLight: 'bg-green-100' },
+  amarillo: { hex: '#EAB308', bgLight: 'bg-yellow-100' },
+  naranja: { hex: '#F97316', bgLight: 'bg-orange-100' },
+  rojo: { hex: '#EF4444', bgLight: 'bg-red-100' },
+  gris: { hex: '#CBD5E1', bgLight: 'bg-slate-100' },
+  // Por hex directo
+  '#1717AF': { hex: '#1717AF', bgLight: 'bg-blue-100' },
+  '#22C55E': { hex: '#22C55E', bgLight: 'bg-emerald-100' },
+  '#15803D': { hex: '#15803D', bgLight: 'bg-green-100' },
+  '#EAB308': { hex: '#EAB308', bgLight: 'bg-yellow-100' },
+  '#F97316': { hex: '#F97316', bgLight: 'bg-orange-100' },
+  '#EF4444': { hex: '#EF4444', bgLight: 'bg-red-100' },
+  '#CBD5E1': { hex: '#CBD5E1', bgLight: 'bg-slate-100' }
+};
+
+/**
+ * Obtiene los colores del stepper (soporta nombre o hex)
+ */
+const getStepperColors = (color) => {
+  // Si está en el mapa, usar ese
+  if (STEPPER_COLORS[color]) {
+    return STEPPER_COLORS[color];
+  }
+  // Si es un hex que no está mapeado, usar directamente
+  if (color?.startsWith('#')) {
+    return { hex: color, bgLight: 'bg-slate-100' };
+  }
+  // Default: verde
+  return STEPPER_COLORS.verde;
 };
 
 /**
@@ -424,7 +449,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   // Cargar configuración del stepper dinámico
   useEffect(() => {
     const cargarConfigStepper = async () => {
+      console.log('[Stepper] Cargando config para fase_id_pipefy:', lead?.fase_id_pipefy);
+      
       if (!lead?.fase_id_pipefy) {
+        console.log('[Stepper] No hay fase_id_pipefy, no se muestra stepper');
         setStepperSteps([]);
         setConfigStepper(null);
         return;
@@ -438,8 +466,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           .eq('fase_id_pipefy', String(lead.fase_id_pipefy))
           .single();
 
+        console.log('[Stepper] Config obtenida:', configActual, 'Error:', error);
+
         if (error || !configActual) {
           // Si no hay config para esta fase, no mostrar stepper
+          console.log('[Stepper] No hay config para esta fase');
           setStepperSteps([]);
           setConfigStepper(null);
           return;
@@ -484,6 +515,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           ...fasesAMostrar.map(f => ({ ...f, tipo: 'mostrar' })),
           ...fasesFuturo.map(f => ({ ...f, tipo: 'futuro' }))
         ];
+
+        console.log('[Stepper] Steps finales:', stepsFinales);
+        console.log('[Stepper] Color a usar:', colorAUsar);
 
         setStepperSteps(stepsFinales);
         setStepperColor(colorAUsar);
@@ -1713,10 +1747,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                   const isLast = index === stepperSteps.length - 1;
                   const isFuturo = step.tipo === 'futuro';
                   
-                  // Obtener colores del mapa
+                  // Obtener colores (soporta hex o nombre)
                   const colores = isFuturo 
-                    ? STEPPER_COLORS.gris 
-                    : (STEPPER_COLORS[stepperColor] || STEPPER_COLORS.verde);
+                    ? getStepperColors('gris')
+                    : getStepperColors(stepperColor);
+                  
+                  const colorHex = colores.hex;
+                  const grisHex = '#CBD5E1';
 
                   return (
                     <div key={`${step.faseId}-${index}`} className="flex items-center flex-1 last:flex-none">
@@ -1724,33 +1761,38 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                       <div className="flex flex-col items-center relative group">
                         {/* Círculo/Dot */}
                         <div 
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
-                            isFuturo 
-                              ? 'bg-slate-200 text-slate-400' 
-                              : `${colores.bgLight} ${colores.text}`
-                          }`}
-                          title={configStepper?.nombre_fase || step.label}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${colores.bgLight}`}
+                          style={{ 
+                            backgroundColor: isFuturo ? '#E2E8F0' : undefined,
+                            opacity: isFuturo ? 0.7 : 1
+                          }}
+                          title={step.label}
                         >
                           {isFuturo ? (
-                            <Circle size={14} />
+                            <Circle size={14} className="text-slate-400" />
                           ) : (
-                            <div className={`w-2.5 h-2.5 rounded-full ${colores.bg}`} />
+                            <div 
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: colorHex }}
+                            />
                           )}
                         </div>
                         
                         {/* Label corto (siempre visible) */}
-                        <span className={`absolute -bottom-6 text-[10px] font-medium whitespace-nowrap ${
-                          isFuturo ? 'text-slate-400' : colores.text
-                        }`}>
+                        <span 
+                          className="absolute -bottom-6 text-[10px] font-medium whitespace-nowrap"
+                          style={{ color: isFuturo ? '#94A3B8' : colorHex }}
+                        >
                           {step.label}
                         </span>
                       </div>
                       
                       {/* Línea conectora */}
                       {!isLast && (
-                        <div className={`flex-1 h-0.5 mx-1 transition-colors duration-300 ${
-                          isFuturo ? 'bg-slate-200' : colores.line
-                        }`} />
+                        <div 
+                          className="flex-1 h-0.5 mx-1 transition-colors duration-300"
+                          style={{ backgroundColor: isFuturo ? grisHex : colorHex }}
+                        />
                       )}
                     </div>
                   );
