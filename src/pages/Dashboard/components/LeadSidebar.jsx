@@ -449,7 +449,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   // Cargar configuración del stepper dinámico
   useEffect(() => {
     const cargarConfigStepper = async () => {
-      console.log('[Stepper] Cargando config para fase_id_pipefy:', lead?.fase_id_pipefy);
       
       if (!lead?.fase_id_pipefy) {
         console.log('[Stepper] No hay fase_id_pipefy, no se muestra stepper');
@@ -459,18 +458,15 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       }
 
       try {
-        // Obtener config de la fase actual
-        const { data: configActual, error } = await supabase
+        // Obtener config de la fase actual (sin .single() para evitar error 406)
+        const { data: configResults, error } = await supabase
           .from('config_stepper')
           .select('*')
-          .eq('fase_id_pipefy', String(lead.fase_id_pipefy))
-          .single();
+          .eq('fase_id_pipefy', String(lead.fase_id_pipefy));
 
-        console.log('[Stepper] Config obtenida:', configActual, 'Error:', error);
+        const configActual = configResults?.[0] || null;
 
         if (error || !configActual) {
-          // Si no hay config para esta fase, no mostrar stepper
-          console.log('[Stepper] No hay config para esta fase');
           setStepperSteps([]);
           setConfigStepper(null);
           return;
@@ -483,6 +479,17 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         let fasesFuturo = [];
         let colorAUsar = configActual.color || 'verde';
 
+        // Obtener todas las configs para hacer lookup de nombres
+        const { data: allConfigs } = await supabase
+          .from('config_stepper')
+          .select('fase_id_pipefy, label_corto, nombre_fase');
+        
+        // Crear mapa de fase_id -> label_corto
+        const labelMap = {};
+        allConfigs?.forEach(c => {
+          labelMap[c.fase_id_pipefy] = c.label_corto || c.nombre_fase;
+        });
+
         if (configActual.tipo === 'gestion') {
           // Tipo gestión: usar fases_a_mostrar con color configurado + fases_futuro en gris
           fasesAMostrar = parsearFases(configActual.fases_a_mostrar);
@@ -490,11 +497,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         } else if (configActual.tipo === 'finalizada' || configActual.tipo === 'interes_futuro') {
           // Tipo finalizada/interes_futuro: buscar config de fase_anterior
           if (lead.fase_anterior) {
-            // Buscar en config_stepper por nombre de fase anterior
-            const { data: allConfigs } = await supabase
-              .from('config_stepper')
-              .select('*');
-            
             // Buscar la config que coincida con la fase_anterior (puede ser por nombre o id)
             const configAnterior = allConfigs?.find(c => 
               c.nombre_fase === lead.fase_anterior || 
@@ -502,22 +504,35 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             );
             
             if (configAnterior) {
-              fasesAMostrar = parsearFases(configAnterior.fases_a_mostrar);
-              fasesFuturo = parsearFases(configAnterior.fases_futuro);
+              // Necesitamos obtener fases_a_mostrar y fases_futuro de configAnterior
+              const { data: configAnteriorFull } = await supabase
+                .from('config_stepper')
+                .select('*')
+                .eq('fase_id_pipefy', configAnterior.fase_id_pipefy);
+              
+              if (configAnteriorFull?.[0]) {
+                fasesAMostrar = parsearFases(configAnteriorFull[0].fases_a_mostrar);
+                fasesFuturo = parsearFases(configAnteriorFull[0].fases_futuro);
+              }
             }
           }
           // El color es el de la fase ACTUAL (donde está el lead)
           colorAUsar = configActual.color || 'rojo';
         }
 
-        // Construir el stepper final
+        // Construir el stepper final con nombres reales
         const stepsFinales = [
-          ...fasesAMostrar.map(f => ({ ...f, tipo: 'mostrar' })),
-          ...fasesFuturo.map(f => ({ ...f, tipo: 'futuro' }))
+          ...fasesAMostrar.map(f => ({ 
+            ...f, 
+            tipo: 'mostrar',
+            labelReal: labelMap[f.faseId] || f.label 
+          })),
+          ...fasesFuturo.map(f => ({ 
+            ...f, 
+            tipo: 'futuro',
+            labelReal: labelMap[f.faseId] || f.label 
+          }))
         ];
-
-        console.log('[Stepper] Steps finales:', stepsFinales);
-        console.log('[Stepper] Color a usar:', colorAUsar);
 
         setStepperSteps(stepsFinales);
         setStepperColor(colorAUsar);
@@ -1741,7 +1756,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
           {/* Stepper del funnel - Dinámico */}
           {stepperSteps.length > 0 && (
-            <div className="flex-shrink-0 px-6 py-5 bg-slate-50/50 border-b border-slate-100">
+            <div className="flex-shrink-0 px-6 pt-5 pb-14 bg-slate-50/50 border-b border-slate-100">
               <div className="flex items-center justify-between">
                 {stepperSteps.map((step, index) => {
                   const isLast = index === stepperSteps.length - 1;
@@ -1754,6 +1769,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                   
                   const colorHex = colores.hex;
                   const grisHex = '#CBD5E1';
+                  const labelText = step.labelReal || step.label;
 
                   return (
                     <div key={`${step.faseId}-${index}`} className="flex items-center flex-1 last:flex-none">
@@ -1766,7 +1782,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                             backgroundColor: isFuturo ? '#E2E8F0' : undefined,
                             opacity: isFuturo ? 0.7 : 1
                           }}
-                          title={step.label}
+                          title={labelText}
                         >
                           {isFuturo ? (
                             <Circle size={14} className="text-slate-400" />
@@ -1778,19 +1794,26 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           )}
                         </div>
                         
-                        {/* Label corto (siempre visible) */}
+                        {/* Tooltip para mobile (visible al hacer tap) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-medium rounded-lg opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap max-w-[120px] text-center truncate sm:hidden">
+                          {labelText}
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                        </div>
+                        
+                        {/* Label corto (oculto en mobile, visible en desktop) */}
                         <span 
-                          className="absolute -bottom-6 text-[10px] font-medium whitespace-nowrap"
+                          className="absolute -bottom-8 text-[9px] font-medium text-center leading-tight max-w-[65px] line-clamp-3 hidden sm:block"
                           style={{ color: isFuturo ? '#94A3B8' : colorHex }}
+                          title={labelText}
                         >
-                          {step.label}
+                          {labelText}
                         </span>
                       </div>
                       
                       {/* Línea conectora */}
                       {!isLast && (
                         <div 
-                          className="flex-1 h-0.5 mx-1 transition-colors duration-300"
+                          className="flex-1 h-0.5 mx-0.5 sm:mx-1 transition-colors duration-300"
                           style={{ backgroundColor: isFuturo ? grisHex : colorHex }}
                         />
                       )}
