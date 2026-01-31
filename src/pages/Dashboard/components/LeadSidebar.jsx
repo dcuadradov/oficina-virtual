@@ -61,6 +61,32 @@ const calcularTiempoWhatsApp = (timestamp) => {
 };
 
 /**
+ * Mapa de colores para el stepper dinámico
+ */
+const STEPPER_COLORS = {
+  azul: { bg: 'bg-[#1717AF]', bgLight: 'bg-blue-100', text: 'text-[#1717AF]', line: 'bg-[#1717AF]' },
+  verde: { bg: 'bg-emerald-500', bgLight: 'bg-emerald-100', text: 'text-emerald-600', line: 'bg-emerald-400' },
+  verde_oscuro: { bg: 'bg-green-700', bgLight: 'bg-green-100', text: 'text-green-700', line: 'bg-green-600' },
+  amarillo: { bg: 'bg-yellow-500', bgLight: 'bg-yellow-100', text: 'text-yellow-600', line: 'bg-yellow-400' },
+  naranja: { bg: 'bg-orange-500', bgLight: 'bg-orange-100', text: 'text-orange-600', line: 'bg-orange-400' },
+  rojo: { bg: 'bg-red-500', bgLight: 'bg-red-100', text: 'text-red-600', line: 'bg-red-400' },
+  gris: { bg: 'bg-slate-300', bgLight: 'bg-slate-100', text: 'text-slate-400', line: 'bg-slate-200' }
+};
+
+/**
+ * Parsea el string de fases (ej: "339756287.P1, 340566951.P2")
+ * y retorna un array de objetos con fase_id y label
+ */
+const parsearFases = (fasesString) => {
+  if (!fasesString || fasesString.trim() === '') return [];
+  
+  return fasesString.split(',').map(item => {
+    const [faseId, label] = item.trim().split('.');
+    return { faseId: faseId.trim(), label: label?.trim() || '' };
+  }).filter(item => item.faseId);
+};
+
+/**
  * Componente botón de WhatsApp con contador de ventana 24h
  */
 const WhatsAppButtonSidebar = ({ lead, size = 20 }) => {
@@ -317,6 +343,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [faseLocal, setFaseLocal] = useState(null); // Fase local para actualización inmediata
   const [toastMessage, setToastMessage] = useState(null); // Toast de confirmación
   
+  // Estados para stepper dinámico
+  const [configStepper, setConfigStepper] = useState(null);
+  const [stepperSteps, setStepperSteps] = useState([]);
+  const [stepperColor, setStepperColor] = useState('verde');
+  
   // Determinar si mostrar botón de agendar basado en la fase del lead
   const mostrarBotonAgendar = lead?.fase_id_pipefy && FASES_LISTO_AGENDAR.includes(String(lead.fase_id_pipefy));
   
@@ -389,6 +420,83 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setLocalLeadData({});
     }
   }, [lead?.card_id]);
+
+  // Cargar configuración del stepper dinámico
+  useEffect(() => {
+    const cargarConfigStepper = async () => {
+      if (!lead?.fase_id_pipefy) {
+        setStepperSteps([]);
+        setConfigStepper(null);
+        return;
+      }
+
+      try {
+        // Obtener config de la fase actual
+        const { data: configActual, error } = await supabase
+          .from('config_stepper')
+          .select('*')
+          .eq('fase_id_pipefy', String(lead.fase_id_pipefy))
+          .single();
+
+        if (error || !configActual) {
+          // Si no hay config para esta fase, no mostrar stepper
+          setStepperSteps([]);
+          setConfigStepper(null);
+          return;
+        }
+
+        setConfigStepper(configActual);
+
+        // Determinar qué fases mostrar según el tipo
+        let fasesAMostrar = [];
+        let fasesFuturo = [];
+        let colorAUsar = configActual.color || 'verde';
+
+        if (configActual.tipo === 'gestion') {
+          // Tipo gestión: usar fases_a_mostrar con color configurado + fases_futuro en gris
+          fasesAMostrar = parsearFases(configActual.fases_a_mostrar);
+          fasesFuturo = parsearFases(configActual.fases_futuro);
+        } else if (configActual.tipo === 'finalizada' || configActual.tipo === 'interes_futuro') {
+          // Tipo finalizada/interes_futuro: buscar config de fase_anterior
+          if (lead.fase_anterior) {
+            // Buscar en config_stepper por nombre de fase anterior
+            const { data: allConfigs } = await supabase
+              .from('config_stepper')
+              .select('*');
+            
+            // Buscar la config que coincida con la fase_anterior (puede ser por nombre o id)
+            const configAnterior = allConfigs?.find(c => 
+              c.nombre_fase === lead.fase_anterior || 
+              c.fase_id_pipefy === lead.fase_anterior
+            );
+            
+            if (configAnterior) {
+              fasesAMostrar = parsearFases(configAnterior.fases_a_mostrar);
+              fasesFuturo = parsearFases(configAnterior.fases_futuro);
+            }
+          }
+          // El color es el de la fase ACTUAL (donde está el lead)
+          colorAUsar = configActual.color || 'rojo';
+        }
+
+        // Construir el stepper final
+        const stepsFinales = [
+          ...fasesAMostrar.map(f => ({ ...f, tipo: 'mostrar' })),
+          ...fasesFuturo.map(f => ({ ...f, tipo: 'futuro' }))
+        ];
+
+        setStepperSteps(stepsFinales);
+        setStepperColor(colorAUsar);
+
+      } catch (error) {
+        console.error('Error cargando config stepper:', error);
+        setStepperSteps([]);
+        setConfigStepper(null);
+      }
+    };
+
+    cargarConfigStepper();
+  }, [lead?.fase_id_pipefy, lead?.fase_anterior]);
 
   // Helper para obtener el valor actual (local o del lead)
   const getFieldValue = (fieldName) => {
@@ -1324,10 +1432,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
   const gestionStatus = getGestionStatus(lead);
   const statusBadge = statusBadges[gestionStatus];
-  const currentStepIndex = funnelSteps.findIndex(
-    step => step.id === lead.etapa_funnel || step.id === lead.fase_nombre_pipefy
-  );
-  const isMatriculaCaida = lead.etapa_funnel === 'Matrícula caída' || lead.fase_nombre_pipefy === 'Matrícula caída';
 
   return (
     <>
@@ -1601,83 +1705,59 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             </div>
           )}
 
-          {/* Stepper del funnel */}
-          <div className="flex-shrink-0 px-6 py-5 bg-slate-50/50 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              {funnelSteps.map((step, index) => {
-                const isCompleted = index < currentStepIndex;
-                const isCurrent = index === currentStepIndex;
-                const isFuture = index > currentStepIndex;
-                const isLast = index === funnelSteps.length - 1;
-                const isMatriculaCaidaStep = step.id === 'Matrícula caída';
-                
-                // Colores según estado
-                let stepColor = 'bg-slate-200 text-slate-400';
-                let lineColor = 'bg-slate-200';
-                let dotColor = 'bg-slate-300';
-                
-                if (isMatriculaCaida) {
-                  // Si está en matrícula caída, todo naranja
-                  stepColor = 'bg-orange-100 text-orange-400';
-                  lineColor = 'bg-orange-200';
-                  dotColor = isMatriculaCaidaStep && isCurrent ? 'bg-orange-500' : 'bg-orange-300';
-                } else if (isCompleted) {
-                  stepColor = 'bg-emerald-100 text-emerald-600';
-                  lineColor = 'bg-emerald-400';
-                  dotColor = 'bg-emerald-500';
-                } else if (isCurrent) {
-                  stepColor = 'bg-emerald-500 text-white shadow-lg shadow-emerald-200';
-                  dotColor = 'bg-emerald-500';
-                }
+          {/* Stepper del funnel - Dinámico */}
+          {stepperSteps.length > 0 && (
+            <div className="flex-shrink-0 px-6 py-5 bg-slate-50/50 border-b border-slate-100">
+              <div className="flex items-center justify-between">
+                {stepperSteps.map((step, index) => {
+                  const isLast = index === stepperSteps.length - 1;
+                  const isFuturo = step.tipo === 'futuro';
+                  
+                  // Obtener colores del mapa
+                  const colores = isFuturo 
+                    ? STEPPER_COLORS.gris 
+                    : (STEPPER_COLORS[stepperColor] || STEPPER_COLORS.verde);
 
-                return (
-                  <div key={step.id} className="flex items-center flex-1 last:flex-none">
-                    {/* Step */}
-                    <div className="flex flex-col items-center relative group">
-                      {/* Círculo/Dot */}
-                      <div 
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${stepColor}`}
-                        title={step.label}
-                      >
-                        {isCompleted && !isMatriculaCaida ? (
-                          <CheckCircle2 size={16} />
-                        ) : isCurrent ? (
-                          <div className="w-2.5 h-2.5 rounded-full bg-current" />
-                        ) : isMatriculaCaidaStep && isMatriculaCaida ? (
-                          <XCircle size={16} />
-                        ) : (
-                          <Circle size={14} />
-                        )}
+                  return (
+                    <div key={`${step.faseId}-${index}`} className="flex items-center flex-1 last:flex-none">
+                      {/* Step */}
+                      <div className="flex flex-col items-center relative group">
+                        {/* Círculo/Dot */}
+                        <div 
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
+                            isFuturo 
+                              ? 'bg-slate-200 text-slate-400' 
+                              : `${colores.bgLight} ${colores.text}`
+                          }`}
+                          title={configStepper?.nombre_fase || step.label}
+                        >
+                          {isFuturo ? (
+                            <Circle size={14} />
+                          ) : (
+                            <div className={`w-2.5 h-2.5 rounded-full ${colores.bg}`} />
+                          )}
+                        </div>
+                        
+                        {/* Label corto (siempre visible) */}
+                        <span className={`absolute -bottom-6 text-[10px] font-medium whitespace-nowrap ${
+                          isFuturo ? 'text-slate-400' : colores.text
+                        }`}>
+                          {step.label}
+                        </span>
                       </div>
                       
-                      {/* Tooltip con fase actual del lead (solo en el paso actual) */}
-                      {isCurrent && lead.fase_nombre_pipefy && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg max-w-[200px] text-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 shadow-lg">
-                          {lead.fase_nombre_pipefy}
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-                        </div>
+                      {/* Línea conectora */}
+                      {!isLast && (
+                        <div className={`flex-1 h-0.5 mx-1 transition-colors duration-300 ${
+                          isFuturo ? 'bg-slate-200' : colores.line
+                        }`} />
                       )}
-                      
-                      {/* Label corto (visible para el actual) */}
-                      <span className={`absolute -bottom-6 text-[10px] font-medium whitespace-nowrap transition-opacity ${
-                        isCurrent ? 'opacity-100' : 'opacity-0'
-                      } ${isMatriculaCaida ? 'text-orange-600' : isCurrent ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {step.shortLabel}
-                      </span>
                     </div>
-                    
-                    {/* Línea conectora */}
-                    {!isLast && (
-                      <div className={`flex-1 h-0.5 mx-1 transition-colors duration-300 ${
-                        isMatriculaCaida ? 'bg-orange-200' : 
-                        isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
-                      }`} />
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tabs */}
           <div className="flex-shrink-0 px-6 pt-4 border-b border-slate-100">
