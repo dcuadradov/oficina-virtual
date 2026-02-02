@@ -3149,11 +3149,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         const currentIndex = historialFasesPaginacion[nombreFase] || 0;
                         const currentItem = items[currentIndex];
 
-                        // Formatear fecha del primer item para el header (Enero 23/26)
-                        const primerItem = items[0];
+                        // Formatear fecha del último item (más reciente) para el header (Enero 23/26)
+                        const ultimoItem = items[items.length - 1];
                         const fechaHeader = (() => {
-                          if (!primerItem?.created_at) return '';
-                          const fecha = new Date(primerItem.created_at);
+                          if (!ultimoItem?.created_at) return '';
+                          const fecha = new Date(ultimoItem.created_at);
                           const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                           const mes = meses[fecha.getMonth()];
