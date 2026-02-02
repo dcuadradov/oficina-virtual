@@ -1024,9 +1024,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setNuevoMensaje('');
       setCategoriaSeleccionada('Otro'); // Reset a default
       
+      // Toast de éxito
+      setToastMessage('Se creó tu seguimiento exitosamente');
+      setTimeout(() => setToastMessage(null), 3000);
+      
     } catch (error) {
       console.error('Error enviando comentario:', error);
-      alert('Error al enviar: ' + error.message);
+      setToastMessage('Error al crear el seguimiento');
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setEnviandoMensaje(false);
     }
