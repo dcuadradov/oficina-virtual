@@ -308,6 +308,15 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
+  // Efecto para actualizar el título de la pestaña del navegador
+  useEffect(() => {
+    if (contadorNuevas > 0) {
+      document.title = `Portal MD (${contadorNuevas > 99 ? '99+' : contadorNuevas})`;
+    } else {
+      document.title = 'Portal MD';
+    }
+  }, [contadorNuevas]);
+
   // Obtener ícono del componente
   const getIcono = (iconoNombre) => {
     const IconComponent = ICONOS[iconoNombre] || Bell;
