@@ -1117,7 +1117,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       }
     };
     
-    if (isOpen && activeTab === 'seguimiento') {
+    if (isOpen && (activeTab === 'seguimiento' || activeTab === 'recordatorio')) {
       cargarCategorias();
     }
   }, [isOpen, activeTab]);
@@ -1259,14 +1259,15 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       const fechaCompleta = new Date(fechaSeleccionada);
       fechaCompleta.setHours(hora24, minutos, 0, 0);
       
-      // 1. Crear comentario en tabla comentarios
+      // 1. Crear comentario en tabla comentarios (con categoría)
       const nuevoComentario = {
         lead_id: lead.card_id,
         texto: textoRecordatorio.trim(),
         autor_email: userEmail || 'unknown',
         origen: 'Recordatorio',
         fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
+        etapa_funnel: lead.etapa_funnel || null,
+        categoria: categoriaSeleccionada || 'Otro'
       };
       
       const { error: errorComentario } = await supabase
@@ -1275,7 +1276,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       
       if (errorComentario) throw errorComentario;
       
-      // 2. Crear recordatorio
+      // 2. Crear recordatorio (con categoría)
       const nuevoRecordatorioData = {
         lead_id: lead.card_id,
         fecha_programada: fechaCompleta.toISOString(),
@@ -1283,7 +1284,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         creado_por: userName,
         estado: 'Programado',
         fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
+        etapa_funnel: lead.etapa_funnel || null,
+        categoria: categoriaSeleccionada || 'Otro'
       };
       
       const { error: errorRecordatorioInsert } = await supabase
@@ -2907,6 +2909,27 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           </select>
                         </div>
                       </div>
+                    </div>
+                    
+                    {/* Dropdown de categoría con buscador */}
+                    <div className="mb-3 relative categoria-dropdown-recordatorio">
+                      <label className="text-xs text-slate-500 mb-1 block">Selecciona categoría del seguimiento (por defecto quedará "Otro")</label>
+                      <select
+                        value={categoriaSeleccionada}
+                        onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+                        disabled={loadingCategorias}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200"
+                      >
+                        {loadingCategorias ? (
+                          <option>Cargando...</option>
+                        ) : (
+                          categorias.map((cat) => (
+                            <option key={cat.id} value={cat.categoria}>
+                              {cat.categoria}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
                     
                     {/* Textarea */}
