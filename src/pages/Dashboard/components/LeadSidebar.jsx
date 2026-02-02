@@ -1050,13 +1050,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     }
   };
 
-  // Manejar scroll para infinite scroll (con flex-col-reverse)
+  // Manejar scroll para infinite scroll (más recientes arriba)
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Con flex-col-reverse el scroll empieza en 0 y va negativo hacia arriba
-    // Detectamos si está cerca del tope (mensajes antiguos)
-    const isNearTop = scrollTop <= -scrollHeight + clientHeight + 150;
-    if (isNearTop && !loadingRecordatorios && hasMoreRecordatorios) {
+    // Detectamos si está cerca del final (mensajes antiguos)
+    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 150;
+    if (isNearBottom && !loadingRecordatorios && hasMoreRecordatorios) {
       loadMoreRecordatorios();
     }
   };
@@ -1071,15 +1070,15 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setFiltroFase(null);
       fetchRecordatorios(0, true);
       
-      // Scroll al final para ver mensajes recientes e input
+      // Scroll al inicio para ver mensajes más recientes primero
       setTimeout(() => {
         // Scroll del contenedor de mensajes
         if (recordatoriosContainerRef.current) {
-          recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
+          recordatoriosContainerRef.current.scrollTop = 0;
         }
         // Scroll del sidebar (contenedor padre)
         if (sidebarContentRef.current) {
-          sidebarContentRef.current.scrollTop = sidebarContentRef.current.scrollHeight;
+          sidebarContentRef.current.scrollTop = 0;
         }
       }, 300);
     }
@@ -2343,8 +2342,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                         </div>
                       )}
                       
-                      {/* Mensajes ordenados: reciente arriba, antiguo abajo */}
-                      {[...recordatorios].reverse().map((comentario, index) => {
+                      {/* Mensajes ordenados: más reciente arriba */}
+                      {recordatorios.map((comentario, index) => {
                         // Obtener nombre del autor (del join con usuarios o del email)
                         const nombreAutor = comentario.usuarios?.nombre || 
                           (comentario.autor_email === userEmail ? userName : comentario.autor_email?.split('@')[0]) || 
