@@ -419,7 +419,7 @@ export default function Dashboard() {
         const cardIds = data.map(lead => lead.card_id);
         const { data: comentarios, error: errorComentarios } = await supabase
           .from('comentarios')
-          .select('lead_id, texto, created_at')
+          .select('lead_id, texto, created_at, categoria')
           .in('lead_id', cardIds)
           .order('created_at', { ascending: false });
         

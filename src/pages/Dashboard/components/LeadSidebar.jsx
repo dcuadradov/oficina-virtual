@@ -306,6 +306,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [nuevoMensaje, setNuevoMensaje] = useState('');
   const [enviandoMensaje, setEnviandoMensaje] = useState(false);
   
+  // Estados para categorías de seguimiento
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Otro');
+  const [loadingCategorias, setLoadingCategorias] = useState(false);
+  
   // Filtros de comentarios
   const [filtroEtapa, setFiltroEtapa] = useState(null);
   const [filtroFase, setFiltroFase] = useState(null);
@@ -982,47 +987,30 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
   // Enviar nuevo mensaje
   const handleEnviarMensaje = async () => {
-    console.log('Intentando enviar...', { 
-      mensaje: nuevoMensaje.trim(), 
-      card_id: lead?.card_id, 
-      enviando: enviandoMensaje,
-      userEmail 
-    });
-    
-    if (!nuevoMensaje.trim()) {
-      console.log('Mensaje vacío');
-      return;
-    }
-    if (!lead?.card_id) {
-      console.log('No hay card_id');
-      return;
-    }
-    if (enviandoMensaje) {
-      console.log('Ya está enviando');
-      return;
-    }
+    if (!lead?.card_id) return;
+    if (enviandoMensaje) return;
     
     try {
       setEnviandoMensaje(true);
       
+      // Si no hay texto, usar "Sin detalle"
+      const textoFinal = nuevoMensaje.trim() || 'Sin detalle';
+      
       const nuevoComentario = {
         lead_id: lead.card_id,
-        texto: nuevoMensaje.trim(),
+        texto: textoFinal,
         autor_email: userEmail || 'unknown',
         origen: 'Seguimiento',
         fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
+        etapa_funnel: lead.etapa_funnel || null,
+        categoria: categoriaSeleccionada || 'Otro'
       };
-      
-      console.log('Enviando comentario:', nuevoComentario);
       
       const { data, error } = await supabase
         .from('comentarios')
         .insert([nuevoComentario])
         .select()
         .single();
-      
-      console.log('Respuesta:', { data, error });
       
       if (error) throw error;
       
@@ -1034,6 +1022,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       };
       setRecordatorios(prev => [comentarioConNombre, ...prev]);
       setNuevoMensaje('');
+      setCategoriaSeleccionada('Otro'); // Reset a default
       
     } catch (error) {
       console.error('Error enviando comentario:', error);
@@ -1077,6 +1066,43 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       }, 300);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatorios]);
+
+  // Cargar categorías de seguimiento
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        setLoadingCategorias(true);
+        const { data, error } = await supabase
+          .from('config_categorias')
+          .select('id, categoria')
+          .eq('modulo', 'comercial')
+          .eq('estado', true)
+          .order('categoria');
+        
+        if (error) throw error;
+        
+        setCategorias(data || []);
+        // Asegurar que "Otro" esté seleccionado por defecto
+        const tieneOtro = data?.some(c => c.categoria === 'Otro');
+        if (tieneOtro) {
+          setCategoriaSeleccionada('Otro');
+        } else if (data?.length > 0) {
+          setCategoriaSeleccionada(data[0].categoria);
+        }
+      } catch (error) {
+        console.error('Error cargando categorías:', error);
+        // Fallback: solo "Otro"
+        setCategorias([{ id: 'default', categoria: 'Otro' }]);
+        setCategoriaSeleccionada('Otro');
+      } finally {
+        setLoadingCategorias(false);
+      }
+    };
+    
+    if (isOpen && activeTab === 'seguimiento') {
+      cargarCategorias();
+    }
+  }, [isOpen, activeTab]);
 
   // Cargar URL de booking del usuario
   const fetchBookingUrl = useCallback(async () => {
@@ -2313,7 +2339,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                             {/* Contenido del mensaje */}
                             <div className="p-4 pb-3">
                               <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                <span className="font-semibold text-slate-600">Seguimiento: </span>
+                                <span className="font-semibold text-slate-600">Categoría: </span>
+                                <span className="text-[#1717AF]">{comentario.categoria || 'Otro'}</span>
+                                <span className="font-semibold text-slate-600 ml-2">Detalle: </span>
                                 {comentario.texto}
                               </p>
                             </div>
@@ -2347,6 +2375,28 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 
                 {/* Campo para nuevo mensaje - ABAJO (como WhatsApp) */}
                 <div ref={seguimientoInputRef} className="flex-shrink-0 border-t border-slate-100 pt-4 mt-2">
+                  {/* Dropdown de categoría */}
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-500 mb-1.5 block font-medium">Categoría</label>
+                    <select
+                      value={categoriaSeleccionada}
+                      onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+                      disabled={loadingCategorias}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200"
+                    >
+                      {loadingCategorias ? (
+                        <option>Cargando...</option>
+                      ) : (
+                        categorias.map((cat) => (
+                          <option key={cat.id} value={cat.categoria}>
+                            {cat.categoria}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  
+                  {/* Input de mensaje */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
@@ -2358,7 +2408,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                             handleEnviarMensaje();
                           }
                         }}
-                        placeholder="Escribe acá el seguimiento del cliente..."
+                        placeholder="Escribe el detalle del seguimiento (opcional)..."
                         rows={1}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none transition-all duration-200"
                         style={{ minHeight: '42px', maxHeight: '120px' }}
@@ -2366,9 +2416,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     </div>
                     <button
                       onClick={handleEnviarMensaje}
-                      disabled={!nuevoMensaje.trim() || enviandoMensaje}
+                      disabled={enviandoMensaje}
                       className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                        nuevoMensaje.trim() && !enviandoMensaje
+                        !enviandoMensaje
                           ? 'bg-[#1717AF] text-white hover:bg-[#02214A] shadow-lg shadow-[#1717AF]/20'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       }`}
@@ -2381,7 +2431,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    Enter para enviar • Shift + Enter para nueva línea
+                    Enter para enviar • Si no escribes detalle, se guardará "Sin detalle"
                   </p>
                 </div>
               </div>

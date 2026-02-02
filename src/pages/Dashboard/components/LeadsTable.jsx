@@ -591,7 +591,9 @@ const LeadsTable = ({
                           <div className="flex-1 min-w-0 max-w-[280px]">
                             {seguimiento ? (
                               <>
-                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`} title={seguimiento.texto}>
+                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`} title={`${seguimiento.categoria || 'Otro'}: ${seguimiento.texto}`}>
+                                  <span className="text-[#1717AF] font-medium">{seguimiento.categoria || 'Otro'}</span>
+                                  <span className="text-slate-400 mx-1">•</span>
                                   {seguimiento.texto}
                                 </p>
                                 <p className="text-xs text-slate-400">
