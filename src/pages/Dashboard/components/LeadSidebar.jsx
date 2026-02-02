@@ -310,6 +310,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [categorias, setCategorias] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Otro');
   const [loadingCategorias, setLoadingCategorias] = useState(false);
+  const [categoriaDropdownOpen, setCategoriaDropdownOpen] = useState(false);
+  const [categoriaBusqueda, setCategoriaBusqueda] = useState('');
   
   // Filtros de comentarios
   const [filtroEtapa, setFiltroEtapa] = useState(null);
@@ -842,6 +844,17 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     const handleClickOutside = (e) => {
       if (!e.target.closest('.comercial-dropdown')) {
         setComercialDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Cerrar dropdown de categorías al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.categoria-dropdown')) {
+        setCategoriaDropdownOpen(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -2380,25 +2393,75 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 
                 {/* Campo para nuevo mensaje - ABAJO (como WhatsApp) */}
                 <div ref={seguimientoInputRef} className="flex-shrink-0 border-t border-slate-100 pt-4 mt-2">
-                  {/* Dropdown de categoría */}
-                  <div className="mb-3">
+                  {/* Dropdown de categoría con buscador */}
+                  <div className="mb-3 relative categoria-dropdown">
                     <label className="text-xs text-slate-500 mb-1.5 block font-medium">Categoría</label>
-                    <select
-                      value={categoriaSeleccionada}
-                      onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategoriaDropdownOpen(!categoriaDropdownOpen);
+                        setCategoriaBusqueda('');
+                      }}
                       disabled={loadingCategorias}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center justify-between"
                     >
-                      {loadingCategorias ? (
-                        <option>Cargando...</option>
-                      ) : (
-                        categorias.map((cat) => (
-                          <option key={cat.id} value={cat.categoria}>
-                            {cat.categoria}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      <span className={categoriaSeleccionada ? 'text-slate-700' : 'text-slate-400'}>
+                        {loadingCategorias ? 'Cargando...' : (categoriaSeleccionada || 'Seleccionar categoría')}
+                      </span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform ${categoriaDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown con buscador */}
+                    {categoriaDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
+                        {/* Input de búsqueda */}
+                        <div className="p-2 border-b border-slate-100">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={categoriaBusqueda}
+                              onChange={(e) => setCategoriaBusqueda(e.target.value)}
+                              placeholder="Buscar categoría..."
+                              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Lista de opciones */}
+                        <div className="max-h-40 overflow-y-auto">
+                          {(() => {
+                            const filtradas = categorias.filter(cat => 
+                              cat.categoria.toLowerCase().includes(categoriaBusqueda.toLowerCase())
+                            );
+                            
+                            if (filtradas.length === 0) {
+                              return <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>;
+                            }
+                            
+                            return filtradas.map((cat) => (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => {
+                                  setCategoriaSeleccionada(cat.categoria);
+                                  setCategoriaDropdownOpen(false);
+                                  setCategoriaBusqueda('');
+                                }}
+                                className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                                  cat.categoria === categoriaSeleccionada 
+                                    ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium' 
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {cat.categoria}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Input de mensaje */}
