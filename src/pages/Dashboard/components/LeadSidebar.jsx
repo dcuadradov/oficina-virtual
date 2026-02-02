@@ -1354,7 +1354,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         .from('recordatorios')
         .select('*', { count: 'exact' })
         .eq('lead_id', lead.card_id)
-        .order('created_at', { ascending: false })
+        .order('fecha_programada', { ascending: false })
         .range(from, to);
       
       if (error) throw error;
