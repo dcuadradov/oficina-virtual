@@ -1259,29 +1259,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       const fechaCompleta = new Date(fechaSeleccionada);
       fechaCompleta.setHours(hora24, minutos, 0, 0);
       
-      // 1. Crear comentario en tabla comentarios (con categoría)
-      const nuevoComentario = {
-        lead_id: lead.card_id,
-        texto: textoRecordatorio.trim(),
-        autor_email: userEmail || 'unknown',
-        origen: 'Recordatorio',
-        fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null,
-        categoria: categoriaSeleccionada || 'Otro'
-      };
-      
-      const { error: errorComentario } = await supabase
-        .from('comentarios')
-        .insert([nuevoComentario]);
-      
-      if (errorComentario) throw errorComentario;
-      
-      // 2. Crear recordatorio (con categoría)
+      // Crear recordatorio (el trigger en BD creará el comentario automáticamente)
       const nuevoRecordatorioData = {
         lead_id: lead.card_id,
         fecha_programada: fechaCompleta.toISOString(),
         observacion: textoRecordatorio.trim(),
-        creado_por: userName,
+        creado_por: userEmail,
         estado: 'Programado',
         fase: lead.fase_nombre_pipefy || null,
         etapa_funnel: lead.etapa_funnel || null,
