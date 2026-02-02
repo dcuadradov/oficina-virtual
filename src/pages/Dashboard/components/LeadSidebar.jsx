@@ -1092,10 +1092,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         setLoadingCategorias(true);
         const { data, error } = await supabase
           .from('config_categorias')
-          .select('id, categoria')
+          .select('id, categoria, posicion')
           .eq('modulo', 'comercial')
           .eq('estado', true)
-          .order('categoria');
+          .order('posicion', { ascending: true });
         
         if (error) throw error;
         
