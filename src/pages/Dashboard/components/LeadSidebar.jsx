@@ -34,7 +34,8 @@ import {
   Search,
   MoreHorizontal,
   AlertCircle,
-  RefreshCcw
+  RefreshCcw,
+  History
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -226,7 +227,7 @@ const tabs = [
   { id: 'info', label: 'Info general', icon: ClipboardList },
   { id: 'seguimiento', label: 'Seguimiento', icon: BarChart3 },
   { id: 'recordatorio', label: 'Recordatorio', icon: Clock },
-  { id: 'formulario', label: 'Formulario', icon: FileText },
+  { id: 'historial', label: 'Historial', icon: History },
 ];
 
 // Fases donde se muestra el botón de agendar
@@ -379,6 +380,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [configStepper, setConfigStepper] = useState(null);
   const [stepperSteps, setStepperSteps] = useState([]);
   const [stepperColor, setStepperColor] = useState('verde');
+  
+  // Estados para historial de fases
+  const [historialFases, setHistorialFases] = useState([]);
+  const [loadingHistorialFases, setLoadingHistorialFases] = useState(false);
+  const [historialFasesTab, setHistorialFasesTab] = useState('Gestión'); // 'Gestión' | 'Finalizado'
+  const [historialFasesExpanded, setHistorialFasesExpanded] = useState({}); // {nombreFase: boolean}
+  const [historialFasesPaginacion, setHistorialFasesPaginacion] = useState({}); // {nombreFase: indice}
   
   // Determinar si mostrar botón de agendar basado en la fase del lead
   const mostrarBotonAgendar = lead?.fase_id_pipefy && FASES_LISTO_AGENDAR.includes(String(lead.fase_id_pipefy));
@@ -553,6 +561,39 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
     cargarConfigStepper();
   }, [lead?.fase_id_pipefy, lead?.fase_anterior]);
+
+  // useEffect para cargar historial de fases
+  useEffect(() => {
+    const cargarHistorialFases = async () => {
+      if (!lead?.card_id) {
+        setHistorialFases([]);
+        return;
+      }
+
+      setLoadingHistorialFases(true);
+      try {
+        const { data, error } = await supabase
+          .from('historial')
+          .select('*')
+          .eq('lead_id', lead.card_id)
+          .eq('modulo', 'comercial')
+          .order('created_at', { ascending: true }); // Más antiguo primero
+
+        if (error) throw error;
+        setHistorialFases(data || []);
+        // Resetear paginación
+        setHistorialFasesExpanded({});
+        setHistorialFasesPaginacion({});
+      } catch (error) {
+        console.error('Error cargando historial de fases:', error);
+        setHistorialFases([]);
+      } finally {
+        setLoadingHistorialFases(false);
+      }
+    };
+
+    cargarHistorialFases();
+  }, [lead?.card_id]);
 
   // Helper para obtener el valor actual (local o del lead)
   const getFieldValue = (fieldName) => {
@@ -3028,28 +3069,201 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               );
             })()}
 
-            {activeTab === 'formulario' && (
+            {activeTab === 'historial' && (
               <div className="h-full">
-                {lead.url_formulario_fase ? (
-                  <div className="h-[calc(100vh-320px)] min-h-[400px] rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
-                    <iframe
-                      src={lead.url_formulario_fase}
-                      className="w-full h-full"
-                      title="Formulario de Pipefy"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
+                {/* Sub-tabs para filtrar por tipo */}
+                <div className="mb-4">
+                  <div className="flex gap-2 border-b border-slate-200">
+                    {['Gestión', 'Finalizado'].map((tipo) => {
+                      // Contar fases únicas (agrupadas) por tipo
+                      const fasesDelTipo = historialFases.filter(h => h.tipo === (tipo === 'Gestión' ? 'Gestión' : 'Finalizado'));
+                      const fasesUnicas = [...new Set(fasesDelTipo.map(h => h.nombre_fase))];
+                      const contador = fasesUnicas.length;
+                      
+                      return (
+                        <button
+                          key={tipo}
+                          onClick={() => setHistorialFasesTab(tipo)}
+                          className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
+                            historialFasesTab === tipo
+                              ? 'text-[#1717AF]'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Fase de {tipo.toLowerCase()} ({contador})
+                          {historialFasesTab === tipo && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1717AF] rounded-full" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                      <FileText size={28} className="text-slate-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin formulario</h3>
-                    <p className="text-sm text-slate-400">Este lead no tiene un formulario asociado</p>
+                </div>
+
+                {/* Loading state */}
+                {loadingHistorialFases && (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 size={24} className="animate-spin text-[#1717AF]" />
                   </div>
                 )}
+
+                {/* Empty state */}
+                {!loadingHistorialFases && (() => {
+                  const fasesDelTipo = historialFases.filter(h => h.tipo === historialFasesTab);
+                  return fasesDelTipo.length === 0;
+                })() && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                      <History size={28} className="text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin historial</h3>
+                    <p className="text-sm text-slate-400">
+                      No hay registros de {historialFasesTab === 'Gestión' ? 'fases de gestión' : 'fases de finalización'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Historial agrupado */}
+                {!loadingHistorialFases && (() => {
+                  const fasesDelTipo = historialFases.filter(h => h.tipo === historialFasesTab);
+                  if (fasesDelTipo.length === 0) return null;
+
+                  // Agrupar por nombre_fase manteniendo el orden de primera aparición
+                  const gruposOrdenados = [];
+                  const gruposMap = {};
+                  
+                  fasesDelTipo.forEach(item => {
+                    if (!gruposMap[item.nombre_fase]) {
+                      gruposMap[item.nombre_fase] = [];
+                      gruposOrdenados.push(item.nombre_fase);
+                    }
+                    gruposMap[item.nombre_fase].push(item);
+                  });
+
+                  return (
+                    <div className="space-y-3">
+                      {gruposOrdenados.map((nombreFase) => {
+                        const items = gruposMap[nombreFase];
+                        const count = items.length;
+                        const isExpanded = historialFasesExpanded[nombreFase] || false;
+                        const currentIndex = historialFasesPaginacion[nombreFase] || 0;
+                        const currentItem = items[currentIndex];
+
+                        // Formatear fecha del primer item para el header (Enero 23/26)
+                        const primerItem = items[0];
+                        const fechaHeader = (() => {
+                          if (!primerItem?.created_at) return '';
+                          const fecha = new Date(primerItem.created_at);
+                          const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                          const mes = meses[fecha.getMonth()];
+                          const dia = fecha.getDate().toString().padStart(2, '0');
+                          const año = fecha.getFullYear().toString().slice(-2);
+                          return `${mes} ${dia}/${año}`;
+                        })();
+
+                        return (
+                          <div
+                            key={nombreFase}
+                            className="bg-white border border-slate-200 rounded-xl overflow-hidden"
+                          >
+                            {/* Header de la tarjeta */}
+                            <button
+                              onClick={() => setHistorialFasesExpanded(prev => ({
+                                ...prev,
+                                [nombreFase]: !prev[nombreFase]
+                              }))}
+                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium text-slate-800">
+                                  {nombreFase} {count > 1 && <span className="text-slate-500">({count})</span>}
+                                </span>
+                                <span className="text-sm text-slate-500">{fechaHeader}</span>
+                              </div>
+                              <ChevronDown 
+                                size={18} 
+                                className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                              />
+                            </button>
+
+                            {/* Contenido expandido */}
+                            {isExpanded && currentItem && (
+                              <div className="px-4 pb-4 border-t border-slate-100">
+                                <div className="pt-3 space-y-2">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <CalendarDays size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Fecha:</span>{' '}
+                                      {new Date(currentItem.created_at).toLocaleDateString('es-ES', {
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric'
+                                      })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Clock size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Hora:</span>{' '}
+                                      {new Date(currentItem.created_at).toLocaleTimeString('es-ES', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: true
+                                      })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <RotateCcw size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Origen:</span>{' '}
+                                      {currentItem.fase_anterior || 'Sin fase anterior'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Paginador horizontal */}
+                                {count > 1 && (
+                                  <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHistorialFasesPaginacion(prev => ({
+                                          ...prev,
+                                          [nombreFase]: Math.max(0, currentIndex - 1)
+                                        }));
+                                      }}
+                                      disabled={currentIndex === 0}
+                                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <ChevronLeft size={16} className="text-slate-500" />
+                                    </button>
+                                    <span className="text-xs text-slate-500 font-medium">
+                                      {'<'} {currentIndex + 1}/{count} {'>'}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHistorialFasesPaginacion(prev => ({
+                                          ...prev,
+                                          [nombreFase]: Math.min(count - 1, currentIndex + 1)
+                                        }));
+                                      }}
+                                      disabled={currentIndex === count - 1}
+                                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <ChevronRight size={16} className="text-slate-500" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
