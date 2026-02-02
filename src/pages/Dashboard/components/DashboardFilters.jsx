@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -136,6 +136,9 @@ const DashboardFilters = ({
   onPeriodoChange,
   selectedDia,
   onDiaChange,
+  selectedCategoria,
+  onCategoriaChange,
+  categorias = [],
   showComercialFilter = false,
   showOnlyComercial = false,
   searchQuery = '',
@@ -145,6 +148,7 @@ const DashboardFilters = ({
   const [mesOpen, setMesOpen] = useState(false);
   const [periodoOpen, setPeriodoOpen] = useState(false);
   const [diaOpen, setDiaOpen] = useState(false);
+  const [categoriaOpen, setCategoriaOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const searchTimeoutRef = useRef(null);
@@ -197,6 +201,7 @@ const DashboardFilters = ({
         setMesOpen(false);
         setPeriodoOpen(false);
         setDiaOpen(false);
+        setCategoriaOpen(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -716,6 +721,79 @@ const DashboardFilters = ({
                   Hoy
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de Categoría de Seguimiento - oculto si showOnlyComercial */}
+      {!showOnlyComercial && categorias.length > 0 && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setCategoriaOpen(!categoriaOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              setDiaOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedCategoria
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <MessageSquare size={16} />
+            <span className="max-w-[150px] truncate">
+              {selectedCategoria || 'Categoría seguimiento'}
+            </span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${categoriaOpen ? 'rotate-180' : ''}`} />
+            {selectedCategoria && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCategoriaChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {categoriaOpen && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onCategoriaChange(null);
+                  setCategoriaOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedCategoria 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todas las categorías
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              {categorias.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    onCategoriaChange(cat.categoria);
+                    setCategoriaOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                    selectedCategoria === cat.categoria
+                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {cat.categoria}
+                </button>
+              ))}
             </div>
           )}
         </div>

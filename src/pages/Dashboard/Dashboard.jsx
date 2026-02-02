@@ -45,6 +45,8 @@ export default function Dashboard() {
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
   const [selectedDia, setSelectedDia] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoria, setSelectedCategoria] = useState(null);
+  const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
   
   // Estado para etapas del funnel (cargadas desde config_fases)
   const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
@@ -162,6 +164,23 @@ export default function Dashboard() {
 
   // Email activo para las consultas (el comercial seleccionado o el usuario actual)
   const emailActivo = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+
+  // Función para cargar categorías de seguimiento
+  const fetchCategorias = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_categorias')
+        .select('*')
+        .eq('modulo', 'comercial')
+        .eq('estado', true)
+        .order('posicion', { ascending: true });
+
+      if (error) throw error;
+      setCategoriasSeguimiento(data || []);
+    } catch (error) {
+      console.error('Error cargando categorías:', error);
+    }
+  }, []);
 
   // Función para cargar lista de comerciales (solo si puede ver todos)
   const fetchComerciales = useCallback(async () => {
@@ -398,6 +417,30 @@ export default function Dashboard() {
         );
       }
 
+      // Aplicar filtro por categoría de seguimiento
+      if (selectedCategoria) {
+        // Obtener los card_ids de leads que tienen comentarios con esta categoría
+        const { data: comentariosConCategoria, error: errorCat } = await supabase
+          .from('comentarios')
+          .select('lead_id')
+          .eq('categoria', selectedCategoria);
+        
+        if (!errorCat && comentariosConCategoria) {
+          const cardIdsConCategoria = [...new Set(comentariosConCategoria.map(c => c.lead_id))];
+          if (cardIdsConCategoria.length > 0) {
+            query = query.in('card_id', cardIdsConCategoria);
+          } else {
+            // No hay leads con esta categoría, retornar vacío
+            setLeads([]);
+            setTotalLeads(0);
+            setCurrentPage(page);
+            setLoading(false);
+            setIsRefreshing(false);
+            return;
+          }
+        }
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -441,7 +484,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -561,6 +604,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (userEmail) {
       fetchComerciales();
+      fetchCategorias();
       fetchEtapasFunnel();
       fetchStats();
       fetchLeads(false, 0);
@@ -607,7 +651,7 @@ export default function Dashboard() {
       fetchStats();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -837,6 +881,9 @@ export default function Dashboard() {
                   onPeriodoChange={handlePeriodoChange}
                   selectedDia={selectedDia}
                   onDiaChange={handleDiaChange}
+                  selectedCategoria={selectedCategoria}
+                  onCategoriaChange={setSelectedCategoria}
+                  categorias={categoriasSeguimiento}
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -850,7 +897,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -861,6 +908,7 @@ export default function Dashboard() {
                       {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
+                      {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
                 </span>
                 <button
                       onClick={() => {
