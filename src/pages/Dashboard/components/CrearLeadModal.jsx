@@ -102,23 +102,45 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
     }
   };
 
-  // Fetch fields del formulario activo
+  // Fetch fields del formulario activo (usando tabla intermedia)
   const fetchFields = async (formularioId) => {
     setLoadingFields(true);
     try {
+      // Query a la tabla intermedia con join a los fields
       const { data, error } = await supabase
-        .from('fields_formulario_creacion_leads')
-        .select('*')
-        .eq('formulario', formularioId)
-        .eq('estado', 'activo')
+        .from('fields_formularios_relacion')
+        .select(`
+          orden,
+          field:fields_formulario_creacion_leads (
+            id,
+            nombre,
+            tipo,
+            opciones,
+            obligatorio,
+            tooltip,
+            dinamico,
+            depende_de,
+            estado
+          )
+        `)
+        .eq('formulario_id', formularioId)
         .order('orden', { ascending: true });
 
       if (error) throw error;
       
-      setFields(data || []);
+      // Transformar la data para aplanar la estructura y filtrar activos
+      const fieldsData = (data || [])
+        .filter(item => item.field && item.field.estado === 'activo')
+        .map(item => ({
+          ...item.field,
+          orden: item.orden
+        }));
+      
+      setFields(fieldsData);
+      
       // Resetear formData
       const initialData = {};
-      (data || []).forEach(field => {
+      fieldsData.forEach(field => {
         initialData[field.nombre] = '';
       });
       setFormData(initialData);
