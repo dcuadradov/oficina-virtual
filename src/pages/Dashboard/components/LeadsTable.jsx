@@ -291,7 +291,7 @@ const LeadsTable = ({
   statsData = {},
   etapasFunnel = { etapas: [], grupos: [] },
   onOpenModal, 
-  onOpenReminder,
+  onOpenReminder, 
   onOpenSeguimiento,
   onMarcarNoRevisado,
   onToggleHot,
@@ -373,16 +373,16 @@ const LeadsTable = ({
                   {todosLosGrupos.map((grupo) => {
                     const count = conteoPorGrupo[grupo.id] || 0;
                     return (
-                      <button
-                        key={grupo.id}
-                        onClick={() => setActiveFunnelTab(grupo.id)}
+                  <button
+                    key={grupo.id}
+                    onClick={() => setActiveFunnelTab(grupo.id)}
                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap ${
-                          activeFunnelTab === grupo.id
-                            ? 'bg-white text-[#1717AF] shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        {grupo.nombre}
+                      activeFunnelTab === grupo.id
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {grupo.nombre}
                         <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                           activeFunnelTab === grupo.id
                             ? 'bg-[#1717AF]/10 text-[#1717AF]'
@@ -390,7 +390,7 @@ const LeadsTable = ({
                         }`}>
                           {count}
                         </span>
-                      </button>
+                  </button>
                     );
                   })}
                 </div>
@@ -429,7 +429,6 @@ const LeadsTable = ({
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Creación</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Actualización</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-28">Tag</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
@@ -563,30 +562,25 @@ const LeadsTable = ({
                         )}
                       </div>
                       
-                      {/* Nombre */}
+                      {/* Nombre, Tag y Comercial */}
                       <div className="min-w-0">
                         <p className={`truncate max-w-[140px] lg:max-w-[180px] group-hover:text-slate-900 transition-colors ${
                           noRevisado ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'
                         }`}>
                           {lead.nombre || 'Sin nombre'}
                         </p>
-                        <p className={`text-xs truncate max-w-[140px] ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
+                        {/* Tag del lead */}
+                        {lead.label && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700 mt-0.5">
+                            <Tag size={8} />
+                            {lead.label}
+                          </span>
+                        )}
+                        <p className={`text-xs truncate max-w-[140px] ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'} ${lead.label ? 'mt-0.5' : ''}`}>
                           {lead.comercial_email ? lead.comercial_email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Sin comercial'}
                         </p>
                       </div>
                     </div>
-                  </td>
-
-                  {/* Tag del lead */}
-                  <td className="py-4 px-4">
-                    {lead.label ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 border border-violet-200 whitespace-nowrap">
-                        <Tag size={10} />
-                        {lead.label}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-300">—</span>
-                    )}
                   </td>
 
                   {/* Seguimiento - ancho amplio con truncado - click abre tab Seguimiento */}
