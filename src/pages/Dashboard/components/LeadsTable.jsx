@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus } from 'lucide-react';
+import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 
 /**
@@ -429,6 +429,7 @@ const LeadsTable = ({
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Creación</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Actualización</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-28">Tag</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
@@ -576,6 +577,18 @@ const LeadsTable = ({
                     </div>
                   </td>
 
+                  {/* Tag del lead */}
+                  <td className="py-4 px-4">
+                    {lead.label ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 border border-violet-200 whitespace-nowrap">
+                        <Tag size={10} />
+                        {lead.label}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
+
                   {/* Seguimiento - ancho amplio con truncado - click abre tab Seguimiento */}
                   <td 
                     className="py-4 px-4 max-w-[320px] cursor-pointer hover:bg-slate-50/50"
@@ -633,30 +646,6 @@ const LeadsTable = ({
                     <div className="flex items-center justify-end gap-1">
                       {/* WhatsApp con contador de ventana 24h */}
                       <WhatsAppButton lead={lead} size={18} />
-
-                      {/* Modal Info */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenModal?.(lead, 'formulario');
-                        }}
-                        className="p-2.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
-                        title="Ver formulario del lead"
-                      >
-                        <ClipboardList size={18} strokeWidth={2} />
-                      </button>
-
-                      {/* Recordatorio */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenReminder?.(lead);
-                        }}
-                        className="p-2.5 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all duration-200 hover:scale-110"
-                        title="Programar un recordatorio"
-                      >
-                        <Clock size={18} strokeWidth={2} />
-                      </button>
 
                       {/* Marcar como pendiente */}
                       {onMarcarNoRevisado && (

@@ -35,7 +35,8 @@ import {
   MoreHorizontal,
   AlertCircle,
   RefreshCcw,
-  History
+  History,
+  Tag
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -1700,42 +1701,53 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     <Briefcase size={14} />
                     {lead.ocupacion || 'Ocupación no especificada'}
                   </p>
-                  {/* Dropdown de fase */}
-                  <div className="relative mt-2">
-                    <button
-                      onClick={() => setFaseDropdownOpen(!faseDropdownOpen)}
-                      disabled={cambiandoFase}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
-                        cambiandoFase 
-                          ? 'bg-slate-100 text-slate-400 cursor-wait'
-                          : 'bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/20 cursor-pointer'
-                      }`}
-                    >
-                      {cambiandoFase ? (
-                        <RefreshCcw size={12} className="animate-spin" />
-                      ) : (
-                        <ChevronDown size={12} className={`transition-transform ${faseDropdownOpen ? 'rotate-180' : ''}`} />
+                  {/* Badges de fase y tag */}
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    {/* Dropdown de fase */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setFaseDropdownOpen(!faseDropdownOpen)}
+                        disabled={cambiandoFase}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+                          cambiandoFase 
+                            ? 'bg-slate-100 text-slate-400 cursor-wait'
+                            : 'bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/20 cursor-pointer'
+                        }`}
+                      >
+                        {cambiandoFase ? (
+                          <RefreshCcw size={12} className="animate-spin" />
+                        ) : (
+                          <ChevronDown size={12} className={`transition-transform ${faseDropdownOpen ? 'rotate-180' : ''}`} />
+                        )}
+                        {faseLocal || lead.fase_nombre_pipefy || 'Sin fase'}
+                      </button>
+                      
+                      {/* Dropdown de fases */}
+                      {faseDropdownOpen && (
+                        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
+                          {funnelSteps.map((fase) => (
+                            <button
+                              key={fase.id}
+                              onClick={() => handleCambiarFase(fase.label || fase.id)}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                                (faseLocal || lead.fase_nombre_pipefy) === (fase.label || fase.id)
+                                  ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                                  : 'text-slate-700'
+                              }`}
+                            >
+                              {fase.label || fase.id}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                      {faseLocal || lead.fase_nombre_pipefy || 'Sin fase'}
-                    </button>
+                    </div>
                     
-                    {/* Dropdown de fases */}
-                    {faseDropdownOpen && (
-                      <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
-                        {funnelSteps.map((fase) => (
-                          <button
-                            key={fase.id}
-                            onClick={() => handleCambiarFase(fase.label || fase.id)}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
-                              (faseLocal || lead.fase_nombre_pipefy) === (fase.label || fase.id)
-                                ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
-                                : 'text-slate-700'
-                            }`}
-                          >
-                            {fase.label || fase.id}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Tag del lead */}
+                    {lead.label && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 border border-violet-200">
+                        <Tag size={10} />
+                        {lead.label}
+                      </span>
                     )}
                   </div>
                 </div>
