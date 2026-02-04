@@ -1,7 +1,7 @@
 import React from 'react';
-import { Users, Clock, AlertCircle, CheckCircle, UserPlus, UserX } from 'lucide-react';
+import { Users, Clock, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
 
-const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange }) => {
+const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange, onCrearLead }) => {
   const { total = 0, porEstado = {} } = statsData;
 
   // Mapear los estados de la BD a los keys del frontend
@@ -11,7 +11,6 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
     atrasado: porEstado.atrasado || 0,
     gestionado: porEstado.gestionado || 0,
     matriculado: porEstado.matriculado || 0,
-    caido: porEstado.caido || 0,
   };
 
   // Configuración de estilos para cada stat card
@@ -25,16 +24,6 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
       bgGradient: 'from-[#02214A]/5 to-[#1717AF]/5',
       iconBg: 'bg-gradient-to-br from-[#02214A]/10 to-[#1717AF]/10',
       textColor: 'text-[#02214A]',
-    },
-    {
-      key: 'sin_gestionar',
-      title: 'Sin gestionar',
-      count: stats.sin_gestionar,
-      icon: Clock,
-      gradient: 'from-amber-500 to-orange-500',
-      bgGradient: 'from-amber-50 to-orange-50',
-      iconBg: 'bg-gradient-to-br from-amber-100 to-orange-100',
-      textColor: 'text-amber-600',
     },
     {
       key: 'atrasado',
@@ -66,24 +55,11 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
       iconBg: 'bg-gradient-to-br from-blue-100 to-indigo-100',
       textColor: 'text-blue-600',
     },
-    {
-      key: 'caido',
-      title: 'Matrícula caída',
-      count: stats.caido,
-      icon: UserX,
-      gradient: 'from-slate-400 to-slate-500',
-      bgGradient: 'from-slate-50 to-gray-100',
-      iconBg: 'bg-slate-100',
-      textColor: 'text-slate-500',
-    },
   ];
-
-  // Filtrar para ocultar "Sin gestionar"
-  const statsVisibles = statsConfig.filter(stat => stat.key !== 'sin_gestionar');
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      {statsVisibles.map((stat) => {
+      {statsConfig.map((stat) => {
         const Icon = stat.icon;
         const isActive = activeFilter === stat.key;
         
@@ -128,6 +104,27 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
           </button>
         );
       })}
+
+      {/* Tarjeta especial para crear leads */}
+      <button
+        onClick={onCrearLead}
+        className="relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-300 bg-white/80 backdrop-blur-sm hover:bg-white hover:shadow-lg hover:scale-[1.02] shadow-sm border border-slate-200/60 border-dashed group cursor-pointer"
+      >
+        {/* Decoración de fondo */}
+        <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 opacity-5 group-hover:opacity-15 transition-opacity" />
+        
+        {/* Icono centrado */}
+        <div className="flex flex-col items-center justify-center h-full py-2">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mb-3 shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
+            <UserPlus className="w-7 h-7 text-white" strokeWidth={2} />
+          </div>
+          
+          {/* Título */}
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide text-center">
+            Crear Lead(s)
+          </div>
+        </div>
+      </button>
     </div>
   );
 };

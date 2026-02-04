@@ -871,15 +871,6 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Botón flotante para crear leads */}
-            <button
-              onClick={() => setCrearLeadModalOpen(true)}
-              className="fixed top-[140px] right-8 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-300/50 hover:shadow-xl hover:shadow-emerald-300/60 hover:scale-105 transition-all duration-200 flex items-center justify-center"
-              title="Crear lead"
-            >
-              <UserPlus size={24} />
-            </button>
-
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
             {activeView === 'tabla' ? (
               <>
@@ -907,6 +898,7 @@ export default function Dashboard() {
                   statsData={statsData}
               activeFilter={activeFilter}
                   onFilterChange={handleFilterChange}
+                  onCrearLead={() => setCrearLeadModalOpen(true)}
             />
 
                 {/* Indicador de filtro activo */}
