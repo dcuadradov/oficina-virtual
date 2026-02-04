@@ -68,6 +68,9 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef(null);
   
+  // Ref para input de búsqueda en dropdown activo
+  const dropdownSearchRef = useRef(null);
+  
   const userEmail = localStorage.getItem('user_email');
 
   // Cargar formularios al abrir
@@ -86,6 +89,15 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdown]);
+  
+  // Focus en input de búsqueda cuando se abre un dropdown
+  useEffect(() => {
+    if (openDropdown && dropdownSearchRef.current) {
+      setTimeout(() => {
+        dropdownSearchRef.current?.focus();
+      }, 50);
+    }
   }, [openDropdown]);
 
   // Cargar fields cuando cambia el formulario activo
@@ -452,12 +464,12 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                                 <div className="relative">
                                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                   <input
+                                    ref={dropdownSearchRef}
                                     type="text"
                                     value={searchQueries[field.nombre] || ''}
                                     onChange={(e) => setSearchQueries(prev => ({ ...prev, [field.nombre]: e.target.value }))}
                                     placeholder="Buscar..."
                                     className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-[#1717AF]"
-                                    autoFocus
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                 </div>

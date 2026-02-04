@@ -418,6 +418,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const recordatoriosContainerRef = useRef(null);
   const seguimientoInputRef = useRef(null);
   const sidebarContentRef = useRef(null);
+  
+  // Refs para inputs de búsqueda en dropdowns
+  const categoriaSearchRef = useRef(null);
+  const categoriaRecordatorioSearchRef = useRef(null);
+  
   const userEmail = localStorage.getItem('user_email');
   const userName = localStorage.getItem('user_name') || 'Usuario';
 
@@ -901,6 +906,20 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Focus en input de búsqueda cuando se abre dropdown de categoría
+  useEffect(() => {
+    if (categoriaDropdownOpen) {
+      setTimeout(() => {
+        // Intenta hacer focus en el ref disponible (seguimiento o recordatorio)
+        if (categoriaSearchRef.current) {
+          categoriaSearchRef.current.focus();
+        } else if (categoriaRecordatorioSearchRef.current) {
+          categoriaRecordatorioSearchRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [categoriaDropdownOpen]);
 
   // Función para generar resumen con IA
   const handleGenerarResumen = async () => {
@@ -2445,12 +2464,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                           <div className="relative">
                             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
+                              ref={categoriaSearchRef}
                               type="text"
                               value={categoriaBusqueda}
                               onChange={(e) => setCategoriaBusqueda(e.target.value)}
                               placeholder="Buscar categoría..."
                               className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
-                              autoFocus
                             />
                           </div>
                         </div>
@@ -2961,12 +2980,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                             <div className="relative">
                               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                               <input
+                                ref={categoriaRecordatorioSearchRef}
                                 type="text"
                                 value={categoriaBusqueda}
                                 onChange={(e) => setCategoriaBusqueda(e.target.value)}
                                 placeholder="Buscar categoría..."
                                 className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
-                                autoFocus
                               />
                             </div>
                           </div>
