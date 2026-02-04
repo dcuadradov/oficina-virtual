@@ -388,16 +388,23 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                   const opciones = parseOpciones(field.opciones);
                   
                   return (
-                    <div key={field.id} className="relative">
-                      {/* Label con tooltip */}
-                      {field.tooltip && (
-                        <div className="absolute right-0 top-0 group">
-                          <Info size={14} className="text-slate-400 cursor-help" />
-                          <div className="absolute right-0 top-full mt-1 w-48 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                            {field.tooltip}
+                    <div key={field.id}>
+                      {/* Label con tooltip al lado */}
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <label className="text-sm font-medium text-slate-600">
+                          {field.nombre}
+                          {field.obligatorio && <span className="text-rose-500 ml-0.5">*</span>}
+                        </label>
+                        {field.tooltip && (
+                          <div className="relative group">
+                            <Info size={14} className="text-slate-400 cursor-help hover:text-slate-600 transition-colors" />
+                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 p-2.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-lg">
+                              {field.tooltip}
+                              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800" />
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       
                       {field.tipo === 'select' ? (
                         <div className="relative">
@@ -406,7 +413,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                             onChange={(e) => handleFieldChange(field.nombre, e.target.value)}
                             className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] appearance-none bg-white"
                           >
-                            <option value="">{field.nombre}{field.obligatorio ? ' *' : ''}</option>
+                            <option value="">Selecciona una opción</option>
                             {opciones.map((opt, idx) => (
                               <option key={idx} value={opt.value}>{opt.value}</option>
                             ))}
@@ -418,7 +425,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                           type={field.tipo === 'numero' ? 'number' : field.tipo === 'email' ? 'email' : 'text'}
                           value={formData[field.nombre] || ''}
                           onChange={(e) => handleFieldChange(field.nombre, e.target.value)}
-                          placeholder={`${field.nombre}${field.obligatorio ? ' *' : ''}`}
+                          placeholder={`Ingresa ${field.nombre.toLowerCase()}`}
                           className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]"
                         />
                       )}
