@@ -7,7 +7,8 @@ import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
-import { LogOut, RefreshCcw, Home, Table, CalendarDays } from 'lucide-react';
+import CrearLeadModal from './components/CrearLeadModal';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -53,6 +54,9 @@ export default function Dashboard() {
   
   // Estado para tabs (Tabla / Mis Pitch)
   const [activeView, setActiveView] = useState('tabla');
+  
+  // Estado para modal de crear lead
+  const [crearLeadModalOpen, setCrearLeadModalOpen] = useState(false);
   
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -867,6 +871,15 @@ export default function Dashboard() {
               </button>
             </div>
 
+            {/* Botón flotante para crear leads */}
+            <button
+              onClick={() => setCrearLeadModalOpen(true)}
+              className="fixed top-[140px] right-8 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-300/50 hover:shadow-xl hover:shadow-emerald-300/60 hover:scale-105 transition-all duration-200 flex items-center justify-center"
+              title="Crear lead"
+            >
+              <UserPlus size={24} />
+            </button>
+
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
             {activeView === 'tabla' ? (
               <>
@@ -991,6 +1004,12 @@ export default function Dashboard() {
         }}
         comerciales={comerciales}
         puedeVerTodos={puedeVerTodos}
+      />
+
+      {/* Modal para crear leads */}
+      <CrearLeadModal 
+        isOpen={crearLeadModalOpen}
+        onClose={() => setCrearLeadModalOpen(false)}
       />
     </div>
   );
