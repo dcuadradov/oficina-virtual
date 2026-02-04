@@ -9,7 +9,9 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  ChevronDown
+  ChevronDown,
+  Search,
+  Check
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
@@ -57,6 +59,10 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   const [enviando, setEnviando] = useState(false);
   const [toast, setToast] = useState(null);
   
+  // Estados para dropdowns con búsqueda
+  const [openDropdown, setOpenDropdown] = useState(null); // nombre del campo abierto
+  const [searchQueries, setSearchQueries] = useState({}); // búsqueda por campo
+  
   // Estados para carga de archivo
   const [archivo, setArchivo] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -70,6 +76,17 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       fetchFormularios();
     }
   }, [isOpen]);
+  
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (openDropdown && !e.target.closest('.dropdown-container')) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdown]);
 
   // Cargar fields cuando cambia el formulario activo
   useEffect(() => {
@@ -407,18 +424,80 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                       </div>
                       
                       {field.tipo === 'select' ? (
-                        <div className="relative">
-                          <select
-                            value={formData[field.nombre] || ''}
-                            onChange={(e) => handleFieldChange(field.nombre, e.target.value)}
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] appearance-none bg-white"
+                        <div className="relative dropdown-container">
+                          {/* Botón del dropdown */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenDropdown(openDropdown === field.nombre ? null : field.nombre);
+                              setSearchQueries(prev => ({ ...prev, [field.nombre]: '' }));
+                            }}
+                            className={`w-full px-4 py-3 border rounded-xl text-sm text-left flex items-center justify-between transition-all ${
+                              openDropdown === field.nombre
+                                ? 'border-[#1717AF] ring-2 ring-[#1717AF]/20'
+                                : 'border-slate-200 hover:border-slate-300'
+                            } bg-white`}
                           >
-                            <option value="">Selecciona una opción</option>
-                            {opciones.map((opt, idx) => (
-                              <option key={idx} value={opt.value}>{opt.value}</option>
-                            ))}
-                          </select>
-                          <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <span className={formData[field.nombre] ? 'text-slate-800' : 'text-slate-400'}>
+                              {formData[field.nombre] || 'Selecciona una opción'}
+                            </span>
+                            <ChevronDown size={16} className={`text-slate-400 transition-transform ${openDropdown === field.nombre ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {/* Dropdown con búsqueda */}
+                          {openDropdown === field.nombre && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 overflow-hidden">
+                              {/* Campo de búsqueda */}
+                              <div className="p-2 border-b border-slate-100">
+                                <div className="relative">
+                                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    value={searchQueries[field.nombre] || ''}
+                                    onChange={(e) => setSearchQueries(prev => ({ ...prev, [field.nombre]: e.target.value }))}
+                                    placeholder="Buscar..."
+                                    className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-[#1717AF]"
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                              </div>
+                              
+                              {/* Lista de opciones */}
+                              <div className="max-h-48 overflow-y-auto">
+                                {opciones
+                                  .filter(opt => 
+                                    opt.value.toLowerCase().includes((searchQueries[field.nombre] || '').toLowerCase())
+                                  )
+                                  .map((opt, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        handleFieldChange(field.nombre, opt.value);
+                                        setOpenDropdown(null);
+                                      }}
+                                      className={`w-full px-4 py-2.5 text-sm text-left flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                                        formData[field.nombre] === opt.value ? 'bg-[#1717AF]/5 text-[#1717AF]' : 'text-slate-700'
+                                      }`}
+                                    >
+                                      <span>{opt.value}</span>
+                                      {formData[field.nombre] === opt.value && (
+                                        <Check size={14} className="text-[#1717AF]" />
+                                      )}
+                                    </button>
+                                  ))
+                                }
+                                {opciones.filter(opt => 
+                                  opt.value.toLowerCase().includes((searchQueries[field.nombre] || '').toLowerCase())
+                                ).length === 0 && (
+                                  <div className="px-4 py-3 text-sm text-slate-400 text-center">
+                                    No se encontraron resultados
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <input
