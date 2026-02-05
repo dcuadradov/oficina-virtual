@@ -139,6 +139,9 @@ const DashboardFilters = ({
   selectedCategoria,
   onCategoriaChange,
   categorias = [],
+  selectedTag,
+  onTagChange,
+  tags = [],
   showComercialFilter = false,
   showOnlyComercial = false,
   searchQuery = '',
@@ -149,6 +152,7 @@ const DashboardFilters = ({
   const [periodoOpen, setPeriodoOpen] = useState(false);
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const searchTimeoutRef = useRef(null);
@@ -792,6 +796,80 @@ const DashboardFilters = ({
                   }`}
                 >
                   {cat.categoria}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro por Tag */}
+      {tags.length > 0 && (
+        <div className="relative">
+          <button
+            onClick={() => {
+              setTagOpen(!tagOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              setDiaOpen(false);
+              setCategoriaOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedTag
+                ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-violet-400 hover:text-violet-600'
+            }`}
+          >
+            <Tag size={16} />
+            <span className="max-w-[150px] truncate">
+              {selectedTag || 'Tags'}
+            </span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${tagOpen ? 'rotate-180' : ''}`} />
+            {selectedTag && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTagChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {tagOpen && (
+            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onTagChange(null);
+                  setTagOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedTag 
+                    ? 'bg-violet-100 text-violet-700 font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todos los tags
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              {tags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    onTagChange(tag);
+                    setTagOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                    selectedTag === tag
+                      ? 'bg-violet-100 text-violet-700 font-medium'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Tag size={12} />
+                  {tag}
                 </button>
               ))}
             </div>

@@ -1641,9 +1641,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                   {/* País en mobile (visible solo en mobile) */}
                   <p className="text-xs text-slate-400 sm:hidden mt-0.5">{lead.pais || 'Sin país'}</p>
                   
-                  {/* Comercial asignado con dropdown de reasignación */}
+                  {/* Comercial asignado con dropdown de reasignación (disponible para todos) */}
                   <div className="relative comercial-dropdown mt-1">
-                    {puedeVerTodos && comerciales.length > 0 ? (
+                    {comerciales.length > 0 ? (
                       <>
                         <button
                           onClick={(e) => {

@@ -48,6 +48,8 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [tagsDisponibles, setTagsDisponibles] = useState([]);
   
   // Estado para etapas del funnel (cargadas desde config_fases)
   const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
@@ -186,10 +188,27 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Función para cargar lista de comerciales (solo si puede ver todos)
+  // Función para cargar tags únicos de los leads
+  const fetchTags = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('label')
+        .not('label', 'is', null)
+        .neq('label', '');
+
+      if (error) throw error;
+      
+      // Obtener valores únicos
+      const uniqueTags = [...new Set(data.map(d => d.label).filter(Boolean))].sort();
+      setTagsDisponibles(uniqueTags);
+    } catch (error) {
+      console.error('Error cargando tags:', error);
+    }
+  }, []);
+
+  // Función para cargar lista de comerciales (para reasignación, disponible para todos)
   const fetchComerciales = useCallback(async () => {
-    if (!puedeVerTodos) return;
-    
     try {
       // Obtener usuarios del módulo comercial (incluir ultima_conexion)
       const { data, error } = await supabase
@@ -210,7 +229,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando comerciales:', error.message);
     }
-  }, [puedeVerTodos]);
+  }, []);
 
   // Función para cargar etapas del funnel desde config_fases
   const fetchEtapasFunnel = useCallback(async () => {
@@ -445,6 +464,11 @@ export default function Dashboard() {
         }
       }
 
+      // Aplicar filtro por tag
+      if (selectedTag) {
+        query = query.eq('label', selectedTag);
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -488,7 +512,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -609,6 +633,7 @@ export default function Dashboard() {
     if (userEmail) {
       fetchComerciales();
       fetchCategorias();
+      fetchTags();
       fetchEtapasFunnel();
       fetchStats();
       fetchLeads(false, 0);
@@ -655,7 +680,7 @@ export default function Dashboard() {
       fetchStats();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -669,9 +694,7 @@ export default function Dashboard() {
           .eq('email', userEmail);
         
         // También refrescar lista de comerciales para actualizar estados online
-        if (puedeVerTodos) {
-          fetchComerciales();
-        }
+        fetchComerciales();
       } catch (error) {
         console.error('Error actualizando conexión:', error);
       }
@@ -684,7 +707,7 @@ export default function Dashboard() {
     const heartbeatInterval = setInterval(actualizarConexion, 30000);
 
     return () => clearInterval(heartbeatInterval);
-  }, [userEmail, puedeVerTodos, fetchComerciales]);
+  }, [userEmail, fetchComerciales]);
 
   // Efecto para recarga automática cada 3 minutos
   useEffect(() => {
@@ -821,13 +844,13 @@ export default function Dashboard() {
               <span className="hidden md:inline">Inicio</span>
             </button>
           
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
-            >
-              <LogOut size={18} />
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-slate-500 hover:text-rose-600 transition-all duration-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100"
+          >
+            <LogOut size={18} />
               <span className="hidden md:inline">Salir</span>
-            </button>
+          </button>
           </div>
         </div>
       </header>
@@ -888,6 +911,9 @@ export default function Dashboard() {
                   selectedCategoria={selectedCategoria}
                   onCategoriaChange={setSelectedCategoria}
                   categorias={categoriasSeguimiento}
+                  selectedTag={selectedTag}
+                  onTagChange={setSelectedTag}
+                  tags={tagsDisponibles}
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -902,7 +928,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -914,6 +940,7 @@ export default function Dashboard() {
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
                       {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
+                      {selectedTag && <span className="text-slate-400"> • Tag: {selectedTag}</span>}
                 </span>
                 <button
                       onClick={() => {
@@ -924,6 +951,8 @@ export default function Dashboard() {
                         setSelectedPeriodo(null);
                         setSelectedDia(null);
                         setSearchQuery('');
+                        setSelectedCategoria(null);
+                        setSelectedTag(null);
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
