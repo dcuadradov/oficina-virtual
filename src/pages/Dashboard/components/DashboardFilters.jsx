@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
