@@ -339,7 +339,7 @@ export default function Dashboard() {
       // Query única para obtener estado_gestion y etapa_funnel
       let statsQuery = supabase
         .from('leads')
-        .select('estado_gestion, etapa_funnel, fecha_gestion')
+        .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
         .neq('etapa_funnel', 'No mostrar');
 
       // Aplicar filtro de comercial
@@ -354,11 +354,29 @@ export default function Dashboard() {
         statsQuery = statsQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       }
 
+      // Aplicar filtro por tag
+      if (selectedTag) {
+        statsQuery = statsQuery.eq('label', selectedTag);
+      }
+
       const { data: statsData, error: statsError } = await statsQuery;
 
       if (statsError) throw statsError;
 
-      const allLeads = statsData || [];
+      let allLeads = statsData || [];
+
+      // Aplicar filtro por categoría de seguimiento (post-query porque requiere join con comentarios)
+      if (selectedCategoria) {
+        const { data: comentariosConCategoria, error: errorCat } = await supabase
+          .from('comentarios')
+          .select('lead_id')
+          .eq('categoria', selectedCategoria);
+        
+        if (!errorCat && comentariosConCategoria) {
+          const cardIdsConCategoria = new Set(comentariosConCategoria.map(c => c.lead_id));
+          allLeads = allLeads.filter(lead => cardIdsConCategoria.has(lead.card_id));
+        }
+      }
 
       // Procesar conteos por estado (siempre sobre todos los leads)
       const porEstado = {};
@@ -387,7 +405,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
