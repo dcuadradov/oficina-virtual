@@ -43,6 +43,31 @@ const parseDependeDe = (dependeDeStr) => {
   return { fieldId, valor };
 };
 
+// Lista de países con códigos telefónicos, banderas y longitudes de número
+const PAISES_TELEFONO = [
+  { codigo: '57', pais: 'Colombia', bandera: '🇨🇴', longitud: [10], placeholder: '3001234567' },
+  { codigo: '52', pais: 'México', bandera: '🇲🇽', longitud: [10], placeholder: '5512345678' },
+  { codigo: '1', pais: 'Estados Unidos', bandera: '🇺🇸', longitud: [10], placeholder: '2025551234' },
+  { codigo: '34', pais: 'España', bandera: '🇪🇸', longitud: [9], placeholder: '612345678' },
+  { codigo: '54', pais: 'Argentina', bandera: '🇦🇷', longitud: [10, 11], placeholder: '1123456789' },
+  { codigo: '56', pais: 'Chile', bandera: '🇨🇱', longitud: [9], placeholder: '912345678' },
+  { codigo: '51', pais: 'Perú', bandera: '🇵🇪', longitud: [9], placeholder: '912345678' },
+  { codigo: '593', pais: 'Ecuador', bandera: '🇪🇨', longitud: [9, 10], placeholder: '991234567' },
+  { codigo: '58', pais: 'Venezuela', bandera: '🇻🇪', longitud: [10], placeholder: '4121234567' },
+  { codigo: '507', pais: 'Panamá', bandera: '🇵🇦', longitud: [8], placeholder: '61234567' },
+  { codigo: '506', pais: 'Costa Rica', bandera: '🇨🇷', longitud: [8], placeholder: '81234567' },
+  { codigo: '502', pais: 'Guatemala', bandera: '🇬🇹', longitud: [8], placeholder: '51234567' },
+  { codigo: '503', pais: 'El Salvador', bandera: '🇸🇻', longitud: [8], placeholder: '71234567' },
+  { codigo: '504', pais: 'Honduras', bandera: '🇭🇳', longitud: [8], placeholder: '91234567' },
+  { codigo: '505', pais: 'Nicaragua', bandera: '🇳🇮', longitud: [8], placeholder: '81234567' },
+  { codigo: '591', pais: 'Bolivia', bandera: '🇧🇴', longitud: [8], placeholder: '71234567' },
+  { codigo: '595', pais: 'Paraguay', bandera: '🇵🇾', longitud: [9], placeholder: '981234567' },
+  { codigo: '598', pais: 'Uruguay', bandera: '🇺🇾', longitud: [8, 9], placeholder: '91234567' },
+  { codigo: '53', pais: 'Cuba', bandera: '🇨🇺', longitud: [8], placeholder: '51234567' },
+  { codigo: '1809', pais: 'Rep. Dominicana', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '55', pais: 'Brasil', bandera: '🇧🇷', longitud: [10, 11], placeholder: '11912345678' },
+].sort((a, b) => a.pais.localeCompare(b.pais));
+
 const CrearLeadModal = ({ isOpen, onClose }) => {
   // Estados principales
   const [formularios, setFormularios] = useState([]);
@@ -62,6 +87,12 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   // Estados para dropdowns con búsqueda
   const [openDropdown, setOpenDropdown] = useState(null); // nombre del campo abierto
   const [searchQueries, setSearchQueries] = useState({}); // búsqueda por campo
+  
+  // Estados para campos de teléfono
+  const [telefonoData, setTelefonoData] = useState({}); // { nombreCampo: { codigoPais: '57', numero: '' } }
+  const [paisDropdownOpen, setPaisDropdownOpen] = useState(null); // nombre del campo con dropdown abierto
+  const [paisBusqueda, setPaisBusqueda] = useState('');
+  const paisSearchRef = useRef(null);
   
   // Estados para carga de archivo
   const [archivo, setArchivo] = useState(null);
@@ -99,6 +130,27 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       }, 50);
     }
   }, [openDropdown]);
+  
+  // Cerrar dropdown de país al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (paisDropdownOpen && !e.target.closest('.pais-dropdown-container')) {
+        setPaisDropdownOpen(null);
+        setPaisBusqueda('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [paisDropdownOpen]);
+  
+  // Focus en input de búsqueda de país cuando se abre
+  useEffect(() => {
+    if (paisDropdownOpen && paisSearchRef.current) {
+      setTimeout(() => {
+        paisSearchRef.current?.focus();
+      }, 50);
+    }
+  }, [paisDropdownOpen]);
 
   // Cargar fields cuando cambia el formulario activo
   useEffect(() => {
@@ -167,12 +219,17 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       
       setFields(fieldsData);
       
-      // Resetear formData
+      // Resetear formData y telefonoData
       const initialData = {};
+      const initialTelefonoData = {};
       fieldsData.forEach(field => {
         initialData[field.nombre] = '';
+        if (field.tipo === 'telefono') {
+          initialTelefonoData[field.nombre] = { codigoPais: '57', numero: '' }; // Colombia por defecto
+        }
       });
       setFormData(initialData);
+      setTelefonoData(initialTelefonoData);
     } catch (error) {
       console.error('Error cargando fields:', error);
     } finally {
@@ -186,6 +243,54 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       ...prev,
       [fieldNombre]: value
     }));
+  };
+
+  // Manejar cambio de campo de teléfono
+  const handleTelefonoChange = (fieldNombre, tipo, value) => {
+    // Solo permitir números en el campo de número
+    if (tipo === 'numero') {
+      value = value.replace(/\D/g, '');
+    }
+    
+    setTelefonoData(prev => {
+      const newData = {
+        ...prev,
+        [fieldNombre]: {
+          ...prev[fieldNombre],
+          [tipo]: value
+        }
+      };
+      
+      // Actualizar formData con el valor combinado: +código.numero
+      const { codigoPais, numero } = newData[fieldNombre];
+      const valorCombinado = numero ? `+${codigoPais}.${numero}` : '';
+      setFormData(prevForm => ({
+        ...prevForm,
+        [fieldNombre]: valorCombinado
+      }));
+      
+      return newData;
+    });
+  };
+  
+  // Validar número de teléfono según el país
+  const validarTelefono = (fieldNombre) => {
+    const data = telefonoData[fieldNombre];
+    if (!data || !data.numero) return { valido: true, mensaje: '' }; // Si está vacío, no validar
+    
+    const paisConfig = PAISES_TELEFONO.find(p => p.codigo === data.codigoPais);
+    if (!paisConfig) return { valido: true, mensaje: '' };
+    
+    const longitudValida = paisConfig.longitud.includes(data.numero.length);
+    if (!longitudValida) {
+      const longitudesStr = paisConfig.longitud.join(' o ');
+      return { 
+        valido: false, 
+        mensaje: `El número debe tener ${longitudesStr} dígitos para ${paisConfig.pais}` 
+      };
+    }
+    
+    return { valido: true, mensaje: '' };
   };
 
   // Verificar si un campo debe mostrarse (campos dinámicos)
@@ -253,6 +358,15 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
         setToast({ type: 'error', message: `El campo "${field.nombre}" es obligatorio` });
         return false;
       }
+      
+      // Validar campos de teléfono
+      if (field.tipo === 'telefono' && formData[field.nombre]) {
+        const validacion = validarTelefono(field.nombre);
+        if (!validacion.valido) {
+          setToast({ type: 'error', message: validacion.mensaje });
+          return false;
+        }
+      }
     }
     return true;
   };
@@ -314,6 +428,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   // Resetear formulario
   const resetForm = () => {
     setFormData({});
+    setTelefonoData({});
     setArchivo(null);
     setModoCreacion('individual');
     setToast(null);
@@ -509,6 +624,125 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                                 )}
                               </div>
                             </div>
+                          )}
+                        </div>
+                      ) : field.tipo === 'telefono' ? (
+                        /* Campo de teléfono internacional */
+                        <div className="space-y-1">
+                          <div className="flex gap-2">
+                            {/* Selector de país */}
+                            <div className="relative pais-dropdown-container" style={{ minWidth: '140px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaisDropdownOpen(paisDropdownOpen === field.nombre ? null : field.nombre);
+                                  setPaisBusqueda('');
+                                }}
+                                className={`w-full px-3 py-3 border rounded-xl text-sm text-left flex items-center gap-2 transition-all ${
+                                  paisDropdownOpen === field.nombre
+                                    ? 'border-[#1717AF] ring-2 ring-[#1717AF]/20'
+                                    : 'border-slate-200 hover:border-slate-300'
+                                } bg-white`}
+                              >
+                                {(() => {
+                                  const paisActual = PAISES_TELEFONO.find(p => p.codigo === telefonoData[field.nombre]?.codigoPais);
+                                  return paisActual ? (
+                                    <>
+                                      <span className="text-lg">{paisActual.bandera}</span>
+                                      <span className="text-slate-700">+{paisActual.codigo}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-slate-400">País</span>
+                                  );
+                                })()}
+                                <ChevronDown size={14} className={`ml-auto text-slate-400 transition-transform ${paisDropdownOpen === field.nombre ? 'rotate-180' : ''}`} />
+                              </button>
+                              
+                              {/* Dropdown de países */}
+                              {paisDropdownOpen === field.nombre && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-40 overflow-hidden" style={{ width: '280px' }}>
+                                  {/* Búsqueda */}
+                                  <div className="p-2 border-b border-slate-100">
+                                    <div className="relative">
+                                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input
+                                        ref={paisSearchRef}
+                                        type="text"
+                                        value={paisBusqueda}
+                                        onChange={(e) => setPaisBusqueda(e.target.value)}
+                                        placeholder="Buscar país..."
+                                        className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-[#1717AF]"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Lista de países */}
+                                  <div className="max-h-52 overflow-y-auto">
+                                    {PAISES_TELEFONO
+                                      .filter(pais => 
+                                        pais.pais.toLowerCase().includes(paisBusqueda.toLowerCase()) ||
+                                        pais.codigo.includes(paisBusqueda)
+                                      )
+                                      .map((pais) => (
+                                        <button
+                                          key={pais.codigo}
+                                          type="button"
+                                          onClick={() => {
+                                            handleTelefonoChange(field.nombre, 'codigoPais', pais.codigo);
+                                            setPaisDropdownOpen(null);
+                                            setPaisBusqueda('');
+                                          }}
+                                          className={`w-full px-3 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-slate-50 transition-colors ${
+                                            telefonoData[field.nombre]?.codigoPais === pais.codigo ? 'bg-[#1717AF]/5' : ''
+                                          }`}
+                                        >
+                                          <span className="text-lg">{pais.bandera}</span>
+                                          <span className="flex-1 text-slate-700">{pais.pais}</span>
+                                          <span className="text-slate-500">+{pais.codigo}</span>
+                                          {telefonoData[field.nombre]?.codigoPais === pais.codigo && (
+                                            <Check size={14} className="text-[#1717AF]" />
+                                          )}
+                                        </button>
+                                      ))
+                                    }
+                                    {PAISES_TELEFONO.filter(pais => 
+                                      pais.pais.toLowerCase().includes(paisBusqueda.toLowerCase()) ||
+                                      pais.codigo.includes(paisBusqueda)
+                                    ).length === 0 && (
+                                      <div className="px-4 py-3 text-sm text-slate-400 text-center">
+                                        No se encontró el país
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Input de número */}
+                            <input
+                              type="tel"
+                              inputMode="numeric"
+                              value={telefonoData[field.nombre]?.numero || ''}
+                              onChange={(e) => handleTelefonoChange(field.nombre, 'numero', e.target.value)}
+                              placeholder={(() => {
+                                const paisActual = PAISES_TELEFONO.find(p => p.codigo === telefonoData[field.nombre]?.codigoPais);
+                                return paisActual?.placeholder || 'Número de teléfono';
+                              })()}
+                              className={`flex-1 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] ${
+                                !validarTelefono(field.nombre).valido 
+                                  ? 'border-rose-300 bg-rose-50/50' 
+                                  : 'border-slate-200'
+                              }`}
+                            />
+                          </div>
+                          
+                          {/* Mensaje de validación */}
+                          {!validarTelefono(field.nombre).valido && (
+                            <p className="text-xs text-rose-500 flex items-center gap-1">
+                              <AlertCircle size={12} />
+                              {validarTelefono(field.nombre).mensaje}
+                            </p>
                           )}
                         </div>
                       ) : (
