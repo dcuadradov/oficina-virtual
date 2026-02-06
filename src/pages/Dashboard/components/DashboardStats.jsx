@@ -77,12 +77,21 @@ const DashboardStats = ({
     if (stat.isWhatsAppFilter) {
       const nuevoFiltro = filtroWhatsApp === 'abierta' ? 'todos' : 'abierta';
       onFiltroWhatsAppChange?.(nuevoFiltro);
+      // Desactivar otros filtros cuando se activa WhatsApp
+      if (nuevoFiltro === 'abierta') {
+        onFilterChange?.('todos');
+      }
       return;
     }
     
     // Para otros filtros, usar el handler normal
     const isActive = activeFilter === stat.key;
-    onFilterChange?.(isActive ? 'todos' : stat.key);
+    const nuevoFiltro = isActive ? 'todos' : stat.key;
+    onFilterChange?.(nuevoFiltro);
+    // Desactivar filtro WhatsApp cuando se activa otro filtro
+    if (nuevoFiltro !== 'todos') {
+      onFiltroWhatsAppChange?.('todos');
+    }
   };
 
   return (
