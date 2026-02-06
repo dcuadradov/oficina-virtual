@@ -7,7 +7,9 @@ const DashboardStats = ({
   onFilterChange, 
   onCrearLead,
   ventanasAbiertas = 0,
-  nuevosLeads = 0
+  nuevosLeads = 0,
+  filtroWhatsApp = 'todos',
+  onFiltroWhatsAppChange
 }) => {
   const { total = 0, porEstado = {} } = statsData;
 
@@ -51,7 +53,8 @@ const DashboardStats = ({
       bgGradient: 'from-emerald-50 to-green-50',
       iconBg: 'bg-gradient-to-br from-emerald-100 to-green-100',
       textColor: 'text-emerald-600',
-      clickable: false, // Solo informativo, no filtra
+      clickable: true, // Ahora filtra usando el filtro de WhatsApp
+      isWhatsAppFilter: true, // Flag especial para manejar diferente
     },
     {
       key: 'gestionado', // Mantener key 'gestionado' para compatibilidad con BD
@@ -66,17 +69,35 @@ const DashboardStats = ({
     },
   ];
 
+  // Handler para click en cards
+  const handleStatClick = (stat) => {
+    if (!stat.clickable) return;
+    
+    // Si es el filtro de WhatsApp, usar su propio handler
+    if (stat.isWhatsAppFilter) {
+      const nuevoFiltro = filtroWhatsApp === 'abierta' ? 'todos' : 'abierta';
+      onFiltroWhatsAppChange?.(nuevoFiltro);
+      return;
+    }
+    
+    // Para otros filtros, usar el handler normal
+    const isActive = activeFilter === stat.key;
+    onFilterChange?.(isActive ? 'todos' : stat.key);
+  };
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {statsConfig.map((stat) => {
         const Icon = stat.icon;
-        const isActive = activeFilter === stat.key;
+        const isActive = stat.isWhatsAppFilter 
+          ? filtroWhatsApp === 'abierta' 
+          : activeFilter === stat.key;
         const isClickable = stat.clickable;
         
         return (
           <button
             key={stat.key}
-            onClick={() => isClickable && onFilterChange?.(isActive ? 'todos' : stat.key)}
+            onClick={() => handleStatClick(stat)}
             className={`
               relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-300
               ${isActive && isClickable

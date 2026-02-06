@@ -64,6 +64,9 @@ export default function Dashboard() {
   const [ventanasAbiertas, setVentanasAbiertas] = useState(0);
   const [nuevosLeads, setNuevosLeads] = useState(0);
   
+  // Estado para filtro de WhatsApp (compartido entre KPIs y tabla)
+  const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -1007,6 +1010,8 @@ export default function Dashboard() {
                   onCrearLead={() => setCrearLeadModalOpen(true)}
                   ventanasAbiertas={ventanasAbiertas}
                   nuevosLeads={nuevosLeads}
+                  filtroWhatsApp={filtroWhatsApp}
+                  onFiltroWhatsAppChange={setFiltroWhatsApp}
             />
 
                 {/* Indicador de filtro activo */}
@@ -1065,6 +1070,8 @@ export default function Dashboard() {
                   onNextPage={handleNextPage}
                   onPrevPage={handlePrevPage}
                   isEmbedded={false}
+                  filtroWhatsApp={filtroWhatsApp}
+                  onFiltroWhatsAppChange={setFiltroWhatsApp}
                 />
               </>
             ) : (

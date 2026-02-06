@@ -307,7 +307,10 @@ const LeadsTable = ({
   showingTo = 0,
   onNextPage,
   onPrevPage,
-  isEmbedded = false
+  isEmbedded = false,
+  // Props de filtro WhatsApp (controlado desde Dashboard)
+  filtroWhatsApp: filtroWhatsAppProp,
+  onFiltroWhatsAppChange
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -315,8 +318,10 @@ const LeadsTable = ({
   // Estado para el tab activo del funnel (inicializar con el primer grupo)
   const [activeFunnelTab, setActiveFunnelTab] = useState(null);
   
-  // Estado para filtro de ventana WhatsApp
-  const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
+  // Estado para filtro de ventana WhatsApp (usa prop si está disponible, sino estado local)
+  const [filtroWhatsAppLocal, setFiltroWhatsAppLocal] = useState('todos');
+  const filtroWhatsApp = filtroWhatsAppProp !== undefined ? filtroWhatsAppProp : filtroWhatsAppLocal;
+  const setFiltroWhatsApp = onFiltroWhatsAppChange || setFiltroWhatsAppLocal;
   
   // Estado para filtro de leads HOT
   const [filtroHot, setFiltroHot] = useState(false);
