@@ -491,29 +491,8 @@ const LeadsTable = ({
           <tbody className="divide-y divide-slate-50">
             {leads
               .filter((lead) => {
-                // Filtro de Nuevos Leads (por card_id de notificaciones)
-                if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
-                  if (!nuevosLeadsCardIds.includes(lead.card_id)) return false;
-                }
-                
-                // Filtro de leads HOT
+                // Filtro de leads HOT (único filtro local, los demás se aplican en el backend)
                 if (filtroHot && lead.is_hot !== true) return false;
-                
-                // Filtro de ventana WhatsApp
-                if (filtroWhatsApp === 'todos' && !filtroNuevosLeads) return true;
-                if (filtroNuevosLeads) return true; // Ya filtrado arriba
-                
-                const timestamp = lead.timestamp_ultimo_mensaje_whatsapp;
-                if (!timestamp) {
-                  // Sin timestamp = ventana cerrada
-                  return filtroWhatsApp === 'cerrada';
-                }
-                
-                const diffHoras = (new Date() - new Date(timestamp)) / (1000 * 60 * 60);
-                const ventanaAbierta = diffHoras < 24;
-                
-                if (filtroWhatsApp === 'abierta') return ventanaAbierta;
-                if (filtroWhatsApp === 'cerrada') return !ventanaAbierta;
                 return true;
               })
               .map((lead, index) => {

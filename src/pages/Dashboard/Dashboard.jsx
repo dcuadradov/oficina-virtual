@@ -424,6 +424,26 @@ export default function Dashboard() {
         statsQuery = statsQuery.eq('label', selectedTag);
       }
 
+      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
+      if (filtroWhatsApp === 'abierta') {
+        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        statsQuery = statsQuery
+          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+      } else if (filtroWhatsApp === 'cerrada') {
+        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        statsQuery = statsQuery.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+      }
+
+      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+        statsQuery = statsQuery.in('card_id', nuevosLeadsCardIds);
+      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
+        // No hay nuevos leads
+        setStatsData({ total: 0, porEstado: {}, porEtapa: {} });
+        return;
+      }
+
       const { data: statsData, error: statsError } = await statsQuery;
 
       if (statsError) throw statsError;
@@ -470,7 +490,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -552,6 +572,30 @@ export default function Dashboard() {
         query = query.eq('label', selectedTag);
       }
 
+      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
+      if (filtroWhatsApp === 'abierta') {
+        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        query = query
+          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+      } else if (filtroWhatsApp === 'cerrada') {
+        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        query = query.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+      }
+
+      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+        query = query.in('card_id', nuevosLeadsCardIds);
+      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
+        // No hay nuevos leads, retornar vacío
+        setLeads([]);
+        setTotalLeads(0);
+        setCurrentPage(page);
+        setLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -595,7 +639,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -767,7 +811,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
