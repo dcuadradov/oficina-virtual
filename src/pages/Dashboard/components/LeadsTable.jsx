@@ -313,7 +313,10 @@ const LeadsTable = ({
   onFiltroWhatsAppChange,
   // Props de filtro Nuevos Leads
   filtroNuevosLeads = false,
-  nuevosLeadsCardIds = []
+  nuevosLeadsCardIds = [],
+  // Props de filtro HOT (controlado desde Dashboard)
+  filtroHot: filtroHotProp,
+  onFiltroHotChange
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -326,8 +329,10 @@ const LeadsTable = ({
   const filtroWhatsApp = filtroWhatsAppProp !== undefined ? filtroWhatsAppProp : filtroWhatsAppLocal;
   const setFiltroWhatsApp = onFiltroWhatsAppChange || setFiltroWhatsAppLocal;
   
-  // Estado para filtro de leads HOT
-  const [filtroHot, setFiltroHot] = useState(false);
+  // Estado para filtro de leads HOT (usa prop si está disponible, sino estado local)
+  const [filtroHotLocal, setFiltroHotLocal] = useState(false);
+  const filtroHot = filtroHotProp !== undefined ? filtroHotProp : filtroHotLocal;
+  const setFiltroHot = onFiltroHotChange || setFiltroHotLocal;
   
   // Toggle del filtro WhatsApp (click en el mismo lo desactiva)
   const handleFiltroWhatsApp = (filtro) => {
@@ -490,11 +495,6 @@ const LeadsTable = ({
           </thead>
           <tbody className="divide-y divide-slate-50">
             {leads
-              .filter((lead) => {
-                // Filtro de leads HOT (único filtro local, los demás se aplican en el backend)
-                if (filtroHot && lead.is_hot !== true) return false;
-                return true;
-              })
               .map((lead, index) => {
               // Usar el campo estado_gestion directamente de la BD
               const status = lead.estado_gestion || 'sin_gestionar';

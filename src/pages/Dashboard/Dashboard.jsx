@@ -71,6 +71,9 @@ export default function Dashboard() {
   // Estado para filtro de Nuevos Leads
   const [filtroNuevosLeads, setFiltroNuevosLeads] = useState(false);
   
+  // Estado para filtro de leads HOT (compartido con tabla)
+  const [filtroHot, setFiltroHot] = useState(false);
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -444,6 +447,11 @@ export default function Dashboard() {
         return;
       }
 
+      // Aplicar filtro de leads HOT
+      if (filtroHot) {
+        statsQuery = statsQuery.eq('is_hot', true);
+      }
+
       const { data: statsData, error: statsError } = await statsQuery;
 
       if (statsError) throw statsError;
@@ -490,7 +498,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -596,6 +604,11 @@ export default function Dashboard() {
         return;
       }
 
+      // Aplicar filtro de leads HOT
+      if (filtroHot) {
+        query = query.eq('is_hot', true);
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -639,7 +652,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -811,7 +824,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, filtroHot]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1126,6 +1139,8 @@ export default function Dashboard() {
                   onFiltroWhatsAppChange={setFiltroWhatsApp}
                   filtroNuevosLeads={filtroNuevosLeads}
                   nuevosLeadsCardIds={nuevosLeadsCardIds}
+                  filtroHot={filtroHot}
+                  onFiltroHotChange={setFiltroHot}
                 />
               </>
             ) : (
