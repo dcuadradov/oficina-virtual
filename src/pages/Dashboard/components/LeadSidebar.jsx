@@ -290,7 +290,7 @@ const OPCIONES_CONSULTA_DECISION = [
   'No consulta con nadie más'
 ];
 
-const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false }) => {
+const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
   const [isAnimating, setIsAnimating] = useState(false);
@@ -1742,13 +1742,21 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                       )}
                     </div>
                     
-                    {/* Tag del lead */}
-                    {lead.label && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 border border-violet-200">
-                        <Tag size={10} />
-                        {lead.label}
-                      </span>
-                    )}
+                    {/* Tag del lead con colores dinámicos */}
+                    {lead.label && (() => {
+                      const tagConfig = configTags[lead.label];
+                      const bgColor = tagConfig?.color_tag || '#8B5CF6'; // Violeta por defecto
+                      const textColor = tagConfig?.color_letra_tag || '#FFFFFF'; // Blanco por defecto
+                      return (
+                        <span 
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+                          style={{ backgroundColor: bgColor, color: textColor }}
+                        >
+                          <Tag size={10} />
+                          {lead.label}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

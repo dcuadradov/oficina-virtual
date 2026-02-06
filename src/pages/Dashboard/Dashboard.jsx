@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
+  const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
   
   // Estado para etapas del funnel (cargadas desde config_fases)
   const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
@@ -205,6 +206,7 @@ export default function Dashboard() {
   // Función para cargar tags únicos de los leads
   const fetchTags = useCallback(async () => {
     try {
+      // Obtener tags únicos de leads
       const { data, error } = await supabase
         .from('leads')
         .select('label')
@@ -216,6 +218,24 @@ export default function Dashboard() {
       // Obtener valores únicos
       const uniqueTags = [...new Set(data.map(d => d.label).filter(Boolean))].sort();
       setTagsDisponibles(uniqueTags);
+      
+      // Cargar configuración de colores de tags
+      const { data: configData, error: configError } = await supabase
+        .from('config_tags')
+        .select('nombre, color_tag, color_letra_tag')
+        .eq('modulo', 'comercial');
+      
+      if (!configError && configData) {
+        // Crear mapa de nombre -> colores
+        const configMap = {};
+        configData.forEach(tag => {
+          configMap[tag.nombre] = {
+            color_tag: tag.color_tag,
+            color_letra_tag: tag.color_letra_tag
+          };
+        });
+        setConfigTags(configMap);
+      }
     } catch (error) {
       console.error('Error cargando tags:', error);
     }
@@ -1141,6 +1161,7 @@ export default function Dashboard() {
                   nuevosLeadsCardIds={nuevosLeadsCardIds}
                   filtroHot={filtroHot}
                   onFiltroHotChange={setFiltroHot}
+                  configTags={configTags}
                 />
               </>
             ) : (
@@ -1185,6 +1206,7 @@ export default function Dashboard() {
         }}
         comerciales={comerciales}
         puedeVerTodos={puedeVerTodos}
+        configTags={configTags}
       />
 
       {/* Modal para crear leads */}

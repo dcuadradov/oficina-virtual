@@ -316,7 +316,9 @@ const LeadsTable = ({
   nuevosLeadsCardIds = [],
   // Props de filtro HOT (controlado desde Dashboard)
   filtroHot: filtroHotProp,
-  onFiltroHotChange
+  onFiltroHotChange,
+  // Configuración de colores de tags
+  configTags = {}
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -562,13 +564,21 @@ const LeadsTable = ({
                         }`}>
                           {lead.nombre || 'Sin nombre'}
                         </p>
-                        {/* Tag del lead */}
-                        {lead.label && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700 mt-0.5">
-                            <Tag size={8} />
-                            {lead.label}
-                          </span>
-                        )}
+                        {/* Tag del lead con colores dinámicos */}
+                        {lead.label && (() => {
+                          const tagConfig = configTags[lead.label];
+                          const bgColor = tagConfig?.color_tag || '#8B5CF6'; // Violeta por defecto
+                          const textColor = tagConfig?.color_letra_tag || '#FFFFFF'; // Blanco por defecto
+                          return (
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5"
+                              style={{ backgroundColor: bgColor, color: textColor }}
+                            >
+                              <Tag size={8} />
+                              {lead.label}
+                            </span>
+                          );
+                        })()}
                         <p className={`text-xs truncate max-w-[140px] ${noRevisado ? 'text-slate-500 font-medium' : 'text-slate-400'} ${lead.label ? 'mt-0.5' : ''}`}>
                           {lead.comercial_email ? lead.comercial_email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Sin comercial'}
                         </p>
