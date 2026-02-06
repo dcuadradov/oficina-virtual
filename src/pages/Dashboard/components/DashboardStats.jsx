@@ -1,19 +1,24 @@
 import React from 'react';
-import { Users, Clock, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
+import { Users, Clock, Bell, MessageCircle, UserPlus } from 'lucide-react';
 
-const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange, onCrearLead }) => {
+const DashboardStats = ({ 
+  statsData = {}, 
+  activeFilter = 'todos', 
+  onFilterChange, 
+  onCrearLead,
+  ventanasAbiertas = 0,
+  nuevosLeads = 0
+}) => {
   const { total = 0, porEstado = {} } = statsData;
 
   // Mapear los estados de la BD a los keys del frontend
   const stats = {
     total,
-    sin_gestionar: porEstado.sin_gestionar || 0,
-    atrasado: porEstado.atrasado || 0,
-    gestionado: porEstado.gestionado || 0,
-    matriculado: porEstado.matriculado || 0,
+    recordatorio_activo: porEstado.gestionado || 0, // gestionado en BD = recordatorio_activo en UI
   };
 
   // Configuración de estilos para cada stat card
+  // Orden: Total leads, Nuevos leads, Ventanas abiertas, Recordatorio activo
   const statsConfig = [
     {
       key: 'todos',
@@ -24,36 +29,40 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
       bgGradient: 'from-[#02214A]/5 to-[#1717AF]/5',
       iconBg: 'bg-gradient-to-br from-[#02214A]/10 to-[#1717AF]/10',
       textColor: 'text-[#02214A]',
+      clickable: true,
     },
     {
-      key: 'atrasado',
-      title: 'Atrasado',
-      count: stats.atrasado,
-      icon: AlertCircle,
-      gradient: 'from-rose-500 to-red-600',
-      bgGradient: 'from-rose-50 to-red-50',
-      iconBg: 'bg-gradient-to-br from-rose-100 to-red-100',
-      textColor: 'text-rose-600',
+      key: 'nuevos_leads',
+      title: 'Nuevos Leads',
+      count: nuevosLeads,
+      icon: Bell,
+      gradient: 'from-amber-500 to-orange-600',
+      bgGradient: 'from-amber-50 to-orange-50',
+      iconBg: 'bg-gradient-to-br from-amber-100 to-orange-100',
+      textColor: 'text-amber-600',
+      clickable: false, // Solo informativo, no filtra
     },
     {
-      key: 'gestionado',
-      title: 'Gestionado',
-      count: stats.gestionado,
-      icon: CheckCircle,
+      key: 'ventanas_abiertas',
+      title: 'Ventanas Abiertas',
+      count: ventanasAbiertas,
+      icon: MessageCircle,
       gradient: 'from-emerald-500 to-green-600',
       bgGradient: 'from-emerald-50 to-green-50',
       iconBg: 'bg-gradient-to-br from-emerald-100 to-green-100',
       textColor: 'text-emerald-600',
+      clickable: false, // Solo informativo, no filtra
     },
     {
-      key: 'matriculado',
-      title: 'Nueva matrícula',
-      count: stats.matriculado,
-      icon: UserPlus,
-      gradient: 'from-blue-500 to-indigo-600',
-      bgGradient: 'from-blue-50 to-indigo-50',
-      iconBg: 'bg-gradient-to-br from-blue-100 to-indigo-100',
-      textColor: 'text-blue-600',
+      key: 'gestionado', // Mantener key 'gestionado' para compatibilidad con BD
+      title: 'Recordatorio Activo',
+      count: stats.recordatorio_activo,
+      icon: Clock,
+      gradient: 'from-violet-500 to-purple-600',
+      bgGradient: 'from-violet-50 to-purple-50',
+      iconBg: 'bg-gradient-to-br from-violet-100 to-purple-100',
+      textColor: 'text-violet-600',
+      clickable: true,
     },
   ];
 
@@ -62,19 +71,21 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
       {statsConfig.map((stat) => {
         const Icon = stat.icon;
         const isActive = activeFilter === stat.key;
+        const isClickable = stat.clickable;
         
         return (
           <button
             key={stat.key}
-            onClick={() => onFilterChange?.(isActive ? 'todos' : stat.key)}
+            onClick={() => isClickable && onFilterChange?.(isActive ? 'todos' : stat.key)}
             className={`
               relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-300
-              ${isActive 
+              ${isActive && isClickable
                 ? `bg-gradient-to-br ${stat.bgGradient} ring-2 ring-offset-2 ring-[#1717AF] shadow-lg scale-[1.02]` 
-                : 'bg-white/80 backdrop-blur-sm hover:bg-white hover:shadow-lg hover:scale-[1.02] shadow-sm'
+                : 'bg-white/80 backdrop-blur-sm hover:bg-white hover:shadow-lg shadow-sm'
               }
+              ${isClickable ? 'hover:scale-[1.02] cursor-pointer' : 'cursor-default'}
               border border-slate-200/60
-              group cursor-pointer
+              group
             `}
           >
             {/* Decoración de fondo */}
@@ -96,9 +107,18 @@ const DashboardStats = ({ statsData = {}, activeFilter = 'todos', onFilterChange
             </div>
             
             {/* Indicador de activo */}
-            {isActive && (
+            {isActive && isClickable && (
               <div className="absolute top-3 right-3">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
+              </div>
+            )}
+            
+            {/* Indicador de solo lectura para cards no clickeables */}
+            {!isClickable && (
+              <div className="absolute top-3 right-3">
+                <div className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                  Info
+                </div>
               </div>
             )}
           </button>

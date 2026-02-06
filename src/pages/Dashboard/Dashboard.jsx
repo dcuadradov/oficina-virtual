@@ -60,6 +60,10 @@ export default function Dashboard() {
   // Estado para modal de crear lead
   const [crearLeadModalOpen, setCrearLeadModalOpen] = useState(false);
   
+  // Estados para KPIs adicionales
+  const [ventanasAbiertas, setVentanasAbiertas] = useState(0);
+  const [nuevosLeads, setNuevosLeads] = useState(0);
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -327,6 +331,58 @@ export default function Dashboard() {
 
     return { fechaInicio, fechaFin };
   }, [selectedDia, selectedMes, selectedPeriodo]);
+
+  // Función para calcular ventanas de WhatsApp abiertas (< 24 horas)
+  const fetchVentanasAbiertas = useCallback(async () => {
+    const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+    if (!targetEmail && !puedeVerTodos) return;
+
+    try {
+      // Calcular hace 24 horas
+      const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      let query = supabase
+        .from('leads')
+        .select('card_id', { count: 'exact', head: true })
+        .neq('etapa_funnel', 'No mostrar')
+        .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+        .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+
+      // Aplicar filtro de comercial
+      if (puedeVerTodos && selectedComercial) {
+        query = query.eq('comercial_email', selectedComercial);
+      } else if (!puedeVerTodos) {
+        query = query.eq('comercial_email', userEmail);
+      }
+
+      const { count, error } = await query;
+      if (error) throw error;
+
+      setVentanasAbiertas(count || 0);
+    } catch (error) {
+      console.error('Error calculando ventanas abiertas:', error.message);
+    }
+  }, [userEmail, puedeVerTodos, selectedComercial]);
+
+  // Función para calcular nuevos leads (notificaciones con contador_nuevos_leads = true y estado_lectura = 'nuevo')
+  const fetchNuevosLeads = useCallback(async () => {
+    if (!userEmail) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('notificaciones')
+        .select('id', { count: 'exact', head: true })
+        .eq('comercial_email', userEmail)
+        .eq('contador_nuevos_leads', true)
+        .eq('estado_lectura', 'nuevo');
+
+      if (error) throw error;
+
+      setNuevosLeads(count || 0);
+    } catch (error) {
+      console.error('Error calculando nuevos leads:', error.message);
+    }
+  }, [userEmail]);
 
   // Función para obtener estadísticas globales (KPIs)
   const fetchStats = useCallback(async () => {
@@ -654,6 +710,8 @@ export default function Dashboard() {
       fetchTags();
       fetchEtapasFunnel();
       fetchStats();
+      fetchVentanasAbiertas();
+      fetchNuevosLeads();
       fetchLeads(false, 0);
       verificarRecordatoriosVencidos(); // Verificar al cargar
     }
@@ -696,6 +754,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (!loading && userEmail) {
       fetchStats();
+      fetchVentanasAbiertas();
+      fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
   }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag]);
@@ -740,6 +800,8 @@ export default function Dashboard() {
       // Actualizar estadísticas
       try {
         await fetchStats();
+        await fetchVentanasAbiertas();
+        await fetchNuevosLeads();
       } catch (e) { console.error('Error en fetchStats:', e); }
       
       // Actualizar leads
@@ -750,7 +812,7 @@ export default function Dashboard() {
     }, 180000); // 3 minutos
 
     return () => clearInterval(intervalId);
-  }, [currentPage, fetchStats, fetchLeads, verificarRecordatoriosVencidos]);
+  }, [currentPage, fetchStats, fetchVentanasAbiertas, fetchNuevosLeads, fetchLeads, verificarRecordatoriosVencidos]);
 
   // Manejadores de paginación
   const handleNextPage = () => {
@@ -943,6 +1005,8 @@ export default function Dashboard() {
               activeFilter={activeFilter}
                   onFilterChange={handleFilterChange}
                   onCrearLead={() => setCrearLeadModalOpen(true)}
+                  ventanasAbiertas={ventanasAbiertas}
+                  nuevosLeads={nuevosLeads}
             />
 
                 {/* Indicador de filtro activo */}
@@ -1039,6 +1103,8 @@ export default function Dashboard() {
         onMarcarNoRevisado={handleMarcarNoRevisado}
         onRefreshData={() => {
           fetchStats();
+          fetchVentanasAbiertas();
+          fetchNuevosLeads();
           fetchLeads(true, currentPage);
         }}
         comerciales={comerciales}
