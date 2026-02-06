@@ -310,7 +310,10 @@ const LeadsTable = ({
   isEmbedded = false,
   // Props de filtro WhatsApp (controlado desde Dashboard)
   filtroWhatsApp: filtroWhatsAppProp,
-  onFiltroWhatsAppChange
+  onFiltroWhatsAppChange,
+  // Props de filtro Nuevos Leads
+  filtroNuevosLeads = false,
+  nuevosLeadsCardIds = []
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -488,11 +491,17 @@ const LeadsTable = ({
           <tbody className="divide-y divide-slate-50">
             {leads
               .filter((lead) => {
+                // Filtro de Nuevos Leads (por card_id de notificaciones)
+                if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+                  if (!nuevosLeadsCardIds.includes(lead.card_id)) return false;
+                }
+                
                 // Filtro de leads HOT
                 if (filtroHot && lead.is_hot !== true) return false;
                 
                 // Filtro de ventana WhatsApp
-                if (filtroWhatsApp === 'todos') return true;
+                if (filtroWhatsApp === 'todos' && !filtroNuevosLeads) return true;
+                if (filtroNuevosLeads) return true; // Ya filtrado arriba
                 
                 const timestamp = lead.timestamp_ultimo_mensaje_whatsapp;
                 if (!timestamp) {

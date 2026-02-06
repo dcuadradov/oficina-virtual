@@ -9,7 +9,9 @@ const DashboardStats = ({
   ventanasAbiertas = 0,
   nuevosLeads = 0,
   filtroWhatsApp = 'todos',
-  onFiltroWhatsAppChange
+  onFiltroWhatsAppChange,
+  filtroNuevosLeads = false,
+  onFiltroNuevosLeadsChange
 }) => {
   const { total = 0, porEstado = {} } = statsData;
 
@@ -42,7 +44,8 @@ const DashboardStats = ({
       bgGradient: 'from-amber-50 to-orange-50',
       iconBg: 'bg-gradient-to-br from-amber-100 to-orange-100',
       textColor: 'text-amber-600',
-      clickable: false, // Solo informativo, no filtra
+      clickable: true,
+      isNuevosLeadsFilter: true,
     },
     {
       key: 'ventanas_abiertas',
@@ -73,6 +76,18 @@ const DashboardStats = ({
   const handleStatClick = (stat) => {
     if (!stat.clickable) return;
     
+    // Si es el filtro de Nuevos Leads
+    if (stat.isNuevosLeadsFilter) {
+      const nuevoFiltro = !filtroNuevosLeads;
+      onFiltroNuevosLeadsChange?.(nuevoFiltro);
+      // Desactivar otros filtros cuando se activa
+      if (nuevoFiltro) {
+        onFilterChange?.('todos');
+        onFiltroWhatsAppChange?.('todos');
+      }
+      return;
+    }
+    
     // Si es el filtro de WhatsApp, usar su propio handler
     if (stat.isWhatsAppFilter) {
       const nuevoFiltro = filtroWhatsApp === 'abierta' ? 'todos' : 'abierta';
@@ -80,6 +95,7 @@ const DashboardStats = ({
       // Desactivar otros filtros cuando se activa WhatsApp
       if (nuevoFiltro === 'abierta') {
         onFilterChange?.('todos');
+        onFiltroNuevosLeadsChange?.(false);
       }
       return;
     }
@@ -88,9 +104,10 @@ const DashboardStats = ({
     const isActive = activeFilter === stat.key;
     const nuevoFiltro = isActive ? 'todos' : stat.key;
     onFilterChange?.(nuevoFiltro);
-    // Desactivar filtro WhatsApp cuando se activa otro filtro
+    // Desactivar otros filtros cuando se activa
     if (nuevoFiltro !== 'todos') {
       onFiltroWhatsAppChange?.('todos');
+      onFiltroNuevosLeadsChange?.(false);
     }
   };
 
@@ -98,9 +115,11 @@ const DashboardStats = ({
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {statsConfig.map((stat) => {
         const Icon = stat.icon;
-        const isActive = stat.isWhatsAppFilter 
-          ? filtroWhatsApp === 'abierta' 
-          : activeFilter === stat.key;
+        const isActive = stat.isNuevosLeadsFilter 
+          ? filtroNuevosLeads
+          : stat.isWhatsAppFilter 
+            ? filtroWhatsApp === 'abierta' 
+            : activeFilter === stat.key;
         const isClickable = stat.clickable;
         
         return (

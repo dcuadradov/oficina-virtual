@@ -63,9 +63,13 @@ export default function Dashboard() {
   // Estados para KPIs adicionales
   const [ventanasAbiertas, setVentanasAbiertas] = useState(0);
   const [nuevosLeads, setNuevosLeads] = useState(0);
+  const [nuevosLeadsCardIds, setNuevosLeadsCardIds] = useState([]); // card_ids para filtrar
   
   // Estado para filtro de WhatsApp (compartido entre KPIs y tabla)
   const [filtroWhatsApp, setFiltroWhatsApp] = useState('todos'); // 'todos' | 'abierta' | 'cerrada'
+  
+  // Estado para filtro de Nuevos Leads
+  const [filtroNuevosLeads, setFiltroNuevosLeads] = useState(false);
   
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -372,16 +376,18 @@ export default function Dashboard() {
     if (!userEmail) return;
 
     try {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from('notificaciones')
-        .select('id', { count: 'exact', head: true })
+        .select('card_id')
         .eq('comercial_email', userEmail)
         .eq('contador_nuevos_leads', true)
         .eq('estado_lectura', 'nuevo');
 
       if (error) throw error;
 
-      setNuevosLeads(count || 0);
+      const cardIds = (data || []).map(n => n.card_id).filter(Boolean);
+      setNuevosLeads(cardIds.length);
+      setNuevosLeadsCardIds(cardIds);
     } catch (error) {
       console.error('Error calculando nuevos leads:', error.message);
     }
@@ -1012,6 +1018,8 @@ export default function Dashboard() {
                   nuevosLeads={nuevosLeads}
                   filtroWhatsApp={filtroWhatsApp}
                   onFiltroWhatsAppChange={setFiltroWhatsApp}
+                  filtroNuevosLeads={filtroNuevosLeads}
+                  onFiltroNuevosLeadsChange={setFiltroNuevosLeads}
             />
 
                 {/* Indicador de filtro activo */}
@@ -1072,6 +1080,8 @@ export default function Dashboard() {
                   isEmbedded={false}
                   filtroWhatsApp={filtroWhatsApp}
                   onFiltroWhatsAppChange={setFiltroWhatsApp}
+                  filtroNuevosLeads={filtroNuevosLeads}
+                  nuevosLeadsCardIds={nuevosLeadsCardIds}
                 />
               </>
             ) : (
