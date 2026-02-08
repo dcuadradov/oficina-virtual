@@ -318,7 +318,9 @@ const LeadsTable = ({
   filtroHot: filtroHotProp,
   onFiltroHotChange,
   // Configuración de colores de tags
-  configTags = {}
+  configTags = {},
+  // Colores de las fases para indicador visual
+  coloresFases = {}
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -517,7 +519,12 @@ const LeadsTable = ({
                   {/* Creación - 2 líneas */}
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-10 rounded-full ${statusStyles[status] || statusStyles['sin_gestionar']} shadow-sm`} />
+                      <div 
+                        className="w-1.5 h-10 rounded-full shadow-sm" 
+                        style={{ 
+                          backgroundColor: coloresFases[lead.fase_id_pipefy] || '#94A3B8' // Color por defecto gris
+                        }} 
+                      />
                       <div className="flex flex-col">
                         <span className={`text-xs ${noRevisado ? 'text-slate-600 font-medium' : 'text-slate-500'}`}>
                           {formatFecha2Lineas(lead.created_at).fecha}

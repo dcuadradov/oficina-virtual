@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
+  const [coloresFases, setColoresFases] = useState({}); // { fase_id_pipefy: color }
   
   // Estado para etapas del funnel (cargadas desde config_fases)
   const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
@@ -238,6 +239,29 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error cargando tags:', error);
+    }
+  }, []);
+
+  // Función para cargar colores de las fases desde config_fases
+  const fetchColoresFases = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_fases')
+        .select('fase_id_pipefy, color')
+        .not('color', 'is', null);
+
+      if (error) throw error;
+      
+      // Crear mapa de fase_id_pipefy -> color
+      const coloresMap = {};
+      data.forEach(fase => {
+        if (fase.fase_id_pipefy && fase.color) {
+          coloresMap[fase.fase_id_pipefy] = fase.color;
+        }
+      });
+      setColoresFases(coloresMap);
+    } catch (error) {
+      console.error('Error cargando colores de fases:', error);
     }
   }, []);
 
@@ -805,6 +829,7 @@ export default function Dashboard() {
       fetchComerciales();
       fetchCategorias();
       fetchTags();
+      fetchColoresFases();
       fetchEtapasFunnel();
       fetchStats();
       fetchVentanasAbiertas();
@@ -1173,6 +1198,7 @@ export default function Dashboard() {
                   filtroHot={filtroHot}
                   onFiltroHotChange={setFiltroHot}
                   configTags={configTags}
+                  coloresFases={coloresFases}
                 />
               </>
             ) : (
