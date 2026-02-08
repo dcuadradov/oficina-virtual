@@ -906,7 +906,7 @@ export default function Dashboard() {
         await fetchLeads(true, currentPage);
       } catch (e) { console.error('Error en fetchLeads:', e); }
       
-    }, 180000); // 3 minutos
+    }, 30000); // 30 segundos
 
     return () => clearInterval(intervalId);
   }, [currentPage, fetchStats, fetchVentanasAbiertas, fetchNuevosLeads, fetchLeads, verificarRecordatoriosVencidos]);
