@@ -399,12 +399,23 @@ export default function Dashboard() {
     if (!userEmail) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('notificaciones')
         .select('card_id')
-        .eq('comercial_email', userEmail)
         .eq('contador_nuevos_leads', true)
         .eq('estado_lectura', 'nuevo');
+
+      // Aplicar filtro de comercial (igual que los otros fetch)
+      if (puedeVerTodos && selectedComercial) {
+        // Admin con comercial seleccionado: solo ese comercial
+        query = query.eq('comercial_email', selectedComercial);
+      } else if (!puedeVerTodos) {
+        // Usuario normal: solo sus notificaciones
+        query = query.eq('comercial_email', userEmail);
+      }
+      // Si puedeVerTodos y no hay selectedComercial: traer todos
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -414,7 +425,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error calculando nuevos leads:', error.message);
     }
-  }, [userEmail]);
+  }, [userEmail, puedeVerTodos, selectedComercial]);
 
   // Función para obtener estadísticas globales (KPIs)
   const fetchStats = useCallback(async () => {
