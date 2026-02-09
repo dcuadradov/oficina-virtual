@@ -51,7 +51,7 @@ export default function Dashboard() {
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
-  const [coloresFases, setColoresFases] = useState({}); // { fase_id_pipefy: color }
+  const [coloresFases, setColoresFases] = useState({}); // { fase_id_pipefy: { color, color_letra } }
   
   // Estado para etapas del funnel (cargadas desde config_fases)
   const [etapasFunnel, setEtapasFunnel] = useState({ etapas: [], grupos: [] });
@@ -247,16 +247,19 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('config_fases')
-        .select('fase_id_pipefy, color')
+        .select('fase_id_pipefy, color, color_letra')
         .not('color', 'is', null);
 
       if (error) throw error;
       
-      // Crear mapa de fase_id_pipefy -> color
+      // Crear mapa de fase_id_pipefy -> { color, color_letra }
       const coloresMap = {};
       data.forEach(fase => {
         if (fase.fase_id_pipefy && fase.color) {
-          coloresMap[fase.fase_id_pipefy] = fase.color;
+          coloresMap[fase.fase_id_pipefy] = {
+            color: fase.color,
+            color_letra: fase.color_letra || '#000000' // Negro por defecto
+          };
         }
       });
       setColoresFases(coloresMap);

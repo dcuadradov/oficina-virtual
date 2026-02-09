@@ -232,8 +232,10 @@ const FaseCell = ({ lead, funnelSteps, noRevisado, coloresFases = {} }) => {
   return (
     <div className="relative" ref={dropdownRef}>
       {(() => {
-        // Obtener el color de la fase actual
-        const faseColor = coloresFases[lead.fase_id_pipefy] || '#64748B'; // Gris por defecto
+        // Obtener los colores de la fase actual
+        const faseConfig = coloresFases[lead.fase_id_pipefy] || { color: '#64748B', color_letra: '#000000' };
+        const bgColor = faseConfig.color || '#64748B'; // Gris por defecto
+        const textColor = faseConfig.color_letra || '#000000'; // Negro por defecto
         
         return (
           <button
@@ -243,13 +245,11 @@ const FaseCell = ({ lead, funnelSteps, noRevisado, coloresFases = {} }) => {
             }}
             disabled={cambiando}
             className={`text-sm px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 font-medium ${
-              cambiando ? 'opacity-50 cursor-wait' : 'hover:opacity-80'
-            } ${noRevisado ? 'ring-2 ring-offset-1' : ''}`}
+              cambiando ? 'opacity-50 cursor-wait' : 'hover:opacity-90'
+            } ${noRevisado ? 'ring-2 ring-offset-1 ring-black' : ''}`}
             style={{ 
-              backgroundColor: `${faseColor}20`, // 20% de opacidad para el fondo
-              color: faseColor,
-              borderColor: faseColor,
-              ...(noRevisado && { ringColor: faseColor })
+              backgroundColor: bgColor,
+              color: textColor
             }}
           >
             {cambiando ? (
@@ -531,7 +531,7 @@ const LeadsTable = ({
                       <div 
                         className="w-1.5 h-10 rounded-full shadow-sm" 
                         style={{ 
-                          backgroundColor: coloresFases[lead.fase_id_pipefy] || '#94A3B8' // Color por defecto gris
+                          backgroundColor: coloresFases[lead.fase_id_pipefy]?.color || '#94A3B8' // Color por defecto gris
                         }} 
                       />
                       <div className="flex flex-col">
