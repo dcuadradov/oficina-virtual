@@ -172,7 +172,7 @@ const statusStyles = {
 };
 
 // Componente para la celda de fase con dropdown
-const FaseCell = ({ lead, funnelSteps, noRevisado }) => {
+const FaseCell = ({ lead, funnelSteps, noRevisado, coloresFases = {} }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [cambiando, setCambiando] = useState(false);
   const [faseLocal, setFaseLocal] = useState(lead.fase_nombre_pipefy);
@@ -231,27 +231,36 @@ const FaseCell = ({ lead, funnelSteps, noRevisado }) => {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        disabled={cambiando}
-        className={`text-sm px-2 py-1 rounded-lg transition-all duration-200 flex items-center gap-1 ${
-          cambiando 
-            ? 'text-slate-400 cursor-wait'
-            : noRevisado 
-              ? 'text-slate-800 font-bold hover:bg-slate-100' 
-              : 'text-slate-600 hover:bg-slate-100'
-        }`}
-      >
-        {cambiando ? (
-          <RotateCcw size={12} className="animate-spin" />
-        ) : (
-          <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        )}
-        {faseLocal || 'Sin etapa'}
-      </button>
+      {(() => {
+        // Obtener el color de la fase actual
+        const faseColor = coloresFases[lead.fase_id_pipefy] || '#64748B'; // Gris por defecto
+        
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
+            disabled={cambiando}
+            className={`text-sm px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 font-medium ${
+              cambiando ? 'opacity-50 cursor-wait' : 'hover:opacity-80'
+            } ${noRevisado ? 'ring-2 ring-offset-1' : ''}`}
+            style={{ 
+              backgroundColor: `${faseColor}20`, // 20% de opacidad para el fondo
+              color: faseColor,
+              borderColor: faseColor,
+              ...(noRevisado && { ringColor: faseColor })
+            }}
+          >
+            {cambiando ? (
+              <RotateCcw size={12} className="animate-spin" />
+            ) : (
+              <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            )}
+            {faseLocal || 'Sin etapa'}
+          </button>
+        );
+      })()}
       
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
@@ -641,7 +650,8 @@ const LeadsTable = ({
                     <FaseCell 
                       lead={lead} 
                       funnelSteps={etapasAUsar} 
-                      noRevisado={noRevisado} 
+                      noRevisado={noRevisado}
+                      coloresFases={coloresFases}
                     />
                   </td>
 
