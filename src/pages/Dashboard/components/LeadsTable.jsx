@@ -246,7 +246,7 @@ const FaseCell = ({ lead, funnelSteps, noRevisado, coloresFases = {} }) => {
             disabled={cambiando}
             className={`text-sm px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 font-medium ${
               cambiando ? 'opacity-50 cursor-wait' : 'hover:opacity-90'
-            } ${noRevisado ? 'ring-2 ring-offset-1 ring-black' : ''}`}
+            }`}
             style={{ 
               backgroundColor: bgColor,
               color: textColor
