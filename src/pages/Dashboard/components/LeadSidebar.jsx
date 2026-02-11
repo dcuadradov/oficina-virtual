@@ -845,7 +845,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     'nombre', 'telefono', 'email', 'ocupacion', 'pais', 'motivacion', 
     'motivacion_detalle', 'nivel_ingles', 'ano_residencia', 'lugar_trabajo',
     'universidad', 'como_adquirio_ingles', 'como_adquirio_ingles_detalle',
-    'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por'
+    'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por',
+    'fuente_dato'
   ];
 
   const handleSaveField = async (fieldName, value) => {
