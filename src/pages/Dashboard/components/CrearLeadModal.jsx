@@ -17,13 +17,15 @@ import { supabase } from '../../../supabaseClient';
 
 /**
  * Parsea las opciones del campo select
- * Formato: "Opción A (1), Opción B (2), Opción C (3)"
+ * Formato: "Opción A (1) | Opción B (2) | Opción C (3)"
+ * Usa | como separador para evitar conflictos con comas en el texto
  * Retorna: [{ value: "Opción A", orden: 1 }, ...]
  */
 const parseOpciones = (opcionesStr) => {
   if (!opcionesStr) return [];
   
-  return opcionesStr.split(',').map(opt => {
+  // Usar | como separador para evitar conflictos con comas en el texto
+  return opcionesStr.split('|').map(opt => {
     const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
     if (match) {
       return { value: match[1].trim(), orden: parseInt(match[2]) };
@@ -34,13 +36,17 @@ const parseOpciones = (opcionesStr) => {
 
 /**
  * Parsea la condición de dependencia
- * Formato: "field_id, valor"
- * Retorna: { fieldId: "field_id", valor: "valor" }
+ * Formato: "nombre_campo | valor"
+ * Usa | como separador para evitar conflictos con comas
+ * Retorna: { fieldId: "nombre_campo", valor: "valor" }
  */
 const parseDependeDe = (dependeDeStr) => {
   if (!dependeDeStr) return null;
-  const [fieldId, valor] = dependeDeStr.split(',').map(s => s.trim());
-  return { fieldId, valor };
+  const parts = dependeDeStr.split('|').map(s => s.trim());
+  if (parts.length >= 2) {
+    return { fieldId: parts[0], valor: parts[1] };
+  }
+  return null;
 };
 
 // Lista de países con códigos telefónicos, banderas y longitudes de número

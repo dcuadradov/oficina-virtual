@@ -290,6 +290,80 @@ const OPCIONES_CONSULTA_DECISION = [
   'No consulta con nadie más'
 ];
 
+/**
+ * Parsea las secciones del formulario
+ * Formato: "Contacto (1) | Ocupación (2) | Motivación (3)"
+ * Retorna: [{ nombre: "Contacto", orden: 1 }, ...]
+ */
+const parseSecciones = (seccionesStr) => {
+  if (!seccionesStr) return [];
+  
+  // Usar | como separador para evitar conflictos con comas en el texto
+  return seccionesStr.split('|').map(sec => {
+    const match = sec.trim().match(/^(.+?)\s*\((\d+)\)$/);
+    if (match) {
+      return { nombre: match[1].trim(), orden: parseInt(match[2]) };
+    }
+    return { nombre: sec.trim(), orden: 999 };
+  }).sort((a, b) => a.orden - b.orden);
+};
+
+/**
+ * Parsea el orden del campo (incluye sección si tiene_secciones = true)
+ * Formato: "SECCIÓN (orden)" o solo "orden"
+ * Retorna: { seccion: "SECCIÓN" | null, orden: number }
+ */
+const parseOrdenField = (ordenStr) => {
+  if (!ordenStr) return { seccion: null, orden: 999 };
+  
+  // Intentar parsear formato "SECCIÓN (orden)"
+  const match = ordenStr.toString().trim().match(/^(.+?)\s*\((\d+)\)$/);
+  if (match) {
+    return { seccion: match[1].trim(), orden: parseInt(match[2]) };
+  }
+  
+  // Si es solo número
+  const numMatch = ordenStr.toString().match(/^\d+$/);
+  if (numMatch) {
+    return { seccion: null, orden: parseInt(ordenStr) };
+  }
+  
+  return { seccion: null, orden: 999 };
+};
+
+/**
+ * Parsea las opciones del campo select
+ * Formato: "Opción A (1) | Opción B (2) | Opción C (3)"
+ * Usa | como separador para evitar conflictos con comas en el texto
+ * Retorna: [{ value: "Opción A", orden: 1 }, ...]
+ */
+const parseOpcionesField = (opcionesStr) => {
+  if (!opcionesStr) return [];
+  
+  // Usar | como separador para evitar conflictos con comas en el texto
+  return opcionesStr.split('|').map(opt => {
+    const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
+    if (match) {
+      return { value: match[1].trim(), orden: parseInt(match[2]) };
+    }
+    return { value: opt.trim(), orden: 999 };
+  }).sort((a, b) => a.orden - b.orden);
+};
+
+/**
+ * Parsea la condición de dependencia
+ * Formato: "nombre_campo | valor"
+ * Usa | como separador para evitar conflictos con comas
+ */
+const parseDependeDeField = (dependeDeStr) => {
+  if (!dependeDeStr) return null;
+  const parts = dependeDeStr.split('|').map(s => s.trim());
+  if (parts.length >= 2) {
+    return { fieldName: parts[0], valor: parts[1] };
+  }
+  return null;
+};
+
 const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
@@ -389,6 +463,15 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [historialFasesExpanded, setHistorialFasesExpanded] = useState({}); // {nombreFase: boolean}
   const [historialFasesPaginacion, setHistorialFasesPaginacion] = useState({}); // {nombreFase: indice}
   
+  // Estados para formulario dinámico de Info General
+  const [infoGeneralFormulario, setInfoGeneralFormulario] = useState(null);
+  const [infoGeneralFields, setInfoGeneralFields] = useState([]);
+  const [infoGeneralSecciones, setInfoGeneralSecciones] = useState([]);
+  const [loadingInfoGeneral, setLoadingInfoGeneral] = useState(false);
+  const [infoGeneralDropdownOpen, setInfoGeneralDropdownOpen] = useState(null);
+  const [infoGeneralSearchQuery, setInfoGeneralSearchQuery] = useState('');
+  const infoGeneralSearchRef = useRef(null);
+  
   // Determinar si mostrar botón de agendar basado en la fase del lead
   const mostrarBotonAgendar = lead?.fase_id_pipefy && FASES_LISTO_AGENDAR.includes(String(lead.fase_id_pipefy));
   
@@ -466,6 +549,86 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       setLocalLeadData({});
     }
   }, [lead?.card_id]);
+
+  // Cargar formulario dinámico de Info General
+  useEffect(() => {
+    const fetchInfoGeneralFormulario = async () => {
+      if (!isOpen) return;
+      
+      setLoadingInfoGeneral(true);
+      try {
+        // Buscar el formulario "Info General" activo
+        const { data: formData, error: formError } = await supabase
+          .from('formularios_creacion_leads')
+          .select('*')
+          .eq('nombre', 'Info General')
+          .eq('estado', 'activo')
+          .single();
+        
+        if (formError || !formData) {
+          console.log('No se encontró formulario Info General dinámico, usando versión estática');
+          setInfoGeneralFormulario(null);
+          setLoadingInfoGeneral(false);
+          return;
+        }
+        
+        setInfoGeneralFormulario(formData);
+        
+        // Parsear secciones si tiene_secciones es true
+        if (formData.tiene_secciones && formData.secciones) {
+          setInfoGeneralSecciones(parseSecciones(formData.secciones));
+        } else {
+          setInfoGeneralSecciones([]);
+        }
+        
+        // Cargar campos del formulario
+        const { data: fieldsData, error: fieldsError } = await supabase
+          .from('fields_formularios_relacion')
+          .select(`
+            orden,
+            field:fields_formulario_creacion_leads (
+              id,
+              nombre,
+              tipo,
+              opciones,
+              obligatorio,
+              tooltip,
+              dinamico,
+              depende_de,
+              estado,
+              campo_origen
+            )
+          `)
+          .eq('formulario_id', formData.id);
+        
+        if (fieldsError) throw fieldsError;
+        
+        // Transformar y ordenar campos
+        const fields = (fieldsData || [])
+          .filter(item => item.field && item.field.estado === 'activo')
+          .map(item => {
+            const ordenInfo = parseOrdenField(item.orden);
+            return {
+              ...item.field,
+              ordenRaw: item.orden,
+              seccion: ordenInfo.seccion,
+              orden: ordenInfo.orden
+            };
+          })
+          .sort((a, b) => a.orden - b.orden);
+        
+        setInfoGeneralFields(fields);
+        
+      } catch (error) {
+        console.error('Error cargando formulario Info General:', error);
+        setInfoGeneralFormulario(null);
+      } finally {
+        setLoadingInfoGeneral(false);
+      }
+    };
+    
+    fetchInfoGeneralFormulario();
+  }, [isOpen, lead?.card_id]);
 
   // Cargar configuración del stepper dinámico
   useEffect(() => {
@@ -1990,8 +2153,230 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 <div className="flex-1 overflow-y-auto">
                   {subActiveTab === 'informacion' && (
                     <div className="space-y-5">
-                      {/* Componente para campo editable de texto - UI mejorada */}
-                      {(() => {
+                      {/* Versión dinámica del formulario Info General */}
+                      {loadingInfoGeneral ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
+                        </div>
+                      ) : infoGeneralFormulario ? (
+                        /* FORMULARIO DINÁMICO */
+                        (() => {
+                          // Obtener valor del campo desde el lead
+                          const getFieldValueDynamic = (field) => {
+                            if (!field.campo_origen) return null;
+                            const [tabla, columna] = field.campo_origen.split(',').map(s => s.trim());
+                            if (tabla === 'leads' && lead) {
+                              return localLeadData[columna] !== undefined ? localLeadData[columna] : lead[columna];
+                            }
+                            return null;
+                          };
+                          
+                          // Verificar si un campo debe mostrarse (dependencias)
+                          const shouldShowField = (field) => {
+                            if (!field.dinamico || !field.depende_de) return true;
+                            const dep = parseDependeDeField(field.depende_de);
+                            if (!dep) return true;
+                            
+                            // Buscar el campo del que depende
+                            const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
+                            if (!parentField) return true;
+                            
+                            const parentValue = getFieldValueDynamic(parentField);
+                            return parentValue === dep.valor;
+                          };
+                          
+                          // Renderizar un campo según su tipo
+                          const renderDynamicField = (field) => {
+                            if (!shouldShowField(field)) return null;
+                            
+                            const value = getFieldValueDynamic(field);
+                            const displayValue = value || 'No disponible';
+                            const isEditing = editingField === field.nombre;
+                            const isSaving = savingField === field.nombre;
+                            const [, columna] = (field.campo_origen || ',').split(',').map(s => s.trim());
+                            
+                            // Campo tipo SELECT
+                            if (field.tipo === 'select' && field.opciones) {
+                              const opciones = parseOpcionesField(field.opciones).map(o => o.value);
+                              const filteredOptions = opciones.filter(opt => 
+                                opt.toLowerCase().includes(infoGeneralSearchQuery.toLowerCase())
+                              );
+                              
+                              if (isEditing) {
+                                return (
+                                  <div key={field.id} className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold">{field.nombre}</p>
+                                      <button
+                                        onClick={cancelEditing}
+                                        className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                    <div className="relative mb-2">
+                                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input
+                                        ref={infoGeneralSearchRef}
+                                        type="text"
+                                        value={infoGeneralSearchQuery}
+                                        onChange={(e) => setInfoGeneralSearchQuery(e.target.value)}
+                                        placeholder="Buscar..."
+                                        className="w-full pl-7 pr-2 py-1.5 text-sm bg-slate-50 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                        autoFocus
+                                      />
+                                    </div>
+                                    <div className="max-h-36 overflow-y-auto rounded-lg bg-slate-50">
+                                      {filteredOptions.length > 0 ? (
+                                        filteredOptions.map((opt) => (
+                                          <button
+                                            key={opt}
+                                            onClick={() => handleSaveField(columna, opt)}
+                                            disabled={isSaving}
+                                            className={`w-full px-2.5 py-1.5 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                              opt === value 
+                                                ? 'bg-[#1717AF] text-white font-medium' 
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                          >
+                                            {opt}
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <p className="px-2.5 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div 
+                                  key={field.id}
+                                  className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200"
+                                  onClick={() => { startEditing(field.nombre, value); setInfoGeneralSearchQuery(''); }}
+                                >
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                      <ClipboardList size={14} className="text-slate-500" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{field.nombre}</p>
+                                      <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                        {displayValue}
+                                      </p>
+                                    </div>
+                                    <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <ChevronDown size={10} />
+                                    </div>
+                                  </div>
+                                  {isSaving && (
+                                    <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                      <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            
+                            // Campo tipo TEXTO
+                            if (isEditing) {
+                              return (
+                                <div key={field.id} className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                  <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold mb-1.5">{field.nombre}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                      placeholder="No disponible"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => handleSaveField(columna, editValue)}
+                                      disabled={isSaving}
+                                      className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 disabled:opacity-50 transition-colors"
+                                    >
+                                      {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    </button>
+                                    <button
+                                      onClick={cancelEditing}
+                                      className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div 
+                                key={field.id}
+                                className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200"
+                                onClick={() => startEditing(field.nombre, value)}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                    <FileText size={14} className="text-slate-500" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{field.nombre}</p>
+                                    <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                      {displayValue}
+                                    </p>
+                                  </div>
+                                  <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Edit2 size={10} />
+                                  </div>
+                                </div>
+                                {isSaving && (
+                                  <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                    <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+                          
+                          // Si tiene secciones, agrupar por sección
+                          if (infoGeneralFormulario.tiene_secciones && infoGeneralSecciones.length > 0) {
+                            return (
+                              <>
+                                {infoGeneralSecciones.map((seccion) => {
+                                  const camposSeccion = infoGeneralFields
+                                    .filter(f => f.seccion === seccion.nombre)
+                                    .sort((a, b) => a.orden - b.orden);
+                                  
+                                  if (camposSeccion.length === 0) return null;
+                                  
+                                  return (
+                                    <div key={seccion.nombre} className="space-y-2">
+                                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                        <ClipboardList size={12} className="text-[#1717AF]" />
+                                        {seccion.nombre}
+                                      </h3>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {camposSeccion.map(field => renderDynamicField(field))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </>
+                            );
+                          }
+                          
+                          // Sin secciones, mostrar todos los campos en orden
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {infoGeneralFields.map(field => renderDynamicField(field))}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                      /* FORMULARIO ESTÁTICO (fallback) */
+                      (() => {
                         const EditableTextField = ({ fieldName, label, icon: Icon, placeholder = 'No especificado', copyable = false }) => {
                           const value = getFieldValue(fieldName);
                           const isEditing = editingField === fieldName;
@@ -2291,7 +2676,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                             </div>
                           </>
                         );
-                      })()}
+                      })()
+                      )}
                     </div>
                   )}
 
