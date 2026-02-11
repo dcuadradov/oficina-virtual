@@ -510,7 +510,7 @@ export default function Dashboard() {
         statsQuery = statsQuery.eq('is_hot', true);
       }
 
-      const { data: statsData, error: statsError } = await statsQuery;
+      const { data: statsData, error: statsError } = await statsQuery.limit(10000);
 
       if (statsError) throw statsError;
 
