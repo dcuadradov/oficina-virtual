@@ -174,6 +174,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
         .select('*')
         .eq('estado', 'activo')
         .eq('modulo', 'comercial')
+        .eq('mostrar_en_creacion', true)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
