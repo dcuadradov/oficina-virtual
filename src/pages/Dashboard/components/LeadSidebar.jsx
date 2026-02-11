@@ -898,7 +898,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                 plan_pago: fieldName === 'plan_pago' ? value : (getFieldValue('plan_pago') || lead.plan_pago),
                 consulta_decision: fieldName === 'consulta_decision' ? value : (getFieldValue('consulta_decision') || lead.consulta_decision),
                 referido_por: fieldName === 'referido_por' ? value : (getFieldValue('referido_por') || lead.referido_por),
-                fuente_dato: lead.fuente_dato || null
+                fuente_dato: fieldName === 'fuente_dato' ? value : (getFieldValue('fuente_dato') || lead.fuente_dato)
               }
             })
           });
