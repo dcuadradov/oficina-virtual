@@ -128,11 +128,16 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDropdown]);
   
-  // Focus en input de búsqueda cuando se abre un dropdown
+  // Focus en input de búsqueda y scroll automático cuando se abre un dropdown
   useEffect(() => {
     if (openDropdown && dropdownSearchRef.current) {
       setTimeout(() => {
         dropdownSearchRef.current?.focus();
+        // Scroll para que el dropdown sea visible
+        const dropdownContainer = dropdownSearchRef.current?.closest('.dropdown-container');
+        if (dropdownContainer) {
+          dropdownContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }, 50);
     }
   }, [openDropdown]);
