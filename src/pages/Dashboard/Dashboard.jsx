@@ -672,7 +672,7 @@ export default function Dashboard() {
       const to = from + LEADS_PER_PAGE - 1;
       
       query = query
-        .order('fecha_asignacion', { ascending: false, nullsFirst: true })
+        .order('updated_at', { ascending: false, nullsFirst: true })
         .range(from, to);
 
       const { data, error, count } = await query;
