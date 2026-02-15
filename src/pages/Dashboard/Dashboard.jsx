@@ -1213,17 +1213,19 @@ export default function Dashboard() {
                 <CalendarDays size={18} />
                 Mis Pitch
               </button>
-              <button
-                onClick={() => setActiveView('metricas')}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
-                  activeView === 'metricas'
-                    ? 'bg-white text-[#1717AF] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <BarChart3 size={18} />
-                Métricas
-              </button>
+              {puedeVerTodos && (
+                <button
+                  onClick={() => setActiveView('metricas')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'metricas'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <BarChart3 size={18} />
+                  Métricas
+                </button>
+              )}
             </div>
 
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
