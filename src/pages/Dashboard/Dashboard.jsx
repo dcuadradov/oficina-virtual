@@ -403,17 +403,17 @@ export default function Dashboard() {
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
       
-      // Config IDs para contar (staging/prod)
+      // Config IDs para contar (prod)
       let configIds = [
-        '7e2037ee-8ec1-4768-839d-bbf30fc925e6', // Nuevo WEB
-        '3ce23f02-5646-4d92-a49a-5d180c112f04'  // Nuevo META 1
+        '514a5826-12c2-4639-924e-9920c4d0e024', // Nuevo WEB
+        'e91b3860-5b8d-4d8a-a470-6e53f695bc36'  // Nuevo META 1
       ];
       
       // Filtrar por tag si está seleccionado
       if (selectedTag === 'Nuevo WEB') {
-        configIds = ['7e2037ee-8ec1-4768-839d-bbf30fc925e6'];
+        configIds = ['514a5826-12c2-4639-924e-9920c4d0e024'];
       } else if (selectedTag === 'Nuevo META 1') {
-        configIds = ['3ce23f02-5646-4d92-a49a-5d180c112f04'];
+        configIds = ['e91b3860-5b8d-4d8a-a470-6e53f695bc36'];
       }
       
       // Query a notificaciones agrupando por comercial_email
