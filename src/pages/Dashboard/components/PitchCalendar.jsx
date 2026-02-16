@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { ChevronLeft, ChevronRight, Calendar, Loader2 } from 'lucide-react';
 
@@ -7,6 +7,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
   const [currentDate, setCurrentDate] = useState(new Date());
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const calendarScrollRef = useRef(null);
 
   // Obtener el inicio de la semana (domingo)
   const getWeekStart = (date) => {
@@ -27,10 +28,13 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     });
   }, [currentDate]);
 
-  // Horas del día (7 AM a 9 PM)
+  // Horas del día (12 AM a 11 PM - 24 horas completas)
   const hours = useMemo(() => {
-    return Array.from({ length: 15 }, (_, i) => i + 7); // 7 a 21
+    return Array.from({ length: 24 }, (_, i) => i); // 0 a 23
   }, []);
+  
+  // Altura de cada slot de hora en píxeles (para calcular scroll)
+  const HOUR_SLOT_HEIGHT = 70;
 
   // Formatear hora
   const formatHour = (hour) => {
@@ -134,6 +138,15 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
 
     fetchPitches();
   }, [currentDate, viewMode, selectedComercial, userEmail]);
+
+  // Auto-scroll a las 7 AM cuando termina de cargar
+  useEffect(() => {
+    if (!loading && calendarScrollRef.current) {
+      // Scroll a la hora 7 (7 AM) - cada hora tiene HOUR_SLOT_HEIGHT px
+      const scrollTo7AM = 7 * HOUR_SLOT_HEIGHT;
+      calendarScrollRef.current.scrollTop = scrollTo7AM;
+    }
+  }, [loading]);
 
   // Extraer fecha/hora sin conversión de zona horaria (soporta formato con T o espacio)
   const parseDateWithoutTimezone = (dateString) => {
@@ -282,7 +295,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
           <Loader2 size={32} className="text-[#1717AF] animate-spin" />
         </div>
       ) : (
-        <div className="overflow-auto max-h-[600px]">
+        <div ref={calendarScrollRef} className="overflow-auto max-h-[600px]">
           {viewMode === 'week' ? (
             /* Vista de semana */
             <div className="min-w-[800px]">
