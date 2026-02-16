@@ -426,11 +426,27 @@ export default function Dashboard() {
       if (fechaInicio && fechaFin) {
         query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       } else {
-        // Por defecto: solo hoy
-        const hoy = new Date();
-        const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString();
-        const finHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1).toISOString();
-        query = query.gte('created_at', inicioHoy).lt('created_at', finHoy);
+        // Por defecto: solo hoy (en zona horaria Colombia UTC-5)
+        // Obtener fecha actual en Colombia
+        const ahora = new Date();
+        const colombiaOffset = -5 * 60; // UTC-5 en minutos
+        const localOffset = ahora.getTimezoneOffset();
+        const diffMinutos = colombiaOffset - (-localOffset);
+        
+        // Ajustar a hora de Colombia
+        const ahoraColombia = new Date(ahora.getTime() + diffMinutos * 60 * 1000);
+        
+        // Inicio del día en Colombia (00:00)
+        const inicioDiaColombia = new Date(ahoraColombia.getFullYear(), ahoraColombia.getMonth(), ahoraColombia.getDate());
+        // Convertir a UTC: sumar 5 horas
+        const inicioHoyUTC = new Date(inicioDiaColombia.getTime() + 5 * 60 * 60 * 1000).toISOString();
+        
+        // Fin del día en Colombia (00:00 del día siguiente)
+        const finDiaColombia = new Date(ahoraColombia.getFullYear(), ahoraColombia.getMonth(), ahoraColombia.getDate() + 1);
+        // Convertir a UTC: sumar 5 horas
+        const finHoyUTC = new Date(finDiaColombia.getTime() + 5 * 60 * 60 * 1000).toISOString();
+        
+        query = query.gte('created_at', inicioHoyUTC).lt('created_at', finHoyUTC);
       }
       
       // Filtrar por comercial si está seleccionado
