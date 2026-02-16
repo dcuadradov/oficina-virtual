@@ -369,27 +369,41 @@ export default function Dashboard() {
     return shortLabels[etapa] || etapa.substring(0, 10);
   };
 
-  // Parsear filtros de fecha
+  // Parsear filtros de fecha (ajustados a zona horaria Colombia UTC-5)
   const parseDateFilters = useCallback(() => {
     let fechaInicio = null;
     let fechaFin = null;
 
     if (selectedDia) {
-      // Día tiene formato: "2025-01-28" - filtrar desde inicio hasta fin del día
-      fechaInicio = `${selectedDia}T00:00:00`;
-      fechaFin = `${selectedDia}T23:59:59`;
+      // Día tiene formato: "2025-01-28"
+      // Convertir a UTC: 00:00 Colombia = 05:00 UTC
+      const [year, month, day] = selectedDia.split('-').map(Number);
+      const mananaDate = new Date(year, month - 1, day + 1);
+      const fechaManana = `${mananaDate.getFullYear()}-${String(mananaDate.getMonth() + 1).padStart(2, '0')}-${String(mananaDate.getDate()).padStart(2, '0')}`;
+      
+      fechaInicio = `${selectedDia} 05:00:00+00`;
+      fechaFin = `${fechaManana} 05:00:00+00`;
     } else if (selectedPeriodo) {
       // Periodo tiene formato: "2025-01-07_2025-01-14"
       const [inicio, fin] = selectedPeriodo.split('_');
-      fechaInicio = inicio;
-      fechaFin = fin;
+      // Convertir a UTC
+      const [yearFin, monthFin, dayFin] = fin.split('-').map(Number);
+      const finMasUno = new Date(yearFin, monthFin - 1, dayFin + 1);
+      const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
+      
+      fechaInicio = `${inicio} 05:00:00+00`;
+      fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
       // Mes tiene formato: "2025-01"
       const [año, mes] = selectedMes.split('-');
-      fechaInicio = `${año}-${mes}-01`;
       // Último día del mes
       const ultimoDia = new Date(parseInt(año), parseInt(mes), 0).getDate();
-      fechaFin = `${año}-${mes}-${ultimoDia}`;
+      // Primer día del mes siguiente
+      const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
+      const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
+      
+      fechaInicio = `${año}-${mes}-01 05:00:00+00`;
+      fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
     }
 
     return { fechaInicio, fechaFin };
@@ -431,14 +445,16 @@ export default function Dashboard() {
         const opcionesFecha = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
         const fechaColombia = new Date().toLocaleDateString('en-CA', opcionesFecha); // formato YYYY-MM-DD
         
-        // Inicio del día en Colombia (00:00 Colombia = 05:00 UTC)
-        const inicioHoyUTC = `${fechaColombia}T05:00:00.000Z`;
+        // Calcular fecha de mañana manualmente
+        const [year, month, day] = fechaColombia.split('-').map(Number);
+        const mananaDate = new Date(year, month - 1, day + 1);
+        const fechaManana = `${mananaDate.getFullYear()}-${String(mananaDate.getMonth() + 1).padStart(2, '0')}-${String(mananaDate.getDate()).padStart(2, '0')}`;
         
-        // Fin del día en Colombia (00:00 del día siguiente Colombia = 05:00 UTC del día siguiente)
-        const manana = new Date(fechaColombia);
-        manana.setDate(manana.getDate() + 1);
-        const fechaManana = manana.toISOString().split('T')[0];
-        const finHoyUTC = `${fechaManana}T05:00:00.000Z`;
+        // Formato compatible con PostgreSQL timestamptz
+        const inicioHoyUTC = `${fechaColombia} 05:00:00+00`;
+        const finHoyUTC = `${fechaManana} 05:00:00+00`;
+        
+        console.log('Filtro métricas - Fecha Colombia:', fechaColombia, '| Rango UTC:', inicioHoyUTC, '-', finHoyUTC);
         
         query = query.gte('created_at', inicioHoyUTC).lt('created_at', finHoyUTC);
       }
