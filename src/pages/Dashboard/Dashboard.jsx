@@ -427,24 +427,18 @@ export default function Dashboard() {
         query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       } else {
         // Por defecto: solo hoy (en zona horaria Colombia UTC-5)
-        // Obtener fecha actual en Colombia
-        const ahora = new Date();
-        const colombiaOffset = -5 * 60; // UTC-5 en minutos
-        const localOffset = ahora.getTimezoneOffset();
-        const diffMinutos = colombiaOffset - (-localOffset);
+        // Obtener fecha actual en formato Colombia
+        const opcionesFecha = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const fechaColombia = new Date().toLocaleDateString('en-CA', opcionesFecha); // formato YYYY-MM-DD
         
-        // Ajustar a hora de Colombia
-        const ahoraColombia = new Date(ahora.getTime() + diffMinutos * 60 * 1000);
+        // Inicio del día en Colombia (00:00 Colombia = 05:00 UTC)
+        const inicioHoyUTC = `${fechaColombia}T05:00:00.000Z`;
         
-        // Inicio del día en Colombia (00:00)
-        const inicioDiaColombia = new Date(ahoraColombia.getFullYear(), ahoraColombia.getMonth(), ahoraColombia.getDate());
-        // Convertir a UTC: sumar 5 horas
-        const inicioHoyUTC = new Date(inicioDiaColombia.getTime() + 5 * 60 * 60 * 1000).toISOString();
-        
-        // Fin del día en Colombia (00:00 del día siguiente)
-        const finDiaColombia = new Date(ahoraColombia.getFullYear(), ahoraColombia.getMonth(), ahoraColombia.getDate() + 1);
-        // Convertir a UTC: sumar 5 horas
-        const finHoyUTC = new Date(finDiaColombia.getTime() + 5 * 60 * 60 * 1000).toISOString();
+        // Fin del día en Colombia (00:00 del día siguiente Colombia = 05:00 UTC del día siguiente)
+        const manana = new Date(fechaColombia);
+        manana.setDate(manana.getDate() + 1);
+        const fechaManana = manana.toISOString().split('T')[0];
+        const finHoyUTC = `${fechaManana}T05:00:00.000Z`;
         
         query = query.gte('created_at', inicioHoyUTC).lt('created_at', finHoyUTC);
       }
