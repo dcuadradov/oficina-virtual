@@ -300,7 +300,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
             /* Vista de semana */
             <div className="min-w-[800px]">
               {/* Header con días */}
-              <div className="grid grid-cols-8 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className="grid grid-cols-8 border-b border-slate-100 sticky top-0 bg-white z-30">
                 <div className="p-3 text-xs font-medium text-slate-400 border-r border-slate-100">
                   GMT-05
                 </div>
