@@ -275,13 +275,14 @@ export default function Dashboard() {
   // Función para cargar lista de comerciales (para reasignación, disponible para todos)
   const fetchComerciales = useCallback(async () => {
     try {
-      // Obtener usuarios del módulo comercial (incluir ultima_conexion)
+      // Obtener usuarios del módulo comercial (incluir ultima_conexion y puede_ver_todos)
       const { data, error } = await supabase
         .from('usuarios')
         .select(`
           email,
           nombre,
           ultima_conexion,
+          puede_ver_todos,
           usuarios_modulos!inner (
             modulo_id
           )

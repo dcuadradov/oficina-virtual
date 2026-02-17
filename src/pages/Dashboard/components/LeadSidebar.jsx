@@ -65,6 +65,53 @@ const calcularTiempoWhatsApp = (timestamp) => {
 };
 
 /**
+ * Determina si un usuario está conectado basado en su última conexión
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {boolean} true si conectado (menos de 2 minutos)
+ */
+const isUserOnline = (ultimaConexion) => {
+  if (!ultimaConexion) return false;
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMinutes = (now - lastConnection) / (1000 * 60);
+  return diffMinutes < 2;
+};
+
+/**
+ * Formatea la última conexión de manera legible
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {string} Texto formateado
+ */
+const formatLastConnection = (ultimaConexion) => {
+  if (!ultimaConexion) return 'Sin datos';
+  
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMs = now - lastConnection;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
+  const remainingMinutes = diffMinutes % 60;
+  
+  if (diffMinutes < 2) {
+    return 'Conectado ahora';
+  }
+  
+  // Formatear tiempo transcurrido
+  let tiempoTranscurrido = '';
+  if (diffDays >= 1) {
+    tiempoTranscurrido = `${diffDays} día${diffDays > 1 ? 's' : ''}, ${remainingHours}h y ${remainingMinutes}min`;
+  } else if (diffHours >= 1) {
+    tiempoTranscurrido = `${diffHours}h y ${remainingMinutes}min`;
+  } else {
+    tiempoTranscurrido = `${diffMinutes}min`;
+  }
+  
+  return `Inactivo. Última conexión hace ${tiempoTranscurrido}`;
+};
+
+/**
  * Mapa de colores para el stepper dinámico (por nombre o hex)
  */
 const STEPPER_COLORS = {
@@ -1875,26 +1922,35 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Reasignar a:</p>
                             </div>
                             {comerciales
-                              .filter(c => c.email !== lead?.comercial_email)
-                              .map((comercial) => (
-                                <button
-                                  key={comercial.email}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setComercialSeleccionado(comercial);
-                                    setMostrarModalReasignar(true);
-                                  }}
-                                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 ${
-                                    comercialSeleccionado?.email === comercial.email
-                                      ? 'bg-[#1717AF]/10 text-[#1717AF]'
-                                      : 'text-slate-600'
-                                  }`}
-                                >
-                                  <div className="font-medium">{comercial.nombre}</div>
-                                  <div className="text-xs text-slate-400 truncate">{comercial.email}</div>
-                                </button>
-                              ))}
-                            {comerciales.filter(c => c.email !== lead?.comercial_email).length === 0 && (
+                              .filter(c => c.email !== lead?.comercial_email && c.puede_ver_todos !== true)
+                              .map((comercial) => {
+                                const online = isUserOnline(comercial.ultima_conexion);
+                                const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                                return (
+                                  <button
+                                    key={comercial.email}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setComercialSeleccionado(comercial);
+                                      setMostrarModalReasignar(true);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 ${
+                                      comercialSeleccionado?.email === comercial.email
+                                        ? 'bg-[#1717AF]/10 text-[#1717AF]'
+                                        : 'text-slate-600'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                      <span className="font-medium">{comercial.nombre}</span>
+                                    </div>
+                                    <div className={`text-xs ml-4 ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                      {connectionStatus}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            {comerciales.filter(c => c.email !== lead?.comercial_email && c.puede_ver_todos !== true).length === 0 && (
                               <p className="px-4 py-3 text-sm text-slate-400 text-center">No hay otros comerciales disponibles</p>
                             )}
                           </div>
