@@ -575,6 +575,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   useEffect(() => {
     if (lead) {
       setLocalLeadData({});
+      // Cancelar cualquier edición pendiente al cambiar de lead
+      setEditingField(null);
+      setEditValue('');
+      setSavingField(null);
+      setSearchSelectQuery('');
     }
   }, [lead?.card_id]);
 
@@ -1749,6 +1754,11 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
+      // Cancelar cualquier edición pendiente al cerrar el sidebar
+      setEditingField(null);
+      setEditValue('');
+      setSavingField(null);
+      setSearchSelectQuery('');
     }
     
     return () => {
@@ -1757,6 +1767,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   }, [isOpen, lead]);
 
   const handleClose = () => {
+    // Cancelar cualquier edición pendiente antes de cerrar
+    setEditingField(null);
+    setEditValue('');
+    setSavingField(null);
+    setSearchSelectQuery('');
+    
     setIsAnimating(false);
     setTimeout(onClose, 300); // Esperar a que termine la animación
   };
