@@ -1922,10 +1922,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Reasignar a:</p>
                             </div>
                             {comerciales
-                              .filter(c => c.email !== lead?.comercial_email && c.puede_ver_todos !== true)
+                              .filter(c => c.email !== lead?.comercial_email)
                               .map((comercial) => {
-                                const online = isUserOnline(comercial.ultima_conexion);
-                                const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                                // Solo mostrar indicador de conexión para comerciales (puede_ver_todos = false)
+                                const mostrarConexion = comercial.puede_ver_todos !== true;
+                                const online = mostrarConexion ? isUserOnline(comercial.ultima_conexion) : false;
+                                const connectionStatus = mostrarConexion ? formatLastConnection(comercial.ultima_conexion) : null;
+                                
                                 return (
                                   <button
                                     key={comercial.email}
@@ -1940,17 +1943,26 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                                         : 'text-slate-600'
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                      <span className="font-medium">{comercial.nombre}</span>
-                                    </div>
-                                    <div className={`text-xs ml-4 ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                      {connectionStatus}
-                                    </div>
+                                    {mostrarConexion ? (
+                                      <>
+                                        <div className="flex items-center gap-2">
+                                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                          <span className="font-medium">{comercial.nombre}</span>
+                                        </div>
+                                        <div className={`text-xs ml-4 ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                          {connectionStatus}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="font-medium">{comercial.nombre}</div>
+                                        <div className="text-xs text-slate-400 truncate">{comercial.email}</div>
+                                      </>
+                                    )}
                                   </button>
                                 );
                               })}
-                            {comerciales.filter(c => c.email !== lead?.comercial_email && c.puede_ver_todos !== true).length === 0 && (
+                            {comerciales.filter(c => c.email !== lead?.comercial_email).length === 0 && (
                               <p className="px-4 py-3 text-sm text-slate-400 text-center">No hay otros comerciales disponibles</p>
                             )}
                           </div>
