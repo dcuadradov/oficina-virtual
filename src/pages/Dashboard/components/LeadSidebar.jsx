@@ -9,6 +9,7 @@ import {
   Star,
   Sparkles,
   MessageCircle,
+  MessageCirclePlus,
   ClipboardList,
   Clock,
   FileText,
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
+import CrearRespondModal from './CrearRespondModal';
 
 /**
  * Calcula las horas restantes de la ventana de 24h de WhatsApp
@@ -115,8 +117,11 @@ const parsearFases = (fasesString) => {
 
 /**
  * Componente botón de WhatsApp con contador de ventana 24h
+ * @param {object} lead - Datos del lead
+ * @param {number} size - Tamaño del ícono
+ * @param {function} onCrearRespond - Callback para abrir modal de crear en Respond
  */
-const WhatsAppButtonSidebar = ({ lead, size = 20 }) => {
+const WhatsAppButtonSidebar = ({ lead, size = 20, onCrearRespond }) => {
   const [tiempoWhatsApp, setTiempoWhatsApp] = useState(() => 
     calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp)
   );
@@ -137,29 +142,37 @@ const WhatsAppButtonSidebar = ({ lead, size = 20 }) => {
   const { horasRestantes, activo } = tiempoWhatsApp;
   const mostrarContador = horasRestantes !== null;
 
+  // Si no tiene URL, mostrar botón para crear en Respond
+  if (!tieneUrl) {
+    return (
+      <button
+        onClick={() => onCrearRespond?.(lead)}
+        className="relative p-2.5 rounded-xl transition-all duration-200 text-[#1717AF] bg-[#1717AF]/10 hover:bg-[#1717AF]/20"
+        title="Crear en Respond.io"
+      >
+        <MessageCirclePlus size={size} />
+      </button>
+    );
+  }
+
   return (
     <button
-      onClick={() => tieneUrl && window.open(lead.respond_io_url, '_blank')}
-      disabled={!tieneUrl}
+      onClick={() => window.open(lead.respond_io_url, '_blank')}
       className={`relative p-2.5 rounded-xl transition-all duration-200 ${
-        tieneUrl 
-          ? activo
-            ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-            : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-          : 'text-slate-300 bg-slate-50 cursor-not-allowed'
+        activo
+          ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+          : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
       }`}
       title={
-        !tieneUrl 
-          ? "Sin conversación disponible" 
-          : activo 
-            ? `Ventana activa: ${horasRestantes}h restantes` 
-            : "Ventana de 24h expirada"
+        activo 
+          ? `Ventana activa: ${horasRestantes}h restantes` 
+          : "Ventana de 24h expirada"
       }
     >
       <MessageCircle size={size} />
       
       {/* Badge contador */}
-      {mostrarContador && tieneUrl && (
+      {mostrarContador && (
         <span 
           className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
             activo 
@@ -424,6 +437,21 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   
   // Estados para lead HOT 🔥
   const [isHot, setIsHot] = useState(false);
+  
+  // Estados para modal de Crear en Respond
+  const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
+  
+  // Handler para abrir modal de Crear en Respond
+  const handleCrearRespond = () => {
+    setCrearRespondModalOpen(true);
+  };
+  
+  // Handler para éxito al crear en Respond
+  const handleRespondSuccess = (respondIoUrl, telefono) => {
+    setCrearRespondModalOpen(false);
+    // Refrescar datos para actualizar el UI
+    onRefreshData?.();
+  };
   const [togglingHot, setTogglingHot] = useState(false);
   
   // Estados para reasignación de comercial 👥
@@ -1963,7 +1991,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                   )}
                   
                   {/* WhatsApp con contador de ventana 24h */}
-                  <WhatsAppButtonSidebar lead={lead} size={18} />
+                  <WhatsAppButtonSidebar lead={lead} size={18} onCrearRespond={handleCrearRespond} />
                 </div>
                 
                 {/* Botón cerrar - siempre visible */}
@@ -3927,6 +3955,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
           </div>
         </div>
       )}
+      
+      {/* Modal para crear lead en Respond.io */}
+      <CrearRespondModal
+        isOpen={crearRespondModalOpen}
+        onClose={() => setCrearRespondModalOpen(false)}
+        lead={lead}
+        onSuccess={handleRespondSuccess}
+      />
     </>
   );
 };

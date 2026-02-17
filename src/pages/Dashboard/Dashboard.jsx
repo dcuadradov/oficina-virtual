@@ -1233,6 +1233,12 @@ export default function Dashboard() {
                   onFiltroHotChange={setFiltroHot}
                   configTags={configTags}
                   coloresFases={coloresFases}
+                  onRefreshData={() => {
+                    fetchStats();
+                    fetchVentanasAbiertas();
+                    fetchNuevosLeads();
+                    fetchLeads(true, currentPage);
+                  }}
                 />
               </>
             ) : activeView === 'pitch' ? (

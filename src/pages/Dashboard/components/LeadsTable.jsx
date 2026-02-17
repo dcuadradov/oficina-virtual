@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag } from 'lucide-react';
+import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
+import CrearRespondModal from './CrearRespondModal';
 
 /**
  * Calcula las horas restantes de la ventana de 24h de WhatsApp
@@ -25,8 +26,11 @@ const calcularTiempoWhatsApp = (timestamp) => {
 
 /**
  * Componente botón de WhatsApp con contador de ventana 24h
+ * @param {object} lead - Datos del lead
+ * @param {number} size - Tamaño del ícono
+ * @param {function} onCrearRespond - Callback para abrir modal de crear en Respond
  */
-const WhatsAppButton = ({ lead, size = 18 }) => {
+const WhatsAppButton = ({ lead, size = 18, onCrearRespond }) => {
   const [tiempoWhatsApp, setTiempoWhatsApp] = useState(() => 
     calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp)
   );
@@ -47,34 +51,43 @@ const WhatsAppButton = ({ lead, size = 18 }) => {
   const { horasRestantes, activo } = tiempoWhatsApp;
   const mostrarContador = horasRestantes !== null;
 
+  // Si no tiene URL, mostrar botón para crear en Respond
+  if (!tieneUrl) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onCrearRespond?.(lead);
+        }}
+        className="relative p-2.5 rounded-xl transition-all duration-200 text-[#1717AF] hover:bg-[#1717AF]/10 hover:scale-110 cursor-pointer"
+        title="Crear en Respond.io"
+      >
+        <MessageCirclePlus size={size} strokeWidth={2} />
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
-        if (tieneUrl) {
-          window.open(lead.respond_io_url, '_blank');
-        }
+        window.open(lead.respond_io_url, '_blank');
       }}
-      disabled={!tieneUrl}
       className={`relative p-2.5 rounded-xl transition-all duration-200 ${
-        tieneUrl 
-          ? activo
-            ? 'text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
-            : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
-          : 'text-slate-200 cursor-not-allowed'
+        activo
+          ? 'text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
+          : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 hover:scale-110 cursor-pointer'
       }`}
       title={
-        !tieneUrl 
-          ? "Sin conversación disponible" 
-          : activo 
-            ? `Ventana activa: ${horasRestantes}h restantes` 
-            : "Ventana de 24h expirada"
+        activo 
+          ? `Ventana activa: ${horasRestantes}h restantes` 
+          : "Ventana de 24h expirada"
       }
     >
       <MessageCircle size={size} strokeWidth={2} />
       
       {/* Badge contador */}
-      {mostrarContador && tieneUrl && (
+      {mostrarContador && (
         <span 
           className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
             activo 
@@ -329,7 +342,9 @@ const LeadsTable = ({
   // Configuración de colores de tags
   configTags = {},
   // Colores de las fases para indicador visual
-  coloresFases = {}
+  coloresFases = {},
+  // Callback para refrescar datos después de acciones
+  onRefreshData
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -346,6 +361,24 @@ const LeadsTable = ({
   const [filtroHotLocal, setFiltroHotLocal] = useState(false);
   const filtroHot = filtroHotProp !== undefined ? filtroHotProp : filtroHotLocal;
   const setFiltroHot = onFiltroHotChange || setFiltroHotLocal;
+  
+  // Estado para modal de Crear en Respond
+  const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
+  const [leadParaRespond, setLeadParaRespond] = useState(null);
+  
+  // Handler para abrir modal de Crear en Respond
+  const handleCrearRespond = (lead) => {
+    setLeadParaRespond(lead);
+    setCrearRespondModalOpen(true);
+  };
+  
+  // Handler para éxito al crear en Respond (actualiza el lead en la lista)
+  const handleRespondSuccess = (respondIoUrl, telefono) => {
+    setCrearRespondModalOpen(false);
+    setLeadParaRespond(null);
+    // Refrescar datos para actualizar el UI
+    onRefreshData?.();
+  };
   
   // Toggle del filtro WhatsApp (click en el mismo lo desactiva)
   const handleFiltroWhatsApp = (filtro) => {
@@ -659,7 +692,7 @@ const LeadsTable = ({
                   <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       {/* WhatsApp con contador de ventana 24h */}
-                      <WhatsAppButton lead={lead} size={18} />
+                      <WhatsAppButton lead={lead} size={18} onCrearRespond={handleCrearRespond} />
 
                       {/* Marcar como pendiente */}
                       {onMarcarNoRevisado && (
@@ -770,6 +803,16 @@ const LeadsTable = ({
         </div>
       )}
       
+      {/* Modal para crear lead en Respond.io */}
+      <CrearRespondModal
+        isOpen={crearRespondModalOpen}
+        onClose={() => {
+          setCrearRespondModalOpen(false);
+          setLeadParaRespond(null);
+        }}
+        lead={leadParaRespond}
+        onSuccess={handleRespondSuccess}
+      />
     </div>
   );
 };
