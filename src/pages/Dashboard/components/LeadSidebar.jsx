@@ -3120,23 +3120,23 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               return (
                 <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
                   {/* Sub-tabs */}
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
                     <button
                       onClick={() => setSubTabRecordatorio('programar')}
-                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                         subTabRecordatorio === 'programar'
-                          ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
                       Programar
                     </button>
                     <button
                       onClick={() => setSubTabRecordatorio('historial')}
-                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                         subTabRecordatorio === 'historial'
-                          ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
                       Historial
