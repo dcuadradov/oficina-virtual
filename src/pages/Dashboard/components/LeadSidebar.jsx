@@ -428,11 +428,39 @@ const parseDependeDeField = (dependeDeStr) => {
   return null;
 };
 
-const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
+const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  
+  // Estado local del lead para actualizaciones en tiempo real
+  const [leadLocal, setLeadLocal] = useState(null);
+  const lead = leadLocal || leadProp;
+  
+  // Sincronizar lead local cuando cambia el prop
+  useEffect(() => {
+    setLeadLocal(leadProp);
+  }, [leadProp?.card_id]);
+  
+  // Función para refrescar datos del lead desde la base de datos
+  const refreshLeadData = useCallback(async () => {
+    if (!leadProp?.card_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('card_id', leadProp.card_id)
+        .single();
+      
+      if (!error && data) {
+        setLeadLocal(data);
+      }
+    } catch (err) {
+      console.error('Error refrescando lead:', err);
+    }
+  }, [leadProp?.card_id]);
   
   // Usar etapas de la BD o fallback al default
   const etapasFromProp = etapasFunnel?.etapas || [];
@@ -554,7 +582,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [loadingConfigTici, setLoadingConfigTici] = useState(false);
   const [posponiendo, setPosponiendo] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [tiempoRestante, setTiempoRestante] = useState({ dias: 0, horas: 0, minutos: 0 });
+  const [tiempoRestante, setTiempoRestante] = useState({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
+  
+  // Estados para historial TICI
+  const [historialTici, setHistorialTici] = useState({}); // { fase_id: [records] }
+  const [loadingHistorialTici, setLoadingHistorialTici] = useState(false);
+  const [acordeonTiciAbierto, setAcordeonTiciAbierto] = useState(null); // fase_id abierta
+  const [indiceTiciPorFase, setIndiceTiciPorFase] = useState({}); // { fase_id: indice_actual }
+  const [previewHistorialTici, setPreviewHistorialTici] = useState(null); // registro para previsualizar
   const [infoGeneralDropdownOpen, setInfoGeneralDropdownOpen] = useState(null);
   const [infoGeneralSearchQuery, setInfoGeneralSearchQuery] = useState('');
   const infoGeneralSearchRef = useRef(null);
@@ -1582,18 +1617,70 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     }
   }, [lead?.card_id, lead?.numero_de_recordatorio_automatico, lead?.fase_nombre_pipefy]);
 
+  // Cargar historial de recordatorios automáticos (TICI)
+  const fetchHistorialTici = useCallback(async () => {
+    if (!lead?.card_id) return;
+    
+    try {
+      setLoadingHistorialTici(true);
+      
+      const { data, error } = await supabase
+        .from('recordatorios_automaticos')
+        .select('*')
+        .eq('card_id', lead.card_id)
+        .order('numero', { ascending: true });
+      
+      if (error) {
+        console.error('Error cargando historial TICI:', error);
+        setHistorialTici({});
+        return;
+      }
+      
+      // Agrupar por fase (nombre) - incluir TODAS las fases que tengan registros
+      const agrupado = {};
+      (data || []).forEach(r => {
+        const faseKey = r.fase || 'Sin fase';
+        if (!agrupado[faseKey]) {
+          agrupado[faseKey] = [];
+        }
+        agrupado[faseKey].push(r);
+      });
+      
+      // Ordenar registros dentro de cada fase por numero
+      Object.keys(agrupado).forEach(fase => {
+        agrupado[fase].sort((a, b) => (a.numero || 0) - (b.numero || 0));
+      });
+      
+      setHistorialTici(agrupado);
+      
+      // Inicializar índices en 0 para cada fase
+      const indices = {};
+      Object.keys(agrupado).forEach(fase => {
+        indices[fase] = 0;
+      });
+      setIndiceTiciPorFase(indices);
+      
+    } catch (error) {
+      console.error('Error en fetchHistorialTici:', error);
+      setHistorialTici({});
+    } finally {
+      setLoadingHistorialTici(false);
+    }
+  }, [lead?.card_id]);
+
   // Cargar datos de TICI cuando se abre el tab
   useEffect(() => {
     if (isOpen && lead?.card_id && activeTab === 'tici') {
       fetchConfigRecordatorioAuto();
+      fetchHistorialTici();
       setSubTabTici('programado');
     }
-  }, [isOpen, lead?.card_id, activeTab, fetchConfigRecordatorioAuto]);
+  }, [isOpen, lead?.card_id, activeTab, fetchConfigRecordatorioAuto, fetchHistorialTici]);
 
   // Countdown en tiempo real para recordatorio automático
   useEffect(() => {
     if (!lead?.fecha_recordatorio_automatico || activeTab !== 'tici') {
-      setTiempoRestante({ dias: 0, horas: 0, minutos: 0 });
+      setTiempoRestante({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
       return;
     }
 
@@ -1603,15 +1690,16 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       const diffMs = fechaRecordatorio - ahora;
       
       if (diffMs <= 0) {
-        setTiempoRestante({ dias: 0, horas: 0, minutos: 0 });
+        setTiempoRestante({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
         return;
       }
       
       const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       const horas = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const segundos = Math.floor((diffMs % (1000 * 60)) / 1000);
       
-      setTiempoRestante({ dias, horas, minutos });
+      setTiempoRestante({ dias, horas, minutos, segundos });
     };
 
     calcularTiempoRestante();
@@ -1634,7 +1722,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         telefono: lead.telefono,
         card_id: lead.card_id,
         nombre: lead.nombre,
-        fase_nombre_pipefy: lead.fase_nombre_pipefy
+        fase_nombre_pipefy: lead.fase_nombre_pipefy,
+        fecha_recordatorio_automatico: lead.fecha_recordatorio_automatico
       };
       
       const response = await fetch('https://api.mdenglish.us/webhook/posponer_recordatorio_automatico', {
@@ -1647,11 +1736,28 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         throw new Error('Error al posponer recordatorio');
       }
       
-      // Refrescar datos del lead para mostrar la nueva fecha
-      onRefreshData?.();
+      // Esperar y parsear la respuesta del webhook
+      const result = await response.json();
+      
+      // Verificar que el webhook respondió correctamente
+      if (result?.result === 'ok') {
+        // Refrescar datos del lead directamente desde la base de datos
+        await refreshLeadData();
+        // También refrescar la configuración del recordatorio
+        fetchConfigRecordatorioAuto();
+        // Refrescar datos del dashboard en background
+        onRefreshData?.();
+        // Mostrar toast de éxito
+        setToastMessage('Recordatorio pospuesto exitosamente');
+        setTimeout(() => setToastMessage(null), 3000);
+      } else {
+        throw new Error('Respuesta inesperada del webhook');
+      }
       
     } catch (error) {
       console.error('Error posponiendo recordatorio:', error);
+      setToastMessage('Error al posponer el recordatorio');
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setPosponiendo(false);
     }
@@ -1805,7 +1911,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
         .eq('card_id', lead.card_id)
         .select();
       
-      console.log('Update lead resultado:', { dataLead, errorLead, card_id: lead.card_id });
       
       if (errorLead) {
         console.error('Error actualizando lead:', errorLead);
@@ -1910,10 +2015,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     });
   };
 
+  // Efecto para manejar apertura/cierre del sidebar
   useEffect(() => {
     if (isOpen) {
       setIsAnimating(true);
-      setActiveTab(initialTab); // Usar el tab inicial pasado como prop
       // Prevenir scroll del body cuando el sidebar está abierto
       document.body.style.overflow = 'hidden';
     } else {
@@ -1928,7 +2033,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, lead]);
+  }, [isOpen]);
+  
+  // Efecto separado para resetear el tab solo cuando cambia el lead (card_id diferente)
+  useEffect(() => {
+    if (isOpen && leadProp?.card_id) {
+      setActiveTab(initialTab);
+    }
+  }, [leadProp?.card_id, isOpen, initialTab]);
 
   const handleClose = () => {
     // Cancelar cualquier edición pendiente antes de cerrar
@@ -3966,11 +4078,12 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
               // Formatear countdown
               const formatearCountdown = () => {
-                const { dias, horas, minutos } = tiempoRestante;
+                const { dias, horas, minutos, segundos } = tiempoRestante;
                 const partes = [];
                 if (dias > 0) partes.push(`${dias} ${dias === 1 ? 'día' : 'días'}`);
                 if (horas > 0) partes.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
-                if (minutos > 0 || partes.length === 0) partes.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+                if (minutos > 0) partes.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+                partes.push(`${segundos} ${segundos === 1 ? 'segundo' : 'segundos'}`);
                 return partes.join(', ');
               };
 
@@ -4039,13 +4152,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                       ) : (
                         // Estado 3: Con recordatorio programado
                         <div className="space-y-4">
-                          {/* Header */}
-                          <div className="text-center pb-3 border-b border-slate-100">
-                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                              Próximo recordatorio automático
-                            </p>
-                          </div>
-
                           {/* Card principal */}
                           <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-5 space-y-4">
                             {/* Título y previsualizar */}
@@ -4062,7 +4168,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               {/* Botón Previsualizar */}
                               <button
                                 onClick={() => {
-                                  console.log('Preview config:', configRecordatorioAuto);
                                   setShowPreviewModal(true);
                                 }}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#1717AF] hover:bg-[#1717AF]/5 rounded-lg transition-colors"
@@ -4092,27 +4197,56 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               </div>
                             </div>
 
-                            {/* Información del tiempo de programación - solo para recordatorio #1 */}
-                            {lead?.numero_de_recordatorio_automatico === 1 && (
-                              <div className="text-sm text-slate-600 leading-relaxed">
-                                <p>
-                                  Este recordatorio se programó{' '}
+                            {/* Información detallada del recordatorio */}
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                              {/* Regla */}
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Regla</p>
+                                <p className="text-sm text-slate-700 leading-relaxed">
+                                  {lead?.numero_de_recordatorio_automatico === 1 ? (
+                                    <>
+                                      Este recordatorio automático se programó{' '}
+                                      <span className="font-semibold text-slate-800">
+                                        {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                      </span>{' '}
+                                      después de que el lead entró en la fase{' '}
+                                      <span className="font-semibold text-slate-800">"{lead?.fase_nombre_pipefy}"</span>.
+                                    </>
+                                  ) : (
+                                    <>
+                                      Este recordatorio automático se programó{' '}
+                                      <span className="font-semibold text-slate-800">
+                                        {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                      </span>{' '}
+                                      después de que se envió el recordatorio{' '}
+                                      <span className="font-semibold text-slate-800">#{lead?.numero_de_recordatorio_automatico - 1}</span>.
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+                              
+                              {/* WhatsApp */}
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">No te preocupes</p>
+                                <p className="text-sm text-slate-700 leading-relaxed">
+                                  Si el lead te escribe por WhatsApp antes de que se cumpla el recordatorio, este se reprograma automáticamente{' '}
                                   <span className="font-semibold text-slate-800">
                                     {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
                                   </span>{' '}
-                                  después de que el lead entró en la etapa{' '}
-                                  <span className="font-semibold text-slate-800">{lead?.fase_nombre_pipefy}</span>.
+                                  después de su último mensaje.
                                 </p>
                               </div>
-                            )}
+                            </div>
 
-                            {/* Información de posponer */}
+                            {/* Importante - Posponer */}
                             <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
-                              <p className="text-sm text-amber-800">
-                                Si el lead te contestó por teléfono, selecciona "Posponer", y el recordatorio se extenderá{' '}
+                              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">Importante</p>
+                              <p className="text-sm text-amber-800 leading-relaxed">
+                                Si logras contactarlo por otro medio, selecciona "Posponer" y el recordatorio se moverá{' '}
                                 <span className="font-semibold">
                                   {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
-                                </span>.
+                                </span>{' '}
+                                desde el momento en que lo indiques.
                               </p>
                             </div>
 
@@ -4140,18 +4274,192 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                     </div>
                   )}
 
-                  {/* Contenido de Historial - placeholder */}
+                  {/* Contenido de Historial TICI */}
                   {subTabTici === 'historial' && (
                     <div className="flex-1 overflow-y-auto">
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                          <History size={28} className="text-slate-400" />
+                      {loadingHistorialTici ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
                         </div>
-                        <h3 className="text-lg font-semibold text-slate-700 mb-2">Próximamente</h3>
-                        <p className="text-sm text-slate-400">
-                          El historial de recordatorios automáticos estará disponible pronto.
-                        </p>
-                      </div>
+                      ) : Object.values(historialTici).every(arr => arr.length === 0) ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                            <History size={28} className="text-slate-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin historial</h3>
+                          <p className="text-sm text-slate-400">
+                            No hay recordatorios automáticos enviados para este lead.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(() => {
+                            // Orden específico de fases para el historial
+                            const ordenFases = {
+                              'Sin contacto': 1,
+                              'Gestionando': 2,
+                              'Pendiente de agenda': 3
+                            };
+                            
+                            return Object.keys(historialTici)
+                              .filter(fase => historialTici[fase].length > 0)
+                              .sort((a, b) => {
+                                const ordenA = ordenFases[a] || 999;
+                                const ordenB = ordenFases[b] || 999;
+                                return ordenA - ordenB;
+                              });
+                          })().map(fase => {
+                            const registros = historialTici[fase] || [];
+                            const estaAbierto = acordeonTiciAbierto === fase;
+                            const indiceActual = indiceTiciPorFase[fase] || 0;
+                            const registroActual = registros[indiceActual];
+                            const faseName = fase;
+                            
+                            return (
+                              <div key={fase} className="border border-slate-200 rounded-xl overflow-hidden">
+                                {/* Header del acordeón */}
+                                <button
+                                  onClick={() => setAcordeonTiciAbierto(estaAbierto ? null : fase)}
+                                  className={`w-full px-4 py-3 flex items-center justify-between transition-colors ${
+                                    estaAbierto ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-slate-700">{faseName}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      registros.length > 0 ? 'bg-[#1717AF]/10 text-[#1717AF]' : 'bg-slate-100 text-slate-400'
+                                    }`}>
+                                      {registros.length} {registros.length === 1 ? 'enviado' : 'enviados'}
+                                    </span>
+                                  </div>
+                                  <ChevronDown 
+                                    size={18} 
+                                    className={`text-slate-400 transition-transform ${estaAbierto ? 'rotate-180' : ''}`} 
+                                  />
+                                </button>
+                                
+                                {/* Contenido del acordeón */}
+                                {estaAbierto && registros.length > 0 && (
+                                  <div className="p-4 border-t border-slate-100 bg-white">
+                                    {/* Navegación horizontal */}
+                                    {registros.length > 1 && (
+                                      <div className="flex items-center justify-between mb-4">
+                                        <button
+                                          onClick={() => setIndiceTiciPorFase(prev => ({
+                                            ...prev,
+                                            [fase]: Math.max(0, indiceActual - 1)
+                                          }))}
+                                          disabled={indiceActual === 0}
+                                          className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <ChevronLeft size={18} className="text-slate-600" />
+                                        </button>
+                                        <span className="text-xs text-slate-500">
+                                          {indiceActual + 1} de {registros.length}
+                                        </span>
+                                        <button
+                                          onClick={() => setIndiceTiciPorFase(prev => ({
+                                            ...prev,
+                                            [fase]: Math.min(registros.length - 1, indiceActual + 1)
+                                          }))}
+                                          disabled={indiceActual === registros.length - 1}
+                                          className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <ChevronRight size={18} className="text-slate-600" />
+                                        </button>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Card del registro */}
+                                    <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 p-4 space-y-3">
+                                      {/* Header con número y etapa */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-lg bg-[#1717AF]/10 flex items-center justify-center">
+                                            <Sparkles size={16} className="text-[#1717AF]" />
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-semibold text-slate-800">
+                                              Recordatorio automático #{registroActual?.numero}
+                                            </p>
+                                            <p className="text-xs text-slate-500">
+                                              Etapa: {registroActual?.fase}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Fecha de envío */}
+                                      <div className="bg-white rounded-lg p-3 border border-slate-100">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <CalendarDays size={14} className="text-green-600" />
+                                          <span className="text-xs font-medium text-slate-600">Se envió el</span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                          {(() => {
+                                            if (!registroActual?.created_at) return 'Fecha no disponible';
+                                            const fecha = new Date(registroActual.created_at);
+                                            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                                            const dia = fecha.getDate();
+                                            const mes = meses[fecha.getMonth()];
+                                            const año = fecha.getFullYear();
+                                            let horas = fecha.getHours();
+                                            const minutos = fecha.getMinutes().toString().padStart(2, '0');
+                                            const ampm = horas >= 12 ? 'PM' : 'AM';
+                                            horas = horas % 12 || 12;
+                                            return `${dia} de ${mes} de ${año} a las ${horas}:${minutos} ${ampm}`;
+                                          })()}
+                                        </p>
+                                      </div>
+                                      
+                                      {/* Regla */}
+                                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Regla</p>
+                                        <p className="text-sm text-slate-700 leading-relaxed">
+                                          {registroActual?.numero === 1 ? (
+                                            <>
+                                              Este recordatorio automático se programó{' '}
+                                              <span className="font-semibold text-slate-800">
+                                                {formatearTiempoActivacion(registroActual?.tiempo_activacion)}
+                                              </span>{' '}
+                                              después de que el lead entró en la fase{' '}
+                                              <span className="font-semibold text-slate-800">"{registroActual?.fase}"</span>.
+                                            </>
+                                          ) : (
+                                            <>
+                                              Este recordatorio automático se programó{' '}
+                                              <span className="font-semibold text-slate-800">
+                                                {formatearTiempoActivacion(registroActual?.tiempo_activacion)}
+                                              </span>{' '}
+                                              después de que se envió el recordatorio{' '}
+                                              <span className="font-semibold text-slate-800">#{registroActual?.numero - 1}</span>.
+                                            </>
+                                          )}
+                                        </p>
+                                      </div>
+                                      
+                                      {/* Botón Previsualizar */}
+                                      {registroActual?.preview && (
+                                        <button
+                                          onClick={() => setPreviewHistorialTici(registroActual)}
+                                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors text-sm font-medium"
+                                        >
+                                          {registroActual?.template?.startsWith('Correo') ? (
+                                            <Mail size={16} />
+                                          ) : (
+                                            <MessageCircle size={16} />
+                                          )}
+                                          Previsualizar
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4169,8 +4477,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
             onClick={() => setShowPreviewModal(false)}
           />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-lg max-h-[80vh]">
-            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[80vh]">
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-h-[85vh] ${
+            configRecordatorioAuto.template?.startsWith('Correo') ? 'max-w-3xl' : 'max-w-lg'
+          }`}>
+            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh]">
               {/* Header */}
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -4200,9 +4510,37 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               <div className="flex-1 overflow-y-auto p-6">
                 {configRecordatorioAuto.template?.startsWith('Correo') ? (
                   <div 
-                    className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: configRecordatorioAuto.preview || '<p>Sin contenido disponible</p>' }}
-                  />
+                    className="email-preview-container"
+                    style={{
+                      maxWidth: '100%',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <style>
+                      {`
+                        .email-preview-container table {
+                          max-width: 100% !important;
+                          width: 100% !important;
+                        }
+                        .email-preview-container img {
+                          max-width: 100% !important;
+                          height: auto !important;
+                        }
+                        .email-preview-container td,
+                        .email-preview-container th {
+                          word-break: break-word !important;
+                        }
+                        .email-preview-container .r0-o,
+                        .email-preview-container [class*="r0-o"] {
+                          width: 100% !important;
+                          max-width: 100% !important;
+                        }
+                      `}
+                    </style>
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: configRecordatorioAuto.preview || '<p>Sin contenido disponible</p>' }}
+                    />
+                  </div>
                 ) : (
                   <div className="bg-[#E5DDD5] rounded-xl p-4">
                     <div className="bg-white rounded-lg p-3 shadow-sm max-w-[85%]">
@@ -4218,6 +4556,102 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
                 <button
                   onClick={() => setShowPreviewModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal de previsualización TICI Historial */}
+      {previewHistorialTici && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => setPreviewHistorialTici(null)}
+          />
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-h-[85vh] ${
+            previewHistorialTici.template?.startsWith('Correo') ? 'max-w-3xl' : 'max-w-lg'
+          }`}>
+            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh]">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  {previewHistorialTici.template?.startsWith('Correo') ? (
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Mail size={20} className="text-blue-600" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <MessageCircle size={20} className="text-green-600" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Previsualización</h3>
+                    <p className="text-xs text-slate-500">{previewHistorialTici.template}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPreviewHistorialTici(null)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {previewHistorialTici.template?.startsWith('Correo') ? (
+                  <div 
+                    className="email-preview-container"
+                    style={{
+                      maxWidth: '100%',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <style>
+                      {`
+                        .email-preview-container table {
+                          max-width: 100% !important;
+                          width: 100% !important;
+                        }
+                        .email-preview-container img {
+                          max-width: 100% !important;
+                          height: auto !important;
+                        }
+                        .email-preview-container td,
+                        .email-preview-container th {
+                          word-break: break-word !important;
+                        }
+                        .email-preview-container .r0-o,
+                        .email-preview-container [class*="r0-o"] {
+                          width: 100% !important;
+                          max-width: 100% !important;
+                        }
+                      `}
+                    </style>
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: previewHistorialTici.preview || '<p>Sin contenido disponible</p>' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-[#E5DDD5] rounded-xl p-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm max-w-[85%]">
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                        {previewHistorialTici.preview || 'Sin contenido disponible'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+                <button
+                  onClick={() => setPreviewHistorialTici(null)}
                   className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors"
                 >
                   Cerrar
