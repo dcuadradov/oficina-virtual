@@ -4071,7 +4071,10 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               
                               {/* Botón Previsualizar */}
                               <button
-                                onClick={() => setShowPreviewModal(true)}
+                                onClick={() => {
+                                  console.log('Preview config:', configRecordatorioAuto);
+                                  setShowPreviewModal(true);
+                                }}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#1717AF] hover:bg-[#1717AF]/5 rounded-lg transition-colors"
                               >
                                 Previsualizar
@@ -4099,17 +4102,19 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
                               </div>
                             </div>
 
-                            {/* Información del tiempo de programación */}
-                            <div className="text-sm text-slate-600 leading-relaxed">
-                              <p>
-                                Este recordatorio se programó{' '}
-                                <span className="font-semibold text-slate-800">
-                                  {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
-                                </span>{' '}
-                                después de que el lead entró en la etapa{' '}
-                                <span className="font-semibold text-slate-800">{lead?.fase_nombre_pipefy}</span>.
-                              </p>
-                            </div>
+                            {/* Información del tiempo de programación - solo para recordatorio #1 */}
+                            {lead?.numero_de_recordatorio_automatico === 1 && (
+                              <div className="text-sm text-slate-600 leading-relaxed">
+                                <p>
+                                  Este recordatorio se programó{' '}
+                                  <span className="font-semibold text-slate-800">
+                                    {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                  </span>{' '}
+                                  después de que el lead entró en la etapa{' '}
+                                  <span className="font-semibold text-slate-800">{lead?.fase_nombre_pipefy}</span>.
+                                </p>
+                              </div>
+                            )}
 
                             {/* Información de posponer */}
                             <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
