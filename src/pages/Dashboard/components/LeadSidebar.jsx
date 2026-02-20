@@ -3926,6 +3926,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
             )}
 
             {activeTab === 'tici' && (() => {
+              // DEBUG: Ver datos del lead
+              console.log('TICI Debug:', {
+                fase_id_pipefy: lead?.fase_id_pipefy,
+                fecha_recordatorio_automatico: lead?.fecha_recordatorio_automatico,
+                numero_de_recordatorio_automatico: lead?.numero_de_recordatorio_automatico,
+                fase_nombre_pipefy: lead?.fase_nombre_pipefy
+              });
+              
               // Determinar el estado del tab TICI
               // Convertir fase_id_pipefy a string para comparación consistente
               const faseIdString = lead?.fase_id_pipefy?.toString();
@@ -3933,6 +3941,8 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               const fechaRecordatorio = lead?.fecha_recordatorio_automatico ? new Date(lead.fecha_recordatorio_automatico) : null;
               const ahora = new Date();
               const tieneRecordatorioProgramado = faseAplica && fechaRecordatorio && fechaRecordatorio >= ahora;
+              
+              console.log('TICI Estado:', { faseIdString, faseAplica, fechaRecordatorio, ahora, tieneRecordatorioProgramado });
               
               // Formatear tiempo de activación
               const formatearTiempoActivacion = (segundos) => {
