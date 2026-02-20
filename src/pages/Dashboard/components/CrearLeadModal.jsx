@@ -70,7 +70,9 @@ const PAISES_TELEFONO = [
   { codigo: '595', pais: 'Paraguay', bandera: '🇵🇾', longitud: [9], placeholder: '981234567' },
   { codigo: '598', pais: 'Uruguay', bandera: '🇺🇾', longitud: [8, 9], placeholder: '91234567' },
   { codigo: '53', pais: 'Cuba', bandera: '🇨🇺', longitud: [8], placeholder: '51234567' },
-  { codigo: '1809', pais: 'Rep. Dominicana', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '1809', pais: 'Rep. Dominicana (1809)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '1829', pais: 'Rep. Dominicana (1829)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '1849', pais: 'Rep. Dominicana (1849)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
   { codigo: '55', pais: 'Brasil', bandera: '🇧🇷', longitud: [10, 11], placeholder: '11912345678' },
 ].sort((a, b) => a.pais.localeCompare(b.pais));
 

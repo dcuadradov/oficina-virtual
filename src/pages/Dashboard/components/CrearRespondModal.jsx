@@ -25,7 +25,9 @@ const PAISES_TELEFONO = [
   { codigo: '598', pais: 'Uruguay', bandera: '🇺🇾', longitud: [8, 9], placeholder: '91234567' },
   { codigo: '55', pais: 'Brasil', bandera: '🇧🇷', longitud: [10, 11], placeholder: '11912345678' },
   { codigo: '53', pais: 'Cuba', bandera: '🇨🇺', longitud: [8], placeholder: '51234567' },
-  { codigo: '809', pais: 'República Dominicana', bandera: '🇩🇴', longitud: [10], placeholder: '8091234567' },
+  { codigo: '1809', pais: 'República Dominicana (1809)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '1829', pais: 'República Dominicana (1829)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
+  { codigo: '1849', pais: 'República Dominicana (1849)', bandera: '🇩🇴', longitud: [7], placeholder: '2345678' },
   { codigo: '787', pais: 'Puerto Rico', bandera: '🇵🇷', longitud: [10], placeholder: '7871234567' },
 ];
 
