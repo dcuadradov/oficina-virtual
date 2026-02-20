@@ -3927,7 +3927,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
 
             {activeTab === 'tici' && (() => {
               // Determinar el estado del tab TICI
-              const faseAplica = FASES_RECORDATORIO_AUTOMATICO.includes(lead?.fase_id_pipefy);
+              // Convertir fase_id_pipefy a string para comparación consistente
+              const faseIdString = lead?.fase_id_pipefy?.toString();
+              const faseAplica = FASES_RECORDATORIO_AUTOMATICO.includes(faseIdString);
               const fechaRecordatorio = lead?.fecha_recordatorio_automatico ? new Date(lead.fecha_recordatorio_automatico) : null;
               const ahora = new Date();
               const tieneRecordatorioProgramado = faseAplica && fechaRecordatorio && fechaRecordatorio >= ahora;
