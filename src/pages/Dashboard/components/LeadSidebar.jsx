@@ -289,7 +289,11 @@ const tabs = [
   { id: 'seguimiento', label: 'Seguimiento', icon: BarChart3 },
   { id: 'recordatorio', label: 'Recordatorio', icon: Clock },
   { id: 'historial', label: 'Historial', icon: History },
+  { id: 'tici', label: 'TICI', icon: Sparkles },
 ];
+
+// Fases que aplican para recordatorios automáticos TICI
+const FASES_RECORDATORIO_AUTOMATICO = ['340832804', '339756097', '341769991'];
 
 // Fases donde se muestra el botón de agendar
 const FASES_LISTO_AGENDAR = ['339756287', '340855086'];
@@ -543,6 +547,14 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
   const [infoGeneralFields, setInfoGeneralFields] = useState([]);
   const [infoGeneralSecciones, setInfoGeneralSecciones] = useState([]);
   const [loadingInfoGeneral, setLoadingInfoGeneral] = useState(false);
+  
+  // Estados para TICI (Recordatorios automáticos)
+  const [subTabTici, setSubTabTici] = useState('programado'); // 'programado' | 'historial'
+  const [configRecordatorioAuto, setConfigRecordatorioAuto] = useState(null);
+  const [loadingConfigTici, setLoadingConfigTici] = useState(false);
+  const [posponiendo, setPosponiendo] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [tiempoRestante, setTiempoRestante] = useState({ dias: 0, horas: 0, minutos: 0 });
   const [infoGeneralDropdownOpen, setInfoGeneralDropdownOpen] = useState(null);
   const [infoGeneralSearchQuery, setInfoGeneralSearchQuery] = useState('');
   const infoGeneralSearchRef = useRef(null);
@@ -1539,6 +1551,111 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
       }, 100);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatoriosCalendario, fetchRecordatorioActivo]);
+
+  // Cargar configuración de recordatorio automático (TICI)
+  const fetchConfigRecordatorioAuto = useCallback(async () => {
+    if (!lead?.card_id || !lead?.numero_de_recordatorio_automatico || !lead?.fase_nombre_pipefy) {
+      setConfigRecordatorioAuto(null);
+      return;
+    }
+    
+    try {
+      setLoadingConfigTici(true);
+      
+      const { data, error } = await supabase
+        .from('config_recordatorios_automaticos')
+        .select('*')
+        .eq('numero', lead.numero_de_recordatorio_automatico)
+        .eq('fase', lead.fase_nombre_pipefy)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error cargando config TICI:', error);
+      }
+      
+      setConfigRecordatorioAuto(data || null);
+    } catch (error) {
+      console.error('Error en fetchConfigRecordatorioAuto:', error);
+      setConfigRecordatorioAuto(null);
+    } finally {
+      setLoadingConfigTici(false);
+    }
+  }, [lead?.card_id, lead?.numero_de_recordatorio_automatico, lead?.fase_nombre_pipefy]);
+
+  // Cargar datos de TICI cuando se abre el tab
+  useEffect(() => {
+    if (isOpen && lead?.card_id && activeTab === 'tici') {
+      fetchConfigRecordatorioAuto();
+      setSubTabTici('programado');
+    }
+  }, [isOpen, lead?.card_id, activeTab, fetchConfigRecordatorioAuto]);
+
+  // Countdown en tiempo real para recordatorio automático
+  useEffect(() => {
+    if (!lead?.fecha_recordatorio_automatico || activeTab !== 'tici') {
+      setTiempoRestante({ dias: 0, horas: 0, minutos: 0 });
+      return;
+    }
+
+    const calcularTiempoRestante = () => {
+      const fechaRecordatorio = new Date(lead.fecha_recordatorio_automatico);
+      const ahora = new Date();
+      const diffMs = fechaRecordatorio - ahora;
+      
+      if (diffMs <= 0) {
+        setTiempoRestante({ dias: 0, horas: 0, minutos: 0 });
+        return;
+      }
+      
+      const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const horas = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      setTiempoRestante({ dias, horas, minutos });
+    };
+
+    calcularTiempoRestante();
+    const interval = setInterval(calcularTiempoRestante, 1000);
+    
+    return () => clearInterval(interval);
+  }, [lead?.fecha_recordatorio_automatico, activeTab]);
+
+  // Handler para posponer recordatorio automático
+  const handlePosponerRecordatorio = async () => {
+    if (!configRecordatorioAuto || !lead) return;
+    
+    try {
+      setPosponiendo(true);
+      
+      const payload = {
+        ...configRecordatorioAuto,
+        pais: lead.pais,
+        current_phase: lead.current_phase,
+        telefono: lead.telefono,
+        card_id: lead.card_id,
+        nombre: lead.nombre,
+        fase_nombre_pipefy: lead.fase_nombre_pipefy
+      };
+      
+      const response = await fetch('https://api.mdenglish.us/webhook/posponer_recordatorio_automatico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al posponer recordatorio');
+      }
+      
+      // Refrescar datos del lead para mostrar la nueva fecha
+      onRefreshData?.();
+      
+    } catch (error) {
+      console.error('Error posponiendo recordatorio:', error);
+    } finally {
+      setPosponiendo(false);
+    }
+  };
 
   // Función para programar recordatorio
   const handleProgramarRecordatorio = async () => {
@@ -3808,9 +3925,301 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', etapasFunnel 
               </div>
             )}
 
+            {activeTab === 'tici' && (() => {
+              // Determinar el estado del tab TICI
+              const faseAplica = FASES_RECORDATORIO_AUTOMATICO.includes(lead?.fase_id_pipefy);
+              const fechaRecordatorio = lead?.fecha_recordatorio_automatico ? new Date(lead.fecha_recordatorio_automatico) : null;
+              const ahora = new Date();
+              const tieneRecordatorioProgramado = faseAplica && fechaRecordatorio && fechaRecordatorio >= ahora;
+              
+              // Formatear tiempo de activación
+              const formatearTiempoActivacion = (segundos) => {
+                if (!segundos) return '';
+                const horas = Math.floor(segundos / 3600);
+                if (horas >= 24) {
+                  const dias = Math.floor(horas / 24);
+                  const horasRestantes = horas % 24;
+                  if (horasRestantes === 0) {
+                    return `${dias} ${dias === 1 ? 'día' : 'días'}`;
+                  }
+                  return `${dias} ${dias === 1 ? 'día' : 'días'} y ${horasRestantes} ${horasRestantes === 1 ? 'hora' : 'horas'}`;
+                }
+                return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+              };
+
+              // Formatear fecha del recordatorio
+              const formatearFechaRecordatorio = (fecha) => {
+                if (!fecha) return '';
+                const f = new Date(fecha);
+                const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                const dia = f.getDate();
+                const mes = meses[f.getMonth()];
+                const año = f.getFullYear();
+                let horas = f.getHours();
+                const minutos = f.getMinutes().toString().padStart(2, '0');
+                const ampm = horas >= 12 ? 'pm' : 'am';
+                horas = horas % 12 || 12;
+                return `${dia} de ${mes} de ${año} a las ${horas}:${minutos} ${ampm}`;
+              };
+
+              // Formatear countdown
+              const formatearCountdown = () => {
+                const { dias, horas, minutos } = tiempoRestante;
+                const partes = [];
+                if (dias > 0) partes.push(`${dias} ${dias === 1 ? 'día' : 'días'}`);
+                if (horas > 0) partes.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
+                if (minutos > 0 || partes.length === 0) partes.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+                return partes.join(', ');
+              };
+
+              // Determinar tipo de template
+              const tipoTemplate = configRecordatorioAuto?.template?.startsWith('Correo') ? 'correo' : 'whatsapp';
+
+              return (
+                <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
+                  {/* Sub-tabs */}
+                  <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
+                    <button
+                      onClick={() => setSubTabTici('programado')}
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                        subTabTici === 'programado'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Programado
+                    </button>
+                    <button
+                      onClick={() => setSubTabTici('historial')}
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                        subTabTici === 'historial'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Historial
+                    </button>
+                  </div>
+
+                  {/* Contenido de Programado */}
+                  {subTabTici === 'programado' && (
+                    <div className="flex-1 overflow-y-auto">
+                      {loadingConfigTici ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
+                        </div>
+                      ) : !faseAplica ? (
+                        // Estado 1: La fase no aplica
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                            <Sparkles size={32} className="text-slate-300" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                            Fase sin recordatorio automático
+                          </h3>
+                          <p className="text-sm text-slate-400 max-w-xs">
+                            La fase actual del lead no tiene configurados recordatorios automáticos TICI.
+                          </p>
+                        </div>
+                      ) : !tieneRecordatorioProgramado ? (
+                        // Estado 2: Sin recordatorio programado
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-20 h-20 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
+                            <Clock size={32} className="text-amber-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                            Sin recordatorio programado
+                          </h3>
+                          <p className="text-sm text-slate-400 max-w-xs">
+                            No hay un recordatorio automático activo para este lead en la fase actual.
+                          </p>
+                        </div>
+                      ) : (
+                        // Estado 3: Con recordatorio programado
+                        <div className="space-y-4">
+                          {/* Header */}
+                          <div className="text-center pb-3 border-b border-slate-100">
+                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                              Próximo recordatorio automático
+                            </p>
+                          </div>
+
+                          {/* Card principal */}
+                          <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-5 space-y-4">
+                            {/* Título y previsualizar */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="font-semibold text-slate-800">
+                                  Recordatorio automático #{lead?.numero_de_recordatorio_automatico || 1}
+                                </h4>
+                                <p className="text-sm text-slate-500">
+                                  Etapa: {lead?.fase_nombre_pipefy || 'Sin etapa'}
+                                </p>
+                              </div>
+                              
+                              {/* Botón Previsualizar */}
+                              <button
+                                onClick={() => setShowPreviewModal(true)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#1717AF] hover:bg-[#1717AF]/5 rounded-lg transition-colors"
+                              >
+                                Previsualizar
+                                {tipoTemplate === 'correo' ? (
+                                  <Mail size={16} className="text-[#1717AF]" />
+                                ) : (
+                                  <MessageCircle size={16} className="text-[#25D366]" />
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Fecha de envío con countdown */}
+                            <div className="bg-white rounded-xl p-4 border border-slate-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <CalendarDays size={16} className="text-[#1717AF]" />
+                                <span className="text-sm font-medium text-slate-700">Se enviará el</span>
+                              </div>
+                              <p className="text-base font-semibold text-slate-800 mb-1">
+                                {formatearFechaRecordatorio(lead?.fecha_recordatorio_automatico)}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+                                  {formatearCountdown()}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Información del tiempo de programación */}
+                            <div className="text-sm text-slate-600 leading-relaxed">
+                              <p>
+                                Este recordatorio se programó{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                </span>{' '}
+                                después de que el lead entró en la etapa{' '}
+                                <span className="font-semibold text-slate-800">{lead?.fase_nombre_pipefy}</span>.
+                              </p>
+                            </div>
+
+                            {/* Información de posponer */}
+                            <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                              <p className="text-sm text-amber-800">
+                                Si el lead te contestó por teléfono, selecciona "Posponer", y el recordatorio se extenderá{' '}
+                                <span className="font-semibold">
+                                  {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                </span>.
+                              </p>
+                            </div>
+
+                            {/* Botón Posponer */}
+                            <button
+                              onClick={handlePosponerRecordatorio}
+                              disabled={posponiendo}
+                              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1717AF] to-indigo-600 text-white font-semibold hover:from-[#0f0f8a] hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {posponiendo ? (
+                                <>
+                                  <Loader2 size={18} className="animate-spin" />
+                                  Posponiendo...
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw size={18} />
+                                  Posponer
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contenido de Historial - placeholder */}
+                  {subTabTici === 'historial' && (
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                          <History size={28} className="text-slate-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-700 mb-2">Próximamente</h3>
+                        <p className="text-sm text-slate-400">
+                          El historial de recordatorios automáticos estará disponible pronto.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           </div>
         </div>
       </div>
+
+      {/* Modal de previsualización TICI */}
+      {showPreviewModal && configRecordatorioAuto && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => setShowPreviewModal(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-lg max-h-[80vh]">
+            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[80vh]">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  {configRecordatorioAuto.template?.startsWith('Correo') ? (
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Mail size={20} className="text-blue-600" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <MessageCircle size={20} className="text-green-600" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Previsualización</h3>
+                    <p className="text-xs text-slate-500">{configRecordatorioAuto.template}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {configRecordatorioAuto.template?.startsWith('Correo') ? (
+                  <div 
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: configRecordatorioAuto.preview || '<p>Sin contenido disponible</p>' }}
+                  />
+                ) : (
+                  <div className="bg-[#E5DDD5] rounded-xl p-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm max-w-[85%]">
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                        {configRecordatorioAuto.preview || 'Sin contenido disponible'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Modal de confirmación de recordatorio */}
       {mostrarConfirmacion && (
