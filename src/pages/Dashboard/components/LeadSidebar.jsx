@@ -289,7 +289,7 @@ const tabs = [
   { id: 'seguimiento', label: 'Seguimiento', icon: BarChart3 },
   { id: 'recordatorio', label: 'Recordatorio', icon: Clock },
   { id: 'historial', label: 'Historial', icon: History },
-  { id: 'tici', label: 'TICI', icon: Sparkles },
+  { id: 'tici', label: 'Emdi', icon: Sparkles },
 ];
 
 // Fases que aplican para recordatorios automáticos TICI
@@ -4133,7 +4133,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             Fase sin recordatorio automático
                           </h3>
                           <p className="text-sm text-slate-400 max-w-xs">
-                            La fase actual del lead no tiene configurados recordatorios automáticos TICI.
+                            La fase actual del lead no tiene configurados recordatorios automáticos.
                           </p>
                         </div>
                       ) : !tieneRecordatorioProgramado ? (
