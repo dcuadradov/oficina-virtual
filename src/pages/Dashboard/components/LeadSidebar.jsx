@@ -1382,6 +1382,36 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       
       if (error) throw error;
       
+      // Enviar al webhook de Respond
+      let respondOk = false;
+      try {
+        const webhookResponse = await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.id,
+            lead_id: lead.card_id,
+            texto: textoFinal,
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Seguimiento',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: categoriaSeleccionada || 'Otro',
+            created_at: data.created_at,
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null
+          })
+        });
+        const webhookResult = await webhookResponse.json();
+        if (webhookResult?.result === 'ok') {
+          respondOk = true;
+        }
+      } catch (webhookError) {
+        console.error('Error enviando webhook seguimiento:', webhookError);
+      }
+      
       // Agregar al inicio de la lista con el nombre y fecha
       const comentarioConNombre = {
         ...data,
@@ -1392,8 +1422,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setNuevoMensaje('');
       setCategoriaSeleccionada('Otro'); // Reset a default
       
-      // Toast de éxito
-      setToastMessage('Se creó tu seguimiento exitosamente');
+      // Toast de éxito (unificado si Respond respondió ok)
+      const mensajeToast = respondOk 
+        ? '¡Listo! El seguimiento ya está registrado en OV y Respond.'
+        : 'Se creó tu seguimiento exitosamente';
+      setToastMessage(mensajeToast);
       setTimeout(() => setToastMessage(null), 3000);
       
     } catch (error) {
@@ -1830,9 +1863,46 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       
       if (errorLead) throw errorLead;
       
-      // Éxito - guardar fecha para mostrar en modal y limpiar formulario
+      // Enviar al webhook de Respond
+      let respondOk = false;
+      try {
+        const webhookResponse = await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: null,
+            lead_id: lead.card_id,
+            texto: textoRecordatorio.trim(),
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Recordatorio',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: categoriaSeleccionada || 'Otro',
+            created_at: new Date().toISOString(),
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null,
+            fecha_programada: fechaCompleta.toISOString()
+          })
+        });
+        const webhookResult = await webhookResponse.json();
+        if (webhookResult?.result === 'ok') {
+          respondOk = true;
+        }
+      } catch (webhookError) {
+        console.error('Error enviando webhook recordatorio:', webhookError);
+      }
+      
+      // Toast de éxito (unificado si Respond respondió ok)
+      const mensajeToast = respondOk 
+        ? '¡Listo! El recordatorio ya está registrado en OV y Respond.'
+        : 'Se creó tu recordatorio exitosamente';
+      setToastMessage(mensajeToast);
+      setTimeout(() => setToastMessage(null), 3000);
+      
+      // Éxito - limpiar formulario
       setFechaRecordatorioCreado(fechaCompleta);
-      setMostrarConfirmacion(true);
       setFechaSeleccionada(null);
       setTextoRecordatorio('');
       setHoraInput('09');
