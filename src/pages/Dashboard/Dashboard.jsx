@@ -275,7 +275,7 @@ export default function Dashboard() {
   // Función para cargar lista de comerciales (para reasignación, disponible para todos)
   const fetchComerciales = useCallback(async () => {
     try {
-      // Obtener usuarios del módulo comercial (incluir ultima_conexion y puede_ver_todos)
+      // Obtener usuarios del módulo comercial (incluir ultima_conexion, puede_ver_todos, card_id, disponibilidad y performance)
       const { data, error } = await supabase
         .from('usuarios')
         .select(`
@@ -283,6 +283,9 @@ export default function Dashboard() {
           nombre,
           ultima_conexion,
           puede_ver_todos,
+          card_id,
+          disponibilidad,
+          performance,
           usuarios_modulos!inner (
             modulo_id
           )
@@ -1154,6 +1157,7 @@ export default function Dashboard() {
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
+                  onRefreshComerciales={fetchComerciales}
                 />
 
                 {/* KPIs - Debajo de los filtros */}
@@ -1252,6 +1256,7 @@ export default function Dashboard() {
                     onComercialChange={handleComercialChange}
                     showComercialFilter={true}
                     showOnlyComercial={true}
+                    onRefreshComerciales={fetchComerciales}
                   />
                 )}
 
@@ -1282,6 +1287,7 @@ export default function Dashboard() {
                   onTagChange={setSelectedTag}
                   tags={tagsDisponibles}
                   showComercialFilter={puedeVerTodos}
+                  onRefreshComerciales={fetchComerciales}
                 />
 
                 {/* Sub-tabs de Métricas */}
