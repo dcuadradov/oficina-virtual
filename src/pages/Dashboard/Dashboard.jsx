@@ -1016,7 +1016,8 @@ export default function Dashboard() {
     setCurrentPage(0);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.clear();
     window.location.href = '/login';
   };
