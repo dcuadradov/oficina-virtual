@@ -51,6 +51,8 @@ export default function Dashboard() {
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
+  const [selectedFuente, setSelectedFuente] = useState(null);
+  const [fuentesDisponibles, setFuentesDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
   const [coloresFases, setColoresFases] = useState({}); // { fase_id_pipefy: { color, color_letra } }
   
@@ -243,6 +245,25 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error cargando tags:', error);
+    }
+  }, []);
+
+  // Función para cargar fuentes únicas de los leads
+  const fetchFuentes = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('fuente_dato')
+        .not('fuente_dato', 'is', null)
+        .neq('fuente_dato', '');
+
+      if (error) throw error;
+      
+      // Obtener valores únicos y ordenar
+      const uniqueFuentes = [...new Set(data.map(d => d.fuente_dato).filter(Boolean))].sort();
+      setFuentesDisponibles(uniqueFuentes);
+    } catch (error) {
+      console.error('Error cargando fuentes:', error);
     }
   }, []);
 
@@ -507,6 +528,11 @@ export default function Dashboard() {
         statsQuery = statsQuery.eq('label', selectedTag);
       }
 
+      // Aplicar filtro por fuente
+      if (selectedFuente) {
+        statsQuery = statsQuery.eq('fuente_dato', selectedFuente);
+      }
+
       // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
       if (filtroWhatsApp === 'abierta') {
         const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -578,7 +604,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -660,6 +686,11 @@ export default function Dashboard() {
         query = query.eq('label', selectedTag);
       }
 
+      // Aplicar filtro por fuente
+      if (selectedFuente) {
+        query = query.eq('fuente_dato', selectedFuente);
+      }
+
       // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
       if (filtroWhatsApp === 'abierta') {
         const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -732,7 +763,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -854,6 +885,7 @@ export default function Dashboard() {
       fetchComerciales();
       fetchCategorias();
       fetchTags();
+      fetchFuentes();
       fetchColoresFases();
       fetchEtapasFunnel();
       fetchStats();
@@ -905,7 +937,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, filtroWhatsApp, filtroNuevosLeads, filtroHot]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, filtroHot]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1155,6 +1187,9 @@ export default function Dashboard() {
                   selectedTag={selectedTag}
                   onTagChange={setSelectedTag}
                   tags={tagsDisponibles}
+                  selectedFuente={selectedFuente}
+                  onFuenteChange={setSelectedFuente}
+                  fuentes={fuentesDisponibles}
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -1176,7 +1211,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag || selectedFuente) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -1189,6 +1224,7 @@ export default function Dashboard() {
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
                       {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
                       {selectedTag && <span className="text-slate-400"> • Tag: {selectedTag}</span>}
+                      {selectedFuente && <span className="text-slate-400"> • Fuente: {selectedFuente}</span>}
                 </span>
                 <button
                       onClick={() => {
@@ -1201,6 +1237,7 @@ export default function Dashboard() {
                         setSearchQuery('');
                         setSelectedCategoria(null);
                         setSelectedTag(null);
+                        setSelectedFuente(null);
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
@@ -1287,6 +1324,9 @@ export default function Dashboard() {
                   selectedTag={selectedTag}
                   onTagChange={setSelectedTag}
                   tags={tagsDisponibles}
+                  selectedFuente={selectedFuente}
+                  onFuenteChange={setSelectedFuente}
+                  fuentes={fuentesDisponibles}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
                 />

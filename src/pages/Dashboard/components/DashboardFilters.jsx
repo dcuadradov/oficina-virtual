@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2 } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -142,6 +142,9 @@ const DashboardFilters = ({
   selectedTag,
   onTagChange,
   tags = [],
+  selectedFuente,
+  onFuenteChange,
+  fuentes = [],
   showComercialFilter = false,
   showOnlyComercial = false,
   searchQuery = '',
@@ -154,6 +157,7 @@ const DashboardFilters = ({
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
+  const [fuenteOpen, setFuenteOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const searchTimeoutRef = useRef(null);
@@ -268,6 +272,8 @@ const DashboardFilters = ({
         setPeriodoOpen(false);
         setDiaOpen(false);
         setCategoriaOpen(false);
+        setTagOpen(false);
+        setFuenteOpen(false);
         setPerformanceDropdownOpen(null);
       }
     };
@@ -1053,6 +1059,82 @@ const DashboardFilters = ({
                 >
                   <Tag size={12} />
                   {tag}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro por Fuente */}
+      {!showOnlyComercial && fuentes.length > 0 && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setFuenteOpen(!fuenteOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              setDiaOpen(false);
+              setCategoriaOpen(false);
+              setTagOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedFuente
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <Globe size={16} />
+            <span className="max-w-[150px] truncate">
+              {selectedFuente || 'Fuente'}
+            </span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${fuenteOpen ? 'rotate-180' : ''}`} />
+            {selectedFuente && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFuenteChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {fuenteOpen && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onFuenteChange(null);
+                  setFuenteOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedFuente 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todas las fuentes
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              {fuentes.map((fuente) => (
+                <button
+                  key={fuente}
+                  onClick={() => {
+                    onFuenteChange(fuente);
+                    setFuenteOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                    selectedFuente === fuente
+                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Globe size={12} />
+                  {fuente}
                 </button>
               ))}
             </div>
