@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import CrearRespondModal from './CrearRespondModal';
 
@@ -366,6 +367,59 @@ const LeadsTable = ({
   const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
   const [leadParaRespond, setLeadParaRespond] = useState(null);
   
+  // Estado para modal de Activar Recordatorios Automáticos
+  const [activarRecordatorioModalOpen, setActivarRecordatorioModalOpen] = useState(false);
+  const [leadParaRecordatorio, setLeadParaRecordatorio] = useState(null);
+  const [activandoRecordatorio, setActivandoRecordatorio] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  
+  // Fases que aplican para recordatorios automáticos
+  const FASES_RECORDATORIO_AUTO = ['340832804', '339756097', '341769991'];
+  
+  // Función para verificar si un lead tiene recordatorio automático activo
+  const tieneRecordatorioActivo = (lead) => {
+    if (!lead.fecha_recordatorio_automatico) return false;
+    const fechaRecordatorio = new Date(lead.fecha_recordatorio_automatico);
+    const ahora = new Date();
+    return fechaRecordatorio >= ahora;
+  };
+  
+  // Función para verificar si la fase aplica para recordatorios automáticos
+  const faseAplicaParaRecordatorio = (lead) => {
+    const faseId = String(lead.fase_id_pipefy);
+    return FASES_RECORDATORIO_AUTO.includes(faseId);
+  };
+  
+  // Handler para activar recordatorios automáticos
+  const handleActivarRecordatorio = async () => {
+    if (!leadParaRecordatorio) return;
+    
+    setActivandoRecordatorio(true);
+    try {
+      const response = await fetch('https://api.mdenglish.us/webhook/iniciar_recordatorio_automatico_desde_el_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: leadParaRecordatorio.card_id })
+      });
+      
+      const result = await response.json();
+      
+      if (result?.result === 'ok') {
+        setToastMessage(`Los recordatorios automáticos para ${leadParaRecordatorio.nombre} se han activado.`);
+        setTimeout(() => setToastMessage(null), 4000);
+        onRefreshData?.();
+      }
+    } catch (error) {
+      console.error('Error activando recordatorio:', error);
+      setToastMessage('Error al activar recordatorios automáticos');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setActivandoRecordatorio(false);
+      setActivarRecordatorioModalOpen(false);
+      setLeadParaRecordatorio(null);
+    }
+  };
+  
   // Handler para abrir modal de Crear en Respond
   const handleCrearRespond = (lead) => {
     setLeadParaRespond(lead);
@@ -715,6 +769,32 @@ const LeadsTable = ({
                         </button>
                       )}
 
+                      {/* Recordatorios Automáticos (Emdi) - Solo para fases que aplican */}
+                      {faseAplicaParaRecordatorio(lead) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const activo = tieneRecordatorioActivo(lead);
+                            if (activo) {
+                              // Si está activo, abrir sidebar en tab Emdi
+                              onOpenModal?.(lead, 'tici');
+                            } else {
+                              // Si no está activo, mostrar modal de confirmación
+                              setLeadParaRecordatorio(lead);
+                              setActivarRecordatorioModalOpen(true);
+                            }
+                          }}
+                          className={`p-2.5 rounded-xl transition-all duration-200 ${
+                            tieneRecordatorioActivo(lead)
+                              ? 'text-violet-500 hover:text-violet-600 hover:bg-violet-50'
+                              : 'text-slate-300 hover:text-violet-400 hover:bg-violet-50'
+                          }`}
+                          title={tieneRecordatorioActivo(lead) ? "Ver recordatorio programado" : "Activar recordatorios automáticos"}
+                        >
+                          <Sparkles size={18} strokeWidth={2} fill={tieneRecordatorioActivo(lead) ? 'currentColor' : 'none'} />
+                        </button>
+                      )}
+
                       {/* Toggle HOT */}
                       <button
                         onClick={(e) => {
@@ -813,6 +893,93 @@ const LeadsTable = ({
         lead={leadParaRespond}
         onSuccess={handleRespondSuccess}
       />
+      
+      {/* Modal para activar recordatorios automáticos - renderizado en body */}
+      {activarRecordatorioModalOpen && leadParaRecordatorio && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              if (!activandoRecordatorio) {
+                setActivarRecordatorioModalOpen(false);
+                setLeadParaRecordatorio(null);
+              }
+            }}
+          />
+          
+          {/* Modal */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <Sparkles size={20} className="text-violet-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-800">Recordatorios Automáticos</h3>
+              </div>
+              {!activandoRecordatorio && (
+                <button
+                  onClick={() => {
+                    setActivarRecordatorioModalOpen(false);
+                    setLeadParaRecordatorio(null);
+                  }}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+            
+            {/* Content */}
+            <div className="px-6 py-5">
+              <p className="text-slate-600">
+                <span className="font-semibold text-slate-800">{leadParaRecordatorio.nombre}</span> no tiene la función de recordatorios automáticos activa. ¿Quieres activarla?
+              </p>
+            </div>
+            
+            {/* Actions */}
+            <div className="px-6 py-4 bg-slate-50 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setActivarRecordatorioModalOpen(false);
+                  setLeadParaRecordatorio(null);
+                }}
+                disabled={activandoRecordatorio}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                onClick={handleActivarRecordatorio}
+                disabled={activandoRecordatorio}
+                className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {activandoRecordatorio ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Activando...</span>
+                  </>
+                ) : (
+                  <span>Sí</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      
+      {/* Toast de notificación - renderizado en body */}
+      {toastMessage && createPortal(
+        <div className="fixed bottom-6 right-6 z-[9999] animate-fade-in">
+          <div className="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 max-w-sm">
+            <div className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
