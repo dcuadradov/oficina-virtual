@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -145,6 +145,9 @@ const DashboardFilters = ({
   selectedFuente,
   onFuenteChange,
   fuentes = [],
+  selectedReferido,
+  onReferidoChange,
+  referidos = [],
   showComercialFilter = false,
   showOnlyComercial = false,
   searchQuery = '',
@@ -158,6 +161,7 @@ const DashboardFilters = ({
   const [categoriaOpen, setCategoriaOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
   const [fuenteOpen, setFuenteOpen] = useState(false);
+  const [referidoOpen, setReferidoOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const searchTimeoutRef = useRef(null);
@@ -274,6 +278,7 @@ const DashboardFilters = ({
         setCategoriaOpen(false);
         setTagOpen(false);
         setFuenteOpen(false);
+        setReferidoOpen(false);
         setPerformanceDropdownOpen(null);
       }
     };
@@ -994,15 +999,18 @@ const DashboardFilters = ({
 
       {/* Filtro por Tag */}
       {tags.length > 0 && (
-        <div className="relative">
+        <div className="relative filter-dropdown">
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setTagOpen(!tagOpen);
               setComercialOpen(false);
               setMesOpen(false);
               setPeriodoOpen(false);
               setDiaOpen(false);
               setCategoriaOpen(false);
+              setFuenteOpen(false);
+              setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedTag
@@ -1079,6 +1087,7 @@ const DashboardFilters = ({
               setDiaOpen(false);
               setCategoriaOpen(false);
               setTagOpen(false);
+              setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedFuente
@@ -1135,6 +1144,83 @@ const DashboardFilters = ({
                 >
                   <Globe size={12} />
                   {fuente}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro por Referido */}
+      {!showOnlyComercial && referidos.length > 0 && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setReferidoOpen(!referidoOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              setDiaOpen(false);
+              setCategoriaOpen(false);
+              setTagOpen(false);
+              setFuenteOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedReferido
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <UserPlus size={16} />
+            <span className="max-w-[150px] truncate">
+              {selectedReferido || 'Referido por'}
+            </span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${referidoOpen ? 'rotate-180' : ''}`} />
+            {selectedReferido && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReferidoChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {referidoOpen && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => {
+                  onReferidoChange(null);
+                  setReferidoOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  !selectedReferido 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Todos los referidos
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              {referidos.map((referido) => (
+                <button
+                  key={referido}
+                  onClick={() => {
+                    onReferidoChange(referido);
+                    setReferidoOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                    selectedReferido === referido
+                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <UserPlus size={12} />
+                  {referido}
                 </button>
               ))}
             </div>
