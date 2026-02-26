@@ -82,6 +82,9 @@ export default function Dashboard() {
   // Estado para filtro de leads HOT (compartido con tabla)
   const [filtroHot, setFiltroHot] = useState(false);
   
+  // Estado para filtro de recordatorios automáticos (Emdi)
+  const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
+  
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -558,6 +561,14 @@ export default function Dashboard() {
         statsQuery = statsQuery.eq('is_hot', true);
       }
 
+      // Aplicar filtro de recordatorios automáticos (Emdi)
+      const fasesEmdi = ['340832804', '339756097', '341769991'];
+      if (filtroEmdi === 'activo') {
+        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+      } else if (filtroEmdi === 'inactivo') {
+        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+      }
+
       const { data: statsData, error: statsError } = await statsQuery.limit(10000);
 
       if (statsError) throw statsError;
@@ -604,7 +615,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -720,6 +731,14 @@ export default function Dashboard() {
         query = query.eq('is_hot', true);
       }
 
+      // Aplicar filtro de recordatorios automáticos (Emdi)
+      const fasesEmdi = ['340832804', '339756097', '341769991'];
+      if (filtroEmdi === 'activo') {
+        query = query.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+      } else if (filtroEmdi === 'inactivo') {
+        query = query.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -763,7 +782,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, parseDateFilters]);
 
   // Función para verificar y actualizar recordatorios vencidos
   const verificarRecordatoriosVencidos = useCallback(async () => {
@@ -937,7 +956,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, filtroHot]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1274,6 +1293,8 @@ export default function Dashboard() {
                   nuevosLeadsCardIds={nuevosLeadsCardIds}
                   filtroHot={filtroHot}
                   onFiltroHotChange={setFiltroHot}
+                  filtroEmdi={filtroEmdi}
+                  onFiltroEmdiChange={setFiltroEmdi}
                   configTags={configTags}
                   coloresFases={coloresFases}
                   onRefreshData={() => {

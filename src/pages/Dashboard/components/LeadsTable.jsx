@@ -340,6 +340,9 @@ const LeadsTable = ({
   // Props de filtro HOT (controlado desde Dashboard)
   filtroHot: filtroHotProp,
   onFiltroHotChange,
+  // Props de filtro Emdi (recordatorios automáticos)
+  filtroEmdi: filtroEmdiProp,
+  onFiltroEmdiChange,
   // Configuración de colores de tags
   configTags = {},
   // Colores de las fases para indicador visual
@@ -362,6 +365,11 @@ const LeadsTable = ({
   const [filtroHotLocal, setFiltroHotLocal] = useState(false);
   const filtroHot = filtroHotProp !== undefined ? filtroHotProp : filtroHotLocal;
   const setFiltroHot = onFiltroHotChange || setFiltroHotLocal;
+  
+  // Estado para filtro de Emdi (recordatorios automáticos)
+  const [filtroEmdiLocal, setFiltroEmdiLocal] = useState(null); // null, 'activo', 'inactivo'
+  const filtroEmdi = filtroEmdiProp !== undefined ? filtroEmdiProp : filtroEmdiLocal;
+  const setFiltroEmdi = onFiltroEmdiChange || setFiltroEmdiLocal;
   
   // Estado para modal de Crear en Respond
   const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
@@ -442,6 +450,11 @@ const LeadsTable = ({
   // Toggle del filtro HOT
   const handleFiltroHot = () => {
     setFiltroHot(prev => !prev);
+  };
+  
+  // Toggle del filtro Emdi (recordatorios automáticos)
+  const handleFiltroEmdi = (tipo) => {
+    setFiltroEmdi(prev => prev === tipo ? null : tipo);
   };
   
   // Si no hay tab activo y hay grupos, seleccionar el primero
@@ -545,10 +558,8 @@ const LeadsTable = ({
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
-                <div className="flex items-center justify-end gap-3">
-                  <span>Acciones</span>
-                  
-                  {/* Filtros: WhatsApp abierta, WhatsApp cerrada, HOT */}
+                <div className="flex items-center justify-end gap-2">
+                  {/* Filtros: WhatsApp abierta, WhatsApp cerrada, HOT, Emdi */}
                   <div className="flex items-center gap-1">
                     {/* WhatsApp verde - Ventana abierta */}
                     <button
@@ -587,6 +598,32 @@ const LeadsTable = ({
                       title="Leads HOT"
                     >
                       <Flame size={20} fill={filtroHot ? 'currentColor' : 'none'} />
+                    </button>
+                    
+                    {/* Sparkles activo - Con recordatorio automático */}
+                    <button
+                      onClick={() => handleFiltroEmdi('activo')}
+                      className={`p-1 rounded-lg transition-all duration-200 ${
+                        filtroEmdi === 'activo'
+                          ? 'text-violet-500'
+                          : 'text-violet-300 hover:text-violet-400'
+                      }`}
+                      title="Con recordatorio automático"
+                    >
+                      <Sparkles size={20} fill={filtroEmdi === 'activo' ? 'currentColor' : 'none'} />
+                    </button>
+                    
+                    {/* Sparkles inactivo - Sin recordatorio automático */}
+                    <button
+                      onClick={() => handleFiltroEmdi('inactivo')}
+                      className={`p-1 rounded-lg transition-all duration-200 ${
+                        filtroEmdi === 'inactivo'
+                          ? 'text-slate-500'
+                          : 'text-slate-300 hover:text-slate-400'
+                      }`}
+                      title="Sin recordatorio automático"
+                    >
+                      <Sparkles size={20} strokeDasharray={filtroEmdi === 'inactivo' ? '0' : '2 2'} />
                     </button>
                   </div>
                 </div>
