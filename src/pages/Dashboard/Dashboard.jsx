@@ -815,120 +815,6 @@ export default function Dashboard() {
     }
   }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, parseDateFilters]);
 
-  // Función para verificar y actualizar recordatorios vencidos
-  const verificarRecordatoriosVencidos = useCallback(async () => {
-    try {
-      const ahora = new Date().toISOString();
-      
-      // 1. Buscar recordatorios programados que ya vencieron
-      const { data: vencidos, error: errorBuscar } = await supabase
-        .from('recordatorios')
-        .select('id, lead_id')
-        .eq('estado', 'Programado')
-        .lt('fecha_programada', ahora);
-      
-      if (errorBuscar) throw errorBuscar;
-      
-      if (vencidos && vencidos.length > 0) {
-        console.log(`⏰ Encontrados ${vencidos.length} recordatorios vencidos`);
-        
-        // 2. Actualizar estado de recordatorios a "Vencido"
-        const idsVencidos = vencidos.map(r => r.id);
-        const { error: errorActualizarRec } = await supabase
-          .from('recordatorios')
-          .update({ estado: 'Vencido' })
-          .in('id', idsVencidos);
-        
-        if (errorActualizarRec) throw errorActualizarRec;
-        
-        // 3. Obtener lead_ids únicos afectados
-        const leadIdsUnicos = [...new Set(vencidos.map(r => r.lead_id))];
-        
-        // 4. Obtener datos de los leads para las notificaciones
-        const { data: leadsData } = await supabase
-          .from('leads')
-          .select('card_id, nombre, comercial_email')
-          .in('card_id', leadIdsUnicos);
-        
-        const leadsMap = {};
-        leadsData?.forEach(l => { leadsMap[l.card_id] = l; });
-        
-        // 5. Marcar todos los leads afectados como NO revisados y actualizar fecha_asignacion
-        await supabase
-          .from('leads')
-          .update({ 
-            revisado: false,
-            fecha_asignacion: new Date().toISOString()
-          })
-          .in('card_id', leadIdsUnicos);
-        
-        // 6. Crear notificaciones para cada recordatorio vencido
-        try {
-          // Obtener config de notificación
-          const { data: configNotif } = await supabase
-            .from('config_notificaciones')
-            .select('id, descripcion_template')
-            .eq('tipo', 'Recordatorio programado por ti')
-            .eq('activo', true)
-            .single();
-          
-          if (configNotif) {
-            // Crear notificaciones para cada recordatorio (evitar duplicados por lead)
-            const notificacionesCreadas = new Set();
-            const notificacionesParaInsertar = [];
-            
-            for (const rec of vencidos) {
-              const leadInfo = leadsMap[rec.lead_id];
-              if (leadInfo && !notificacionesCreadas.has(rec.lead_id)) {
-                const descripcion = configNotif.descripcion_template
-                  .replace('{{nombre}}', leadInfo.nombre || 'Lead');
-                
-                notificacionesParaInsertar.push({
-                  config_id: configNotif.id,
-                  card_id: rec.lead_id,
-                  comercial_email: leadInfo.comercial_email,
-                  nombre_lead: leadInfo.nombre,
-                  descripcion: descripcion,
-                  datos_extra: { tipo: 'recordatorio_vencido' }
-                });
-                
-                notificacionesCreadas.add(rec.lead_id);
-              }
-            }
-            
-            if (notificacionesParaInsertar.length > 0) {
-              await supabase.from('notificaciones').insert(notificacionesParaInsertar);
-              console.log(`🔔 Creadas ${notificacionesParaInsertar.length} notificaciones de recordatorios`);
-            }
-          }
-        } catch (notifErr) {
-          console.error('Error creando notificaciones de recordatorios:', notifErr);
-        }
-        
-        // 7. Para cada lead, verificar si tiene otros recordatorios activos
-        for (const leadId of leadIdsUnicos) {
-          const { count } = await supabase
-            .from('recordatorios')
-            .select('*', { count: 'exact', head: true })
-            .eq('lead_id', leadId)
-            .eq('estado', 'Programado');
-          
-          // Si no tiene más recordatorios programados, desactivar
-          if (count === 0) {
-            await supabase
-              .from('leads')
-              .update({ recordatorio_activo: false })
-              .eq('card_id', leadId);
-          }
-        }
-        
-        console.log('✅ Recordatorios vencidos actualizados y leads marcados como no revisados');
-      }
-    } catch (error) {
-      console.error('Error verificando recordatorios:', error.message);
-    }
-  }, []);
-
   // Efecto para carga inicial
   useEffect(() => {
     if (userEmail) {
@@ -943,7 +829,6 @@ export default function Dashboard() {
       fetchVentanasAbiertas();
       fetchNuevosLeads();
       fetchLeads(false, 0);
-      verificarRecordatoriosVencidos(); // Verificar al cargar
     }
   }, [userEmail]);
 
@@ -1022,11 +907,6 @@ export default function Dashboard() {
     const intervalId = setInterval(async () => {
       console.log("🔄 Actualizando datos en segundo plano...");
       
-      // Verificar recordatorios vencidos
-      try {
-        await verificarRecordatoriosVencidos();
-      } catch (e) { console.error('Error en verificación de recordatorios:', e); }
-      
       // Actualizar estadísticas
       try {
         await fetchStats();
@@ -1042,7 +922,7 @@ export default function Dashboard() {
     }, 30000); // 30 segundos
 
     return () => clearInterval(intervalId);
-  }, [currentPage, fetchStats, fetchVentanasAbiertas, fetchNuevosLeads, fetchLeads, verificarRecordatoriosVencidos]);
+  }, [currentPage, fetchStats, fetchVentanasAbiertas, fetchNuevosLeads, fetchLeads]);
 
   // Manejadores de paginación
   const handleNextPage = () => {
