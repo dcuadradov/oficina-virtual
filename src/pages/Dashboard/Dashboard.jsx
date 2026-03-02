@@ -86,6 +86,7 @@ export default function Dashboard() {
   
   // Estado para filtro de recordatorios automáticos (Emdi)
   const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
+  const [filtroGestionWA, setFiltroGestionWA] = useState(null); // null = todos, 'respond' = false, 'personal' = true
   
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -166,6 +167,37 @@ export default function Dashboard() {
       setLeads(prevLeads => 
         prevLeads.map(l => 
           l.card_id === lead.card_id ? { ...l, is_hot: lead.is_hot } : l
+        )
+      );
+    }
+  };
+
+  // Función para toggle gestión WhatsApp personal
+  const handleToggleGestionWhatsApp = async (lead) => {
+    const nuevoEstado = !lead.gestion_whatsapp_personal;
+    
+    // Actualización optimista
+    const updateData = { gestion_whatsapp_personal: nuevoEstado };
+    if (nuevoEstado) {
+      updateData.fecha_recordatorio_automatico = null;
+    }
+    
+    setLeads(prevLeads => 
+      prevLeads.map(l => 
+        l.card_id === lead.card_id ? { ...l, ...updateData } : l
+      )
+    );
+    
+    try {
+      await supabase
+        .from('leads')
+        .update(updateData)
+        .eq('card_id', lead.card_id);
+    } catch (error) {
+      console.error('Error al cambiar gestión WhatsApp:', error);
+      setLeads(prevLeads => 
+        prevLeads.map(l => 
+          l.card_id === lead.card_id ? { ...l, gestion_whatsapp_personal: lead.gestion_whatsapp_personal, fecha_recordatorio_automatico: lead.fecha_recordatorio_automatico } : l
         )
       );
     }
@@ -595,6 +627,13 @@ export default function Dashboard() {
         statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
       }
 
+      // Aplicar filtro de gestión WhatsApp
+      if (filtroGestionWA === 'respond') {
+        statsQuery = statsQuery.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+      } else if (filtroGestionWA === 'personal') {
+        statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
+      }
+
       const { data: statsData, error: statsError } = await statsQuery.limit(10000);
 
       if (statsError) throw statsError;
@@ -641,7 +680,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -770,6 +809,13 @@ export default function Dashboard() {
         query = query.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
       }
 
+      // Aplicar filtro de gestión WhatsApp
+      if (filtroGestionWA === 'respond') {
+        query = query.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+      } else if (filtroGestionWA === 'personal') {
+        query = query.eq('gestion_whatsapp_personal', true);
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
@@ -813,7 +859,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -873,7 +919,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1124,6 +1170,8 @@ export default function Dashboard() {
                   selectedReferido={selectedReferido}
                   onReferidoChange={setSelectedReferido}
                   referidos={referidosDisponibles}
+                  filtroGestionWA={filtroGestionWA}
+                  onFiltroGestionWAChange={setFiltroGestionWA}
                   showComercialFilter={puedeVerTodos}
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -1145,7 +1193,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag || selectedFuente || selectedReferido) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag || selectedFuente || selectedReferido || filtroGestionWA) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -1160,6 +1208,7 @@ export default function Dashboard() {
                       {selectedTag && <span className="text-slate-400"> • Tag: {selectedTag}</span>}
                       {selectedFuente && <span className="text-slate-400"> • Fuente: {selectedFuente}</span>}
                       {selectedReferido && <span className="text-slate-400"> • Referido por: {selectedReferido}</span>}
+                      {filtroGestionWA && <span className="text-slate-400"> • Gestión WA: {filtroGestionWA === 'respond' ? 'Respond' : 'WA Business del Comercial'}</span>}
                 </span>
                 <button
                       onClick={() => {
@@ -1174,6 +1223,7 @@ export default function Dashboard() {
                         setSelectedTag(null);
                         setSelectedFuente(null);
                         setSelectedReferido(null);
+                        setFiltroGestionWA(null);
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
@@ -1192,6 +1242,7 @@ export default function Dashboard() {
                   onOpenSeguimiento={handleOpenSeguimiento}
                   onMarcarNoRevisado={handleMarcarNoRevisado}
                   onToggleHot={handleToggleHot}
+                  onToggleGestionWA={handleToggleGestionWhatsApp}
                   activeEtapa={activeEtapa}
                   onEtapaChange={handleEtapaChange}
                   activeFilter={activeFilter}
@@ -1212,6 +1263,8 @@ export default function Dashboard() {
                   onFiltroHotChange={setFiltroHot}
                   filtroEmdi={filtroEmdi}
                   onFiltroEmdiChange={setFiltroEmdi}
+                  filtroGestionWA={filtroGestionWA}
+                  onFiltroGestionWAChange={setFiltroGestionWA}
                   configTags={configTags}
                   coloresFases={coloresFases}
                   onRefreshData={() => {
@@ -1268,6 +1321,8 @@ export default function Dashboard() {
                   selectedReferido={selectedReferido}
                   onReferidoChange={setSelectedReferido}
                   referidos={referidosDisponibles}
+                  filtroGestionWA={filtroGestionWA}
+                  onFiltroGestionWAChange={setFiltroGestionWA}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
                 />
