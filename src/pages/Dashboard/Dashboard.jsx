@@ -193,6 +193,7 @@ export default function Dashboard() {
         .from('leads')
         .update(updateData)
         .eq('card_id', lead.card_id);
+
     } catch (error) {
       console.error('Error al cambiar gestión WhatsApp:', error);
       setLeads(prevLeads => 

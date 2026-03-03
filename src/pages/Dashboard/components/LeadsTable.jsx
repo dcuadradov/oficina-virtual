@@ -853,9 +853,29 @@ const LeadsTable = ({
 
                       {/* Toggle Gestión WhatsApp Personal */}
                       <button
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
+                          const estabaActivo = lead.gestion_whatsapp_personal;
                           onToggleGestionWA?.(lead);
+                          if (!estabaActivo) {
+                            try {
+                              const res = await fetch('https://api.mdenglish.us/webhook/actualizar_gestion_whatsapp', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  card_id: lead.card_id,
+                                  gestion_whatsapp_personal: true,
+                                  respond_io_url: lead.respond_io_url || null
+                                })
+                              });
+                              if (res.ok) {
+                                setToastMessage('Se actualizó la etiqueta de gestión por el WhatsApp del comercial en Respond');
+                                setTimeout(() => setToastMessage(null), 4000);
+                              }
+                            } catch (err) {
+                              console.error('Error notificando webhook gestión WA:', err);
+                            }
+                          }
                         }}
                         className={`p-2.5 rounded-xl transition-all duration-200 ${
                           lead.gestion_whatsapp_personal
