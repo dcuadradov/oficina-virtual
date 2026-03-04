@@ -87,6 +87,7 @@ export default function Dashboard() {
   // Estado para filtro de recordatorios automáticos (Emdi)
   const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
   const [filtroGestionWA, setFiltroGestionWA] = useState(null); // null = todos, 'respond' = false, 'personal' = true
+  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false }); // Ordenamiento de la tabla
   
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -822,7 +823,7 @@ export default function Dashboard() {
       const to = from + LEADS_PER_PAGE - 1;
       
       query = query
-        .order('updated_at', { ascending: false, nullsFirst: true })
+        .order(sortConfig.field, { ascending: sortConfig.ascending, nullsFirst: true })
         .range(from, to);
 
       const { data, error, count } = await query;
@@ -860,7 +861,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -920,7 +921,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1266,6 +1267,8 @@ export default function Dashboard() {
                   onFiltroEmdiChange={setFiltroEmdi}
                   filtroGestionWA={filtroGestionWA}
                   onFiltroGestionWAChange={setFiltroGestionWA}
+                  sortConfig={sortConfig}
+                  onSortChange={setSortConfig}
                   configTags={configTags}
                   coloresFases={coloresFases}
                   onRefreshData={() => {

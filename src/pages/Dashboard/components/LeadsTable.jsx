@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X } from 'lucide-react';
+import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowUpDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import CrearRespondModal from './CrearRespondModal';
 
@@ -346,6 +346,9 @@ const LeadsTable = ({
   onFiltroEmdiChange,
   filtroGestionWA: filtroGestionWAProp,
   onFiltroGestionWAChange,
+  // Props de ordenamiento
+  sortConfig = { field: 'updated_at', ascending: false },
+  onSortChange,
   // Configuración de colores de tags
   configTags = {},
   // Colores de las fases para indicador visual
@@ -555,8 +558,42 @@ const LeadsTable = ({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-100">
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Creación</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">Actualización</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">
+                <button
+                  onClick={() => onSortChange?.({
+                    field: 'created_at',
+                    ascending: sortConfig.field === 'created_at' ? !sortConfig.ascending : false
+                  })}
+                  className="flex items-center gap-1 hover:text-slate-600 transition-colors group"
+                >
+                  Creación
+                  {sortConfig.field === 'created_at' ? (
+                    sortConfig.ascending
+                      ? <ChevronUp className="w-3.5 h-3.5 text-[#1717AF]" />
+                      : <ChevronDown className="w-3.5 h-3.5 text-[#1717AF]" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                  )}
+                </button>
+              </th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">
+                <button
+                  onClick={() => onSortChange?.({
+                    field: 'updated_at',
+                    ascending: sortConfig.field === 'updated_at' ? !sortConfig.ascending : false
+                  })}
+                  className="flex items-center gap-1 hover:text-slate-600 transition-colors group"
+                >
+                  Actualización
+                  {sortConfig.field === 'updated_at' ? (
+                    sortConfig.ascending
+                      ? <ChevronUp className="w-3.5 h-3.5 text-[#1717AF]" />
+                      : <ChevronDown className="w-3.5 h-3.5 text-[#1717AF]" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                  )}
+                </button>
+              </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
