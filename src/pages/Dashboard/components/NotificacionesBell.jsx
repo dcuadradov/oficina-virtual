@@ -1,27 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Calendar, CalendarPlus, CalendarClock, Flame, RotateCcw, UserPlus, Clock, ExternalLink, Users, AlertCircle } from 'lucide-react';
+import { Bell, Calendar, CalendarPlus, CalendarClock, CalendarCheck, Flame, RotateCcw, UserPlus, UserCheck, Clock, Users, AlertCircle, CheckCheck, Megaphone, Star, Zap, MessageSquare, RefreshCw, Sparkles, Copy } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
-// Mapeo de íconos por nombre
 const ICONOS = {
   calendar: Calendar,
   'calendar-plus': CalendarPlus,
   'calendar-clock': CalendarClock,
+  'calendar-check': CalendarCheck,
   flame: Flame,
   refresh: RotateCcw,
+  'rotate-ccw': RotateCcw,
   user: UserPlus,
+  'user-plus': UserPlus,
+  'user-check': UserCheck,
   clock: Clock,
   users: Users,
   alert: AlertCircle,
-  bell: Bell
+  'alert-circle': AlertCircle,
+  bell: Bell,
+  'check-check': CheckCheck,
+  megaphone: Megaphone,
+  star: Star,
+  zap: Zap,
+  'message-square': MessageSquare,
+  'refresh-cw': RefreshCw,
+  sparkles: Sparkles,
+  copy: Copy
 };
 
-// Número de notificaciones por página
+
 const NOTIFICACIONES_PER_PAGE = 10;
 
-/**
- * AudioContext global para evitar crear múltiples instancias
- */
 let audioContextInstance = null;
 let ultimoSonidoTimestamp = 0;
 
@@ -32,56 +41,31 @@ const getAudioContext = () => {
   return audioContextInstance;
 };
 
-/**
- * Reproduce un sonido de notificación usando Web Audio API
- * Incluye protección contra sonidos duplicados (mínimo 2 segundos entre sonidos)
- */
 const playNotificationSound = async () => {
   const ahora = Date.now();
-  
-  // Evitar sonido duplicado (mínimo 2 segundos entre sonidos)
-  if (ahora - ultimoSonidoTimestamp < 2000) {
-    console.log('🔇 Sonido omitido (muy reciente)');
-    return;
-  }
-  
+  if (ahora - ultimoSonidoTimestamp < 2000) return;
   ultimoSonidoTimestamp = ahora;
   
   try {
     const audioContext = getAudioContext();
-    
-    // Reanudar el contexto si está suspendido (políticas del navegador)
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-    }
+    if (audioContext.state === 'suspended') await audioContext.resume();
     
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
-    // Configurar el sonido (tipo de onda, frecuencia, duración)
     oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // La nota A5
-    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.1); // Baja a E5
-    
-    // Volumen suave
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.1);
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-    
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.3);
-    
-    console.log('🔊 Sonido reproducido');
   } catch (error) {
     console.log('No se pudo reproducir sonido:', error);
   }
 };
 
-/**
- * Formatea el tiempo relativo (hace X minutos, horas, días)
- */
 const formatTimeAgo = (timestamp) => {
   if (!timestamp) return '';
   const now = new Date();
@@ -105,31 +89,95 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [contadorNuevas, setContadorNuevas] = useState(0);
-  
+
+  const [categorias, setCategorias] = useState([]);
+  const [selectedCategoria, setSelectedCategoria] = useState(null);
+
+  // Acumula IDs de notificaciones 'nuevo' que se mostraron, para marcar solo esas al cerrar
+  const notificacionesMostradasRef = useRef(new Set());
+
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
+  const contadorAnteriorRef = useRef(null);
 
-  // Fetch de notificaciones
-  const fetchNotificaciones = useCallback(async (pageNum = 0, append = false) => {
+  const fetchCategorias = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_notificaciones')
+        .select('id, categoria, icono')
+        .eq('activo', true);
+      
+      if (error) throw error;
+      
+      const catMap = {};
+      (data || []).forEach(config => {
+        const cat = config.categoria || 'Otros';
+        if (!catMap[cat]) {
+          catMap[cat] = { nombre: cat, icono: config.icono, configIds: [] };
+        }
+        catMap[cat].configIds.push(config.id);
+      });
+      
+      return Object.values(catMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    } catch (error) {
+      console.error('Error fetching categorias:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchConteosCategorias = useCallback(async (cats) => {
+    if (!userEmail || !cats.length) return cats;
+    
+    try {
+      const { data, error } = await supabase
+        .from('notificaciones')
+        .select('config_id')
+        .eq('comercial_email', userEmail)
+        .eq('estado_lectura', 'nuevo');
+      
+      if (error) throw error;
+      
+      const countMap = {};
+      (data || []).forEach(n => {
+        countMap[n.config_id] = (countMap[n.config_id] || 0) + 1;
+      });
+      
+      return cats.map(cat => ({
+        ...cat,
+        conteo: cat.configIds.reduce((sum, id) => sum + (countMap[id] || 0), 0)
+      }));
+    } catch (error) {
+      console.error('Error fetching conteos:', error);
+      return cats;
+    }
+  }, [userEmail]);
+
+  const fetchNotificaciones = useCallback(async (pageNum = 0, append = false, configIds = null) => {
     if (!userEmail) return;
     
     setLoading(true);
     try {
-      const { data, error, count } = await supabase
+      let query = supabase
         .from('notificaciones')
-        .select(`
-          *,
-          config:config_notificaciones (
-            tipo,
-            icono
-          )
-        `, { count: 'exact' })
+        .select('*, config:config_notificaciones(tipo, icono, categoria)', { count: 'exact' })
         .eq('comercial_email', userEmail)
-        .order('created_at', { ascending: false })
-        .range(pageNum * NOTIFICACIONES_PER_PAGE, (pageNum + 1) * NOTIFICACIONES_PER_PAGE - 1);
-
+        .order('created_at', { ascending: false });
+      
+      if (configIds && configIds.length > 0) {
+        query = query.in('config_id', configIds);
+      }
+      
+      query = query.range(pageNum * NOTIFICACIONES_PER_PAGE, (pageNum + 1) * NOTIFICACIONES_PER_PAGE - 1);
+      
+      const { data, error } = await query;
       if (error) throw error;
-
+      
+      (data || []).forEach(n => {
+        if (n.estado_lectura === 'nuevo') {
+          notificacionesMostradasRef.current.add(n.id);
+        }
+      });
+      
       if (append) {
         setNotificaciones(prev => [...prev, ...(data || [])]);
       } else {
@@ -144,11 +192,6 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Ref para guardar el contador anterior (para detectar nuevas notificaciones)
-  const contadorAnteriorRef = useRef(null);
-
-  // Fetch contador de nuevas (solo estado "nuevo", no "visto")
-  // Si el contador aumenta, reproduce el sonido inmediatamente
   const fetchContador = useCallback(async () => {
     if (!userEmail) return;
     
@@ -163,13 +206,10 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       
       const nuevoContador = count || 0;
       
-      // Si el contador aumentó (y no es la carga inicial), reproducir sonido
       if (contadorAnteriorRef.current !== null && nuevoContador > contadorAnteriorRef.current) {
-        console.log(`🔔 Nuevas notificaciones: ${contadorAnteriorRef.current} → ${nuevoContador}`);
         playNotificationSound();
       }
       
-      // Actualizar ref y estado al mismo tiempo
       contadorAnteriorRef.current = nuevoContador;
       setContadorNuevas(nuevoContador);
     } catch (error) {
@@ -177,65 +217,54 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  // Cargar más notificaciones (infinite scroll)
   const loadMore = () => {
     if (loading || !hasMore) return;
     const nextPage = page + 1;
     setPage(nextPage);
-    fetchNotificaciones(nextPage, true);
+    const currentCat = categorias.find(c => c.nombre === selectedCategoria);
+    fetchNotificaciones(nextPage, true, currentCat?.configIds || null);
   };
 
-  // Marcar como visto (cuando cierra el dropdown)
-  const marcarComoVisto = async () => {
+  const marcarComoVisto = useCallback(async () => {
     if (!userEmail) return;
     
-    const notificacionesNuevas = notificaciones
-      .filter(n => n.estado_lectura === 'nuevo')
-      .map(n => n.id);
-    
-    if (notificacionesNuevas.length === 0) return;
+    const ids = Array.from(notificacionesMostradasRef.current);
+    if (ids.length === 0) return;
 
     try {
       await supabase
         .from('notificaciones')
-        .update({ 
-          estado_lectura: 'visto',
-          visto_at: new Date().toISOString()
-        })
-        .in('id', notificacionesNuevas);
+        .update({ estado_lectura: 'visto', visto_at: new Date().toISOString() })
+        .in('id', ids);
 
-      // Actualizar estado local
-      setNotificaciones(prev => 
-        prev.map(n => 
-          notificacionesNuevas.includes(n.id) 
+      setNotificaciones(prev =>
+        prev.map(n =>
+          ids.includes(n.id)
             ? { ...n, estado_lectura: 'visto', visto_at: new Date().toISOString() }
             : n
         )
       );
       
+      notificacionesMostradasRef.current = new Set();
       fetchContador();
     } catch (error) {
       console.error('Error marcando como visto:', error);
     }
-  };
+  }, [userEmail, fetchContador]);
 
-  // Marcar como abierto y abrir lead
   const handleNotificacionClick = async (notificacion) => {
-    // Marcar como abierto
     if (notificacion.estado_lectura !== 'abierto') {
       try {
         await supabase
           .from('notificaciones')
-          .update({ 
-            estado_lectura: 'abierto',
-            abierto_at: new Date().toISOString()
-          })
+          .update({ estado_lectura: 'abierto', abierto_at: new Date().toISOString() })
           .eq('id', notificacion.id);
 
-        // Actualizar estado local
-        setNotificaciones(prev => 
-          prev.map(n => 
-            n.id === notificacion.id 
+        notificacionesMostradasRef.current.delete(notificacion.id);
+
+        setNotificaciones(prev =>
+          prev.map(n =>
+            n.id === notificacion.id
               ? { ...n, estado_lectura: 'abierto', abierto_at: new Date().toISOString() }
               : n
           )
@@ -247,81 +276,75 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       }
     }
 
-    // Cerrar dropdown y abrir lead
+    marcarComoVisto();
     setIsOpen(false);
+    
     if (onOpenLead && notificacion.card_id) {
       onOpenLead(notificacion.card_id);
     }
   };
 
-  // Toggle dropdown
   const toggleDropdown = async () => {
-    // Inicializar/desbloquear AudioContext al primer click (requerido por navegadores)
     try {
       const ctx = getAudioContext();
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
+      if (ctx.state === 'suspended') await ctx.resume();
     } catch (e) { /* ignorar */ }
     
     if (!isOpen) {
+      notificacionesMostradasRef.current = new Set();
+      
+      const cats = await fetchCategorias();
+      const catsWithCounts = await fetchConteosCategorias(cats);
+      setCategorias(catsWithCounts);
+      
+      const firstWithNotifs = catsWithCounts.find(c => c.conteo > 0);
+      const selected = firstWithNotifs || catsWithCounts[0];
+      setSelectedCategoria(selected?.nombre || null);
+      
       setPage(0);
-      fetchNotificaciones(0, false);
+      fetchNotificaciones(0, false, selected?.configIds || null);
     } else {
-      // Al cerrar, marcar como visto
       marcarComoVisto();
     }
     setIsOpen(!isOpen);
   };
 
-  // Cerrar al hacer click fuera
+  const handleCategoriaClick = (cat) => {
+    if (cat.nombre === selectedCategoria) return;
+    setSelectedCategoria(cat.nombre);
+    setPage(0);
+    fetchNotificaciones(0, false, cat.configIds);
+  };
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
-        dropdownRef.current && 
-        !dropdownRef.current.contains(e.target) &&
-        bellRef.current &&
-        !bellRef.current.contains(e.target)
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        bellRef.current && !bellRef.current.contains(e.target)
       ) {
-        if (isOpen) {
-          marcarComoVisto();
-        }
+        if (isOpen) marcarComoVisto();
         setIsOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, notificaciones]);
+  }, [isOpen, marcarComoVisto]);
 
-  // Fetch inicial + Heartbeat cada 10 segundos (UN SOLO useEffect)
   useEffect(() => {
     if (!userEmail) return;
-    
-    // Fetch inicial
     fetchContador();
-    
-    // Heartbeat cada 10 segundos
-    const heartbeatInterval = setInterval(fetchContador, 10000);
-    
-    return () => clearInterval(heartbeatInterval);
+    const interval = setInterval(fetchContador, 10000);
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
-  // Efecto para actualizar el título de la pestaña del navegador
   useEffect(() => {
-    if (contadorNuevas > 0) {
-      document.title = `Portal MD (${contadorNuevas > 99 ? '99+' : contadorNuevas})`;
-    } else {
-      document.title = 'Portal MD';
-    }
+    document.title = contadorNuevas > 0
+      ? `Portal MD (${contadorNuevas > 99 ? '99+' : contadorNuevas})`
+      : 'Portal MD';
   }, [contadorNuevas]);
 
-  // Obtener ícono del componente
-  const getIcono = (iconoNombre) => {
-    const IconComponent = ICONOS[iconoNombre] || Bell;
-    return IconComponent;
-  };
+  const getIcono = (iconoNombre) => ICONOS[iconoNombre] || Bell;
 
   return (
     <div className="relative">
@@ -337,8 +360,6 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
         title="Notificaciones"
       >
         <Bell size={18} />
-        
-        {/* Badge contador */}
         {contadorNuevas > 0 && (
           <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center text-[11px] font-bold bg-rose-500 text-white rounded-full px-1.5 shadow-lg shadow-rose-200">
             {contadorNuevas > 99 ? '99+' : contadorNuevas}
@@ -350,18 +371,56 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed sm:absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-16 sm:top-full mt-2 w-[calc(100vw-32px)] sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
-          style={{ maxHeight: '480px' }}
+          className="fixed sm:absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-16 sm:top-full mt-2 w-[calc(100vw-32px)] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
+          style={{ maxHeight: '540px' }}
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
             <h3 className="text-base font-bold text-slate-800">Notificaciones</h3>
             {contadorNuevas > 0 && (
-              <p className="text-xs text-slate-500 mt-0.5">
-                {contadorNuevas} sin leer
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">{contadorNuevas} sin leer</p>
             )}
           </div>
+
+          {/* Filtros de categoría */}
+          {categorias.length > 0 && (
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-center gap-2">
+                {categorias.map((cat) => {
+                  const IconCat = getIcono(cat.icono);
+                  const isSelected = selectedCategoria === cat.nombre;
+                  return (
+                    <div key={cat.nombre} className="relative group">
+                      <button
+                        onClick={() => handleCategoriaClick(cat)}
+                        className={`relative w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-[#1717AF] text-white shadow-md shadow-[#1717AF]/25 scale-105'
+                            : 'bg-white text-slate-400 hover:bg-slate-100 hover:text-slate-600 border border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <IconCat size={19} strokeWidth={1.8} />
+                        <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
+                          cat.conteo > 0
+                            ? 'bg-rose-500 text-white shadow-sm shadow-rose-200'
+                            : 'bg-slate-200 text-slate-400'
+                        }`}>
+                          {cat.conteo}
+                        </span>
+                      </button>
+                      {/* Tooltip */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                        <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
+                          {cat.nombre}
+                          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Lista de notificaciones */}
           <div 
@@ -377,7 +436,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
             {notificaciones.length === 0 && !loading ? (
               <div className="px-5 py-12 text-center">
                 <Bell size={32} className="mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500 text-sm">No tienes notificaciones</p>
+                <p className="text-slate-500 text-sm">No hay notificaciones en esta categoría</p>
               </div>
             ) : (
               <>
@@ -393,25 +452,23 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                       onClick={() => handleNotificacionClick(notif)}
                       className={`px-5 py-4 border-b border-slate-100 cursor-pointer transition-all duration-200 ${
                         esNuevo 
-                          ? 'bg-blue-100 hover:bg-blue-150 border-l-4 border-l-blue-500' 
+                          ? 'bg-blue-50/80 hover:bg-blue-100/80 border-l-4 border-l-[#1717AF]' 
                           : esVisto 
-                            ? 'bg-slate-100 hover:bg-slate-150 border-l-4 border-l-slate-300'
+                            ? 'bg-slate-50 hover:bg-slate-100 border-l-4 border-l-slate-300'
                             : 'bg-white hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex gap-3">
-                        {/* Ícono */}
                         <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
                           esNuevo 
                             ? 'bg-[#1717AF] text-white' 
                             : esVisto
-                              ? 'bg-slate-200 text-slate-600'
+                              ? 'bg-slate-200 text-slate-500'
                               : 'bg-slate-100 text-slate-400'
                         }`}>
                           <IconComponent size={18} />
                         </div>
 
-                        {/* Contenido */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p className={`text-sm leading-snug ${
@@ -421,7 +478,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                             </p>
                             
                             {esNuevo && (
-                              <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#1717AF] bg-blue-100 px-2 py-0.5 rounded-full">
+                              <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#1717AF] bg-[#1717AF]/10 px-2 py-0.5 rounded-full">
                                 Nuevo
                               </span>
                             )}
@@ -442,7 +499,6 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                   );
                 })}
 
-                {/* Loading */}
                 {loading && (
                   <div className="px-5 py-4 text-center">
                     <div className="inline-flex items-center gap-2 text-slate-400 text-sm">
@@ -452,7 +508,6 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                   </div>
                 )}
 
-                {/* No más notificaciones */}
                 {!hasMore && notificaciones.length > 0 && (
                   <div className="px-5 py-4 text-center text-xs text-slate-400">
                     No hay más notificaciones
@@ -466,4 +521,3 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     </div>
   );
 }
-
