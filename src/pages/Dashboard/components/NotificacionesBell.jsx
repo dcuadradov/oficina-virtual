@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Calendar, CalendarPlus, CalendarClock, CalendarCheck, Flame, RotateCcw, UserPlus, UserCheck, Clock, Users, AlertCircle, CheckCheck, Megaphone, Star, Zap, MessageSquare, RefreshCw, Sparkles, Copy } from 'lucide-react';
+import { Bell, Calendar, CalendarPlus, CalendarClock, CalendarCheck, Flame, RotateCcw, UserPlus, UserCheck, Clock, Users, AlertCircle, CheckCheck, Megaphone, Star, Zap, MessageSquare, RefreshCw, Sparkles, Copy, FolderOpen } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
 const ICONOS = {
@@ -23,6 +23,7 @@ const ICONOS = {
   star: Star,
   zap: Zap,
   'message-square': MessageSquare,
+  'folder-open': FolderOpen,
   'refresh-cw': RefreshCw,
   sparkles: Sparkles,
   copy: Copy
