@@ -2024,10 +2024,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date(today);
-    maxDate.setDate(maxDate.getDate() + 30);
+    maxDate.setMonth(maxDate.getMonth() + 6);
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
-    // Permitir desde hoy (inclusive) hasta 30 días en el futuro
     return checkDate >= today && checkDate <= maxDate;
   };
   
@@ -3898,7 +3897,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     
                     {/* Nota sobre límite */}
                     <p className="text-xs text-slate-400 text-center mt-2">
-                      Puedes programar desde hoy (mín. 10 min) hasta 30 días en el futuro
+                      Puedes programar desde hoy (mín. 10 min) hasta 6 meses en el futuro
                     </p>
                   </div>
                   </>
