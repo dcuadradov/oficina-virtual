@@ -402,10 +402,10 @@ export default function MetricasPerformance({
         const m = metricsPerComercial[comercialEmail];
         m.total++;
 
-        // Determine advancement: lead has a historial entry for a LATER stage after this one
-        // For Pitch/Posible matrícula/Pago pendiente, only specific target stages count
+        // Determine advancement: lead has a historial entry for a LATER stage after ANY of its entries in this stage
         const advanceTargets = {
           'Pitch': ['Posible matrícula', 'Pago pendiente', 'Matrícula'],
+          'Reprogramar': ['Posible matrícula', 'Pago pendiente', 'Matrícula'],
           'Posible matrícula': ['Pago pendiente', 'Matrícula'],
           'Pago pendiente': ['Matrícula'],
         };
@@ -414,17 +414,18 @@ export default function MetricasPerformance({
         let advanced = false;
         let advanceTimeHours = null;
 
-        if (stageEntries.length > 0) {
-          const lastStageEntry = stageEntries[stageEntries.length - 1];
+        // Check each entry in the stage — if ANY led to advancement, count it
+        for (const entry of stageEntries) {
           const nextDifferentEntry = history.find(
-            h => h.created_at > lastStageEntry.created_at
+            h => h.created_at > entry.created_at
               && h.etapa !== stageName
               && (!validTargets || validTargets.includes(h.etapa))
           );
 
           if (nextDifferentEntry) {
             advanced = true;
-            advanceTimeHours = (nextDifferentEntry.created_at - lastStageEntry.created_at) / (1000 * 60 * 60);
+            advanceTimeHours = (nextDifferentEntry.created_at - entry.created_at) / (1000 * 60 * 60);
+            break;
           }
         }
 
