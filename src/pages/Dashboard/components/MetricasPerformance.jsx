@@ -379,17 +379,33 @@ export default function MetricasPerformance({
 
         if (stageEntries.length === 0 && !isCurrentlyInStage) return;
 
-        // Date range filter: only count if lead had a stage entry within the period,
-        // or is currently in the stage AND was created within the period
+        // Categorize: arrived during period vs already there
+        let isAsignadoPeriodo = false;
+        let isAsignadoPrevio = false;
+
         if (rangeStart && rangeEnd) {
           const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
           const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
-          if (!hasEntryInRange && !(isCurrentlyInStage && createdInRange)) return;
+
+          if (hasEntryInRange || (isCurrentlyInStage && createdInRange)) {
+            isAsignadoPeriodo = true;
+          } else {
+            // Lead was in the stage before the period — check if managed (seguimiento) during the period
+            const hasSeguimientoInRange = seguimientos.some(s => s >= rangeStart && s <= rangeEnd);
+            const hasStageHistory = stageEntries.length > 0 || isCurrentlyInStage;
+            if (hasStageHistory && hasSeguimientoInRange) {
+              isAsignadoPrevio = true;
+            } else {
+              return;
+            }
+          }
         }
 
         if (!metricsPerComercial[comercialEmail]) {
           metricsPerComercial[comercialEmail] = {
             total: 0,
+            asignadosPeriodo: 0,
+            asignadosPrevio: 0,
             avanzaron: 0,
             tiemposAvance: [],
             conSeguimiento: 0,
@@ -403,6 +419,8 @@ export default function MetricasPerformance({
 
         const m = metricsPerComercial[comercialEmail];
         m.total++;
+        if (isAsignadoPeriodo) m.asignadosPeriodo++;
+        if (isAsignadoPrevio) m.asignadosPrevio++;
 
         // Determine advancement: lead has a historial entry for a LATER stage after ANY of its entries in this stage
         const advanceTargets = {
@@ -483,6 +501,8 @@ export default function MetricasPerformance({
         processedComercials[email] = {
           nombre: comercialNames[email] || email?.split('@')[0] || email,
           total: m.total,
+          asignadosPeriodo: m.asignadosPeriodo,
+          asignadosPrevio: m.asignadosPrevio,
           avanzaron: m.avanzaron,
           tasaAvance: m.total > 0 ? (m.avanzaron / m.total) * 100 : 0,
           tiempoPromedioAvance: avgOf(m.tiemposAvance),
@@ -538,12 +558,16 @@ export default function MetricasPerformance({
       const globalAvanzaron = Object.values(processedComercials).reduce((s, m) => s + m.avanzaron, 0);
       const globalConSeg = Object.values(processedComercials).reduce((s, m) => s + m.conSeguimiento, 0);
 
+      const hasDateFilter = !!(rangeStart && rangeEnd);
+
       setDetailData({
         stageName,
         stageIndex,
         columns,
+        hasDateFilter,
         kpis: {
-          total: globalTotal,
+          total: leadCounts[stageName] || globalTotal,
+          detailTotal: globalTotal,
           avanzaron: globalAvanzaron,
           tasaAvance: globalTotal > 0 ? (globalAvanzaron / globalTotal) * 100 : 0,
           conSeguimiento: globalConSeg,
@@ -562,7 +586,7 @@ export default function MetricasPerformance({
     } finally {
       setLoadingDetail(false);
     }
-  }, [parseDateFilters, selectedTag, comercialNames, selectedComercial, comerciales]);
+  }, [parseDateFilters, selectedTag, comercialNames, selectedComercial, comerciales, leadCounts]);
 
   const handleOpenDetail = useCallback((stageName) => {
     setSelectedStage(stageName);
@@ -651,19 +675,19 @@ export default function MetricasPerformance({
                 icon={<TrendingUp size={16} />}
                 label="Avanzan"
                 value={`${detailData.kpis.tasaAvance.toFixed(1)}%`}
-                subtitle={`${detailData.kpis.avanzaron} de ${detailData.kpis.total}`}
+                subtitle={`${detailData.kpis.avanzaron} de ${detailData.kpis.detailTotal}`}
                 color="emerald"
               />
               <KpiCard
                 icon={<MessageSquare size={16} />}
                 label="Con seguimiento"
-                value={detailData.kpis.total > 0 ? `${detailData.kpis.conSeguimiento} — ${((detailData.kpis.conSeguimiento / detailData.kpis.total) * 100).toFixed(1)}%` : '0'}
+                value={detailData.kpis.detailTotal > 0 ? `${detailData.kpis.conSeguimiento} — ${((detailData.kpis.conSeguimiento / detailData.kpis.detailTotal) * 100).toFixed(1)}%` : '0'}
                 color="blue"
               />
               <KpiCard
                 icon={<AlertTriangle size={16} />}
                 label="Sin seguimiento"
-                value={detailData.kpis.total > 0 ? `${detailData.kpis.sinSeguimiento} — ${((detailData.kpis.sinSeguimiento / detailData.kpis.total) * 100).toFixed(1)}%` : '0'}
+                value={detailData.kpis.detailTotal > 0 ? `${detailData.kpis.sinSeguimiento} — ${((detailData.kpis.sinSeguimiento / detailData.kpis.detailTotal) * 100).toFixed(1)}%` : '0'}
                 color="amber"
               />
             </div>
@@ -716,6 +740,20 @@ export default function MetricasPerformance({
                   columns={detailData.columns}
                   getValue={(d) => d.total}
                 />
+                {detailData.hasDateFilter && (
+                  <>
+                    <MetricRow
+                      label="↳ Asignados en el periodo"
+                      columns={detailData.columns}
+                      getValue={(d) => d.asignadosPeriodo}
+                    />
+                    <MetricRow
+                      label="↳ Asignados previamente"
+                      columns={detailData.columns}
+                      getValue={(d) => d.asignadosPrevio}
+                    />
+                  </>
+                )}
                 <MetricRow
                   label="Avanzan de etapa"
                   columns={detailData.columns}
