@@ -1,31 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import logo from '../assets/logo.png';
 import loginBg from '../assets/login-bg.jpg';
 import { Sparkles } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 const Login = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isHovering, setIsHovering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Determinar el callback según el dominio actual (en tiempo de ejecución)
-  const hostname = window.location.hostname;
-  const isProduction = hostname === 'portal.mdenglish.us' || hostname === 'oficina-virtual-prod.web.app';
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  
-  // Seleccionar el callback correcto
-  let callbackEndpoint = 'callback-google-staging'; // default: staging
-  if (isProduction) {
-    callbackEndpoint = 'callback-google';
-  } else if (isLocalhost) {
-    callbackEndpoint = 'callback-google-local';
-  }
+  // Verificar si ya hay sesión activa
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate('/home');
+      }
+    };
+    checkSession();
+    
+    // Mostrar error si viene de un redirect con error
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'unauthorized') {
+      setError('Solo usuarios de @mdenglish.us pueden acceder');
+    }
+  }, [navigate, searchParams]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setIsLoading(true);
-    // Pequeño delay para mostrar animación
-    setTimeout(() => {
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=72291957752-0qoch8qtua86qan19ni2tt7dfl57pb0e.apps.googleusercontent.com&redirect_uri=https://api.mdenglish.us/webhook/${callbackEndpoint}&response_type=code&scope=email%20profile&prompt=select_account`;
-    }, 500);
+    setError(null);
+    
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      
+      if (error) {
+        console.error('Error de autenticación:', error);
+        setError('Error al iniciar sesión. Intenta de nuevo.');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error inesperado. Intenta de nuevo.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -171,6 +196,13 @@ const Login = () => {
                 </>
               )}
             </button>
+            
+            {/* Mensaje de error */}
+            {error && (
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-600 text-center">
+                {error}
+              </div>
+            )}
             
             {/* Separador */}
             <div className="flex items-center gap-4 my-6">

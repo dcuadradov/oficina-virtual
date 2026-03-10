@@ -9,6 +9,7 @@ import {
   Star,
   Sparkles,
   MessageCircle,
+  MessageCirclePlus,
   ClipboardList,
   Clock,
   FileText,
@@ -26,14 +27,216 @@ import {
   CalendarDays,
   Bell,
   RotateCcw,
-  ExternalLink
+  ExternalLink,
+  Flame,
+  Users,
+  ChevronDown,
+  Edit2,
+  Search,
+  MoreHorizontal,
+  AlertCircle,
+  RefreshCcw,
+  History,
+  Tag
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
+import CrearRespondModal from './CrearRespondModal';
 
-// Configuración del stepper del funnel
-const funnelSteps = [
-  { id: 'Sin contacto', label: 'Sin contacto', shortLabel: 'Contacto' },
+/**
+ * Calcula las horas restantes de la ventana de 24h de WhatsApp
+ * @param {string} timestamp - timestamp_ultimo_mensaje_whatsapp
+ * @returns {object} { horasRestantes: number, activo: boolean }
+ */
+const calcularTiempoWhatsApp = (timestamp) => {
+  if (!timestamp) return { horasRestantes: null, activo: false };
+  
+  const ultimoMensaje = new Date(timestamp);
+  const ahora = new Date();
+  const diffMs = ahora - ultimoMensaje;
+  const diffHoras = diffMs / (1000 * 60 * 60);
+  
+  if (diffHoras >= 24) {
+    return { horasRestantes: 0, activo: false };
+  }
+  
+  const horasRestantes = Math.ceil(24 - diffHoras);
+  return { horasRestantes, activo: true };
+};
+
+/**
+ * Determina si un usuario está conectado basado en su última conexión
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {boolean} true si conectado (menos de 2 minutos)
+ */
+const isUserOnline = (ultimaConexion) => {
+  if (!ultimaConexion) return false;
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMinutes = (now - lastConnection) / (1000 * 60);
+  return diffMinutes < 2;
+};
+
+/**
+ * Formatea la última conexión de manera legible
+ * @param {string} ultimaConexion - Timestamp de última conexión
+ * @returns {string} Texto formateado
+ */
+const formatLastConnection = (ultimaConexion) => {
+  if (!ultimaConexion) return 'Sin datos';
+  
+  const lastConnection = new Date(ultimaConexion);
+  const now = new Date();
+  const diffMs = now - lastConnection;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
+  const remainingMinutes = diffMinutes % 60;
+  
+  if (diffMinutes < 2) {
+    return 'Conectado ahora';
+  }
+  
+  // Formatear tiempo transcurrido
+  let tiempoTranscurrido = '';
+  if (diffDays >= 1) {
+    tiempoTranscurrido = `${diffDays} día${diffDays > 1 ? 's' : ''}, ${remainingHours}h y ${remainingMinutes}min`;
+  } else if (diffHours >= 1) {
+    tiempoTranscurrido = `${diffHours}h y ${remainingMinutes}min`;
+  } else {
+    tiempoTranscurrido = `${diffMinutes}min`;
+  }
+  
+  return `Inactivo. Última conexión hace ${tiempoTranscurrido}`;
+};
+
+/**
+ * Mapa de colores para el stepper dinámico (por nombre o hex)
+ */
+const STEPPER_COLORS = {
+  // Por nombre
+  azul: { hex: '#1717AF', bgLight: 'bg-blue-100' },
+  verde: { hex: '#22C55E', bgLight: 'bg-emerald-100' },
+  verde_oscuro: { hex: '#15803D', bgLight: 'bg-green-100' },
+  amarillo: { hex: '#EAB308', bgLight: 'bg-yellow-100' },
+  naranja: { hex: '#F97316', bgLight: 'bg-orange-100' },
+  rojo: { hex: '#EF4444', bgLight: 'bg-red-100' },
+  gris: { hex: '#CBD5E1', bgLight: 'bg-slate-100' },
+  // Por hex directo
+  '#1717AF': { hex: '#1717AF', bgLight: 'bg-blue-100' },
+  '#22C55E': { hex: '#22C55E', bgLight: 'bg-emerald-100' },
+  '#15803D': { hex: '#15803D', bgLight: 'bg-green-100' },
+  '#EAB308': { hex: '#EAB308', bgLight: 'bg-yellow-100' },
+  '#F97316': { hex: '#F97316', bgLight: 'bg-orange-100' },
+  '#EF4444': { hex: '#EF4444', bgLight: 'bg-red-100' },
+  '#CBD5E1': { hex: '#CBD5E1', bgLight: 'bg-slate-100' }
+};
+
+/**
+ * Obtiene los colores del stepper (soporta nombre o hex)
+ */
+const getStepperColors = (color) => {
+  // Si está en el mapa, usar ese
+  if (STEPPER_COLORS[color]) {
+    return STEPPER_COLORS[color];
+  }
+  // Si es un hex que no está mapeado, usar directamente
+  if (color?.startsWith('#')) {
+    return { hex: color, bgLight: 'bg-slate-100' };
+  }
+  // Default: verde
+  return STEPPER_COLORS.verde;
+};
+
+/**
+ * Parsea el string de fases (ej: "339756287.P1, 340566951.P2")
+ * y retorna un array de objetos con fase_id y label
+ */
+const parsearFases = (fasesString) => {
+  if (!fasesString || fasesString.trim() === '') return [];
+  
+  return fasesString.split(',').map(item => {
+    const [faseId, label] = item.trim().split('.');
+    return { faseId: faseId.trim(), label: label?.trim() || '' };
+  }).filter(item => item.faseId);
+};
+
+/**
+ * Componente botón de WhatsApp con contador de ventana 24h
+ * @param {object} lead - Datos del lead
+ * @param {number} size - Tamaño del ícono
+ * @param {function} onCrearRespond - Callback para abrir modal de crear en Respond
+ */
+const WhatsAppButtonSidebar = ({ lead, size = 20, onCrearRespond }) => {
+  const [tiempoWhatsApp, setTiempoWhatsApp] = useState(() => 
+    calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp)
+  );
+
+  useEffect(() => {
+    // Recalcular cuando cambie el timestamp
+    setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    
+    // Actualizar cada minuto
+    const interval = setInterval(() => {
+      setTiempoWhatsApp(calcularTiempoWhatsApp(lead.timestamp_ultimo_mensaje_whatsapp));
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, [lead.timestamp_ultimo_mensaje_whatsapp]);
+
+  const tieneUrl = !!lead.respond_io_url;
+  const { horasRestantes, activo } = tiempoWhatsApp;
+  const mostrarContador = horasRestantes !== null;
+
+  // Si no tiene URL, mostrar botón para crear en Respond
+  if (!tieneUrl) {
+    return (
+      <button
+        onClick={() => onCrearRespond?.(lead)}
+        className="relative p-2.5 rounded-xl transition-all duration-200 text-[#1717AF] bg-[#1717AF]/10 hover:bg-[#1717AF]/20"
+        title="Crear en Respond.io"
+      >
+        <MessageCirclePlus size={size} />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => window.open(lead.respond_io_url, '_blank')}
+      className={`relative p-2.5 rounded-xl transition-all duration-200 ${
+        activo
+          ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+          : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+      }`}
+      title={
+        activo 
+          ? `Ventana activa: ${horasRestantes}h restantes` 
+          : "Ventana de 24h expirada"
+      }
+    >
+      <MessageCircle size={size} />
+      
+      {/* Badge contador */}
+      {mostrarContador && (
+        <span 
+          className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
+            activo 
+              ? 'bg-emerald-500 text-white' 
+              : 'bg-amber-200 text-amber-700'
+          }`}
+        >
+          {horasRestantes}h
+        </span>
+      )}
+    </button>
+  );
+};
+
+// Configuración del stepper del funnel (fallback si no se cargan de BD)
+const funnelStepsDefault = [
+  { id: 'Validación de contacto', label: 'Validación de contacto', shortLabel: 'Validación' },
   { id: 'Perfilamiento', label: 'Perfilamiento', shortLabel: 'Perfil' },
   { id: 'Pitch agendado', label: 'Pitch agendado', shortLabel: 'Agendado' },
   { id: 'Pitch', label: 'Pitch', shortLabel: 'Pitch' },
@@ -85,8 +288,12 @@ const tabs = [
   { id: 'info', label: 'Info general', icon: ClipboardList },
   { id: 'seguimiento', label: 'Seguimiento', icon: BarChart3 },
   { id: 'recordatorio', label: 'Recordatorio', icon: Clock },
-  { id: 'formulario', label: 'Formulario', icon: FileText },
+  { id: 'historial', label: 'Historial', icon: History },
+  { id: 'tici', label: 'Emdi', icon: Sparkles },
 ];
+
+// Fases que aplican para recordatorios automáticos TICI
+const FASES_RECORDATORIO_AUTOMATICO = ['340832804', '339756097', '341769991'];
 
 // Fases donde se muestra el botón de agendar
 const FASES_LISTO_AGENDAR = ['339756287', '340855086'];
@@ -94,12 +301,170 @@ const FASES_LISTO_AGENDAR = ['339756287', '340855086'];
 // Fases donde se muestra el banner de "Pitch agendado"
 const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
-const RECORDATORIOS_PER_PAGE = 10;
+const RECORDATORIOS_PER_PAGE = 50;
 
-const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRevisado, onRefreshData }) => {
+// Opciones para los campos editables con select
+const OPCIONES_OCUPACION = ['Estudiante', 'Médico General', 'Residente', 'Especialista'];
+
+const OPCIONES_MOTIVACION = [
+  'Quiero hacer una especialización en el extranjero',
+  'Quiero entender artículos cientificos',
+  'Quiero entender las guías de práctica clínica',
+  'Tengo una ponencia en un simposio internacional',
+  'Otro'
+];
+
+const OPCIONES_NIVEL_INGLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+
+const OPCIONES_ANO_RESIDENCIA = ['1', '2', '3', '4', '5', '6', '7'];
+
+const OPCIONES_COMO_ADQUIRIO_INGLES = [
+  'En un curso de inglés (instituto o academia)',
+  'En un colegio bilingüe',
+  'Viví o estudié en el extranjero',
+  'Aprendizaje autodidacta (por mi cuenta, apps, internet, etc.)',
+  'A través de mi trabajo o práctica profesional',
+  'Combinación de varias fuentes',
+  'Mi pareja habla inglés',
+  'Otro'
+];
+
+const OPCIONES_CUANDO_EMPEZAR = ['En este momento', 'El próximo mes', 'El próximo semestre'];
+
+const OPCIONES_ESPECIALIDAD = [
+  'Anestesiología y Reanimación', 'Alergología', 'Anatomía Patológica', 'Cardiología',
+  'Cirugía General', 'Cirugía Cardiotorácica', 'Cirugía Colorrectal', 'Cirugía de Tórax',
+  'Cirugía Oncológica', 'Cirugía Pediátrica', 'Cirugía Plástica', 'Cirugía Robótica',
+  'Cirugía Vascular', 'Coloproctología', 'Dermatología', 'Endocrinología y Nutrición',
+  'Epidemiología', 'Gastroenterología', 'Genética Médica', 'Geriatría', 'Gerontología Médica',
+  'Gestión de Salud (Administrativo)', 'Ginecología y Obstetricia', 'Hematología', 'Imagenología',
+  'Infectología', 'Inmunología Clínica', 'Laboratorio Clínico', 'Medicina de Emergencias',
+  'Medicina Familiar', 'Medicina Física y Rehabilitación', 'Medicina Hiperbárica',
+  'Medicina Intensiva', 'Medicina Interna', 'Medicina Legal y Forense', 'Medicina Nuclear',
+  'Medicina Paliativa', 'Medicina Preventiva y Salud Pública', 'Medicina del Trabajo',
+  'Nefrología', 'Neumología', 'Neurocirugía', 'Neurología', 'Oftalmología', 'Oncología Médica',
+  'Otorrinolaringología', 'Pediatría', 'Psiquiatría', 'Radiología', 'Reumatología',
+  'Terapia del Dolor', 'Traumatología y Ortopedia', 'Urología'
+];
+
+const OPCIONES_PLAN_PAGO = ['1', '2', '4', '6', '8', '10', '12'];
+
+const OPCIONES_CONSULTA_DECISION = [
+  'Si, debe consultar con alguien más',
+  'No consulta con nadie más'
+];
+
+/**
+ * Parsea las secciones del formulario
+ * Formato: "Contacto (1) | Ocupación (2) | Motivación (3)"
+ * Retorna: [{ nombre: "Contacto", orden: 1 }, ...]
+ */
+const parseSecciones = (seccionesStr) => {
+  if (!seccionesStr) return [];
+  
+  // Usar | como separador para evitar conflictos con comas en el texto
+  return seccionesStr.split('|').map(sec => {
+    const match = sec.trim().match(/^(.+?)\s*\((\d+)\)$/);
+    if (match) {
+      return { nombre: match[1].trim(), orden: parseInt(match[2]) };
+    }
+    return { nombre: sec.trim(), orden: 999 };
+  }).sort((a, b) => a.orden - b.orden);
+};
+
+/**
+ * Parsea el orden del campo (incluye sección si tiene_secciones = true)
+ * Formato: "SECCIÓN (orden)" o solo "orden"
+ * Retorna: { seccion: "SECCIÓN" | null, orden: number }
+ */
+const parseOrdenField = (ordenStr) => {
+  if (!ordenStr) return { seccion: null, orden: 999 };
+  
+  // Intentar parsear formato "SECCIÓN (orden)"
+  const match = ordenStr.toString().trim().match(/^(.+?)\s*\((\d+)\)$/);
+  if (match) {
+    return { seccion: match[1].trim(), orden: parseInt(match[2]) };
+  }
+  
+  // Si es solo número
+  const numMatch = ordenStr.toString().match(/^\d+$/);
+  if (numMatch) {
+    return { seccion: null, orden: parseInt(ordenStr) };
+  }
+  
+  return { seccion: null, orden: 999 };
+};
+
+/**
+ * Parsea las opciones del campo select
+ * Formato: "Opción A (1) | Opción B (2) | Opción C (3)"
+ * Usa | como separador para evitar conflictos con comas en el texto
+ * Retorna: [{ value: "Opción A", orden: 1 }, ...]
+ */
+const parseOpcionesField = (opcionesStr) => {
+  if (!opcionesStr) return [];
+  
+  // Usar | como separador para evitar conflictos con comas en el texto
+  return opcionesStr.split('|').map(opt => {
+    const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
+    if (match) {
+      return { value: match[1].trim(), orden: parseInt(match[2]) };
+    }
+    return { value: opt.trim(), orden: 999 };
+  }).sort((a, b) => a.orden - b.orden);
+};
+
+/**
+ * Parsea la condición de dependencia
+ * Formato: "nombre_campo | valor"
+ * Usa | como separador para evitar conflictos con comas
+ */
+const parseDependeDeField = (dependeDeStr) => {
+  if (!dependeDeStr) return null;
+  const parts = dependeDeStr.split('|').map(s => s.trim());
+  if (parts.length >= 2) {
+    return { fieldName: parts[0], valor: parts[1] };
+  }
+  return null;
+};
+
+const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  
+  // Estado local del lead para actualizaciones en tiempo real
+  const [leadLocal, setLeadLocal] = useState(null);
+  const lead = leadLocal || leadProp;
+  
+  // Sincronizar lead local cuando cambia el prop
+  useEffect(() => {
+    setLeadLocal(leadProp);
+  }, [leadProp?.card_id]);
+  
+  // Función para refrescar datos del lead desde la base de datos
+  const refreshLeadData = useCallback(async () => {
+    if (!leadProp?.card_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('card_id', leadProp.card_id)
+        .single();
+      
+      if (!error && data) {
+        setLeadLocal(data);
+      }
+    } catch (err) {
+      console.error('Error refrescando lead:', err);
+    }
+  }, [leadProp?.card_id]);
+  
+  // Usar etapas de la BD o fallback al default
+  const etapasFromProp = etapasFunnel?.etapas || [];
+  const funnelSteps = etapasFromProp.length > 0 ? etapasFromProp : funnelStepsDefault;
   
   // Estados para recordatorios
   const [recordatorios, setRecordatorios] = useState([]);
@@ -108,6 +473,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   const [recordatoriosPage, setRecordatoriosPage] = useState(0);
   const [nuevoMensaje, setNuevoMensaje] = useState('');
   const [enviandoMensaje, setEnviandoMensaje] = useState(false);
+  
+  // Estados para categorías de seguimiento
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Otro');
+  const [loadingCategorias, setLoadingCategorias] = useState(false);
+  const [categoriaDropdownOpen, setCategoriaDropdownOpen] = useState(false);
+  const [categoriaBusqueda, setCategoriaBusqueda] = useState('');
   
   // Filtros de comentarios
   const [filtroEtapa, setFiltroEtapa] = useState(null);
@@ -142,10 +514,85 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   const [urlBooking, setUrlBooking] = useState(null);
   const [loadingUrls, setLoadingUrls] = useState(false);
   
+  // Estados para lead HOT 🔥
+  const [isHot, setIsHot] = useState(false);
+  
+  // Estados para modal de Crear en Respond
+  const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
+  
+  // Handler para abrir modal de Crear en Respond
+  const handleCrearRespond = () => {
+    setCrearRespondModalOpen(true);
+  };
+  
+  // Handler para éxito al crear en Respond
+  const handleRespondSuccess = (respondIoUrl, telefono) => {
+    setCrearRespondModalOpen(false);
+    // Refrescar datos para actualizar el UI
+    onRefreshData?.();
+  };
+  const [togglingHot, setTogglingHot] = useState(false);
+  
+  // Estados para reasignación de comercial 👥
+  const [comercialDropdownOpen, setComercialDropdownOpen] = useState(false);
+  const [comercialSeleccionado, setComercialSeleccionado] = useState(null);
+  const [mostrarModalReasignar, setMostrarModalReasignar] = useState(false);
+  const [reasignando, setReasignando] = useState(false);
+  
+  // Estados para edición de campos
+  const [editingField, setEditingField] = useState(null); // Campo actualmente en edición
+  const [editValue, setEditValue] = useState(''); // Valor temporal durante edición
+  const [savingField, setSavingField] = useState(null); // Campo que se está guardando
+  const [searchSelectQuery, setSearchSelectQuery] = useState(''); // Búsqueda en selects
+  const [modalTextoCompleto, setModalTextoCompleto] = useState(null); // Modal para ver texto completo
+  const [localLeadData, setLocalLeadData] = useState({}); // Datos locales para actualización inmediata
+  
   // Estados para resumen IA
   const [generandoResumen, setGenerandoResumen] = useState(false);
   const [resumenIA, setResumenIA] = useState(null);
   const [resumenIAFecha, setResumenIAFecha] = useState(null);
+  
+  // Estados para cambio de fase
+  const [faseDropdownOpen, setFaseDropdownOpen] = useState(false);
+  const [cambiandoFase, setCambiandoFase] = useState(false);
+  const [faseLocal, setFaseLocal] = useState(null); // Fase local para actualización inmediata
+  const [toastMessage, setToastMessage] = useState(null); // Toast de confirmación
+  
+  // Estados para stepper dinámico
+  const [configStepper, setConfigStepper] = useState(null);
+  const [stepperSteps, setStepperSteps] = useState([]);
+  const [stepperColor, setStepperColor] = useState('verde');
+  
+  // Estados para historial de fases
+  const [historialFases, setHistorialFases] = useState([]);
+  const [loadingHistorialFases, setLoadingHistorialFases] = useState(false);
+  const [historialFasesTab, setHistorialFasesTab] = useState('Gestión'); // 'Gestión' | 'Finalizado'
+  const [historialFasesExpanded, setHistorialFasesExpanded] = useState({}); // {nombreFase: boolean}
+  const [historialFasesPaginacion, setHistorialFasesPaginacion] = useState({}); // {nombreFase: indice}
+  
+  // Estados para formulario dinámico de Info General
+  const [infoGeneralFormulario, setInfoGeneralFormulario] = useState(null);
+  const [infoGeneralFields, setInfoGeneralFields] = useState([]);
+  const [infoGeneralSecciones, setInfoGeneralSecciones] = useState([]);
+  const [loadingInfoGeneral, setLoadingInfoGeneral] = useState(false);
+  
+  // Estados para TICI (Recordatorios automáticos)
+  const [subTabTici, setSubTabTici] = useState('programado'); // 'programado' | 'historial'
+  const [configRecordatorioAuto, setConfigRecordatorioAuto] = useState(null);
+  const [loadingConfigTici, setLoadingConfigTici] = useState(false);
+  const [posponiendo, setPosponiendo] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [tiempoRestante, setTiempoRestante] = useState({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
+  
+  // Estados para historial TICI
+  const [historialTici, setHistorialTici] = useState({}); // { fase_id: [records] }
+  const [loadingHistorialTici, setLoadingHistorialTici] = useState(false);
+  const [acordeonTiciAbierto, setAcordeonTiciAbierto] = useState(null); // fase_id abierta
+  const [indiceTiciPorFase, setIndiceTiciPorFase] = useState({}); // { fase_id: indice_actual }
+  const [previewHistorialTici, setPreviewHistorialTici] = useState(null); // registro para previsualizar
+  const [infoGeneralDropdownOpen, setInfoGeneralDropdownOpen] = useState(null);
+  const [infoGeneralSearchQuery, setInfoGeneralSearchQuery] = useState('');
+  const infoGeneralSearchRef = useRef(null);
   
   // Determinar si mostrar botón de agendar basado en la fase del lead
   const mostrarBotonAgendar = lead?.fase_id_pipefy && FASES_LISTO_AGENDAR.includes(String(lead.fase_id_pipefy));
@@ -175,6 +622,13 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
   };
   
   const recordatoriosContainerRef = useRef(null);
+  const seguimientoInputRef = useRef(null);
+  const sidebarContentRef = useRef(null);
+  
+  // Refs para inputs de búsqueda en dropdowns
+  const categoriaSearchRef = useRef(null);
+  const categoriaRecordatorioSearchRef = useRef(null);
+  
   const userEmail = localStorage.getItem('user_email');
   const userName = localStorage.getItem('user_name') || 'Usuario';
 
@@ -200,6 +654,567 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       setResumenIAFecha(null);
     }
   }, [lead?.card_id, lead?.resumen_ia, lead?.resumen_ia_fecha]);
+
+  // Inicializar estado HOT cuando cambia el lead
+  useEffect(() => {
+    setIsHot(lead?.is_hot || false);
+  }, [lead?.card_id, lead?.is_hot]);
+
+  // Inicializar fase local cuando cambia el lead
+  useEffect(() => {
+    setFaseLocal(lead?.fase_nombre_pipefy || null);
+  }, [lead?.card_id, lead?.fase_nombre_pipefy]);
+
+  // Sincronizar datos locales cuando cambia el lead
+  useEffect(() => {
+    if (lead) {
+      setLocalLeadData({});
+      // Cancelar cualquier edición pendiente al cambiar de lead
+      setEditingField(null);
+      setEditValue('');
+      setSavingField(null);
+      setSearchSelectQuery('');
+    }
+  }, [lead?.card_id]);
+
+  // Cargar formulario dinámico de Info General
+  useEffect(() => {
+    const fetchInfoGeneralFormulario = async () => {
+      if (!isOpen) return;
+      
+      setLoadingInfoGeneral(true);
+      try {
+        // Buscar el formulario "Info General" activo
+        const { data: formData, error: formError } = await supabase
+          .from('formularios_creacion_leads')
+          .select('*')
+          .eq('nombre', 'Info General')
+          .eq('estado', 'activo')
+          .single();
+        
+        if (formError || !formData) {
+          console.log('No se encontró formulario Info General dinámico, usando versión estática');
+          setInfoGeneralFormulario(null);
+          setLoadingInfoGeneral(false);
+          return;
+        }
+        
+        setInfoGeneralFormulario(formData);
+        
+        // Parsear secciones si tiene_secciones es true
+        if (formData.tiene_secciones && formData.secciones) {
+          setInfoGeneralSecciones(parseSecciones(formData.secciones));
+        } else {
+          setInfoGeneralSecciones([]);
+        }
+        
+        // Cargar campos del formulario
+        const { data: fieldsData, error: fieldsError } = await supabase
+          .from('fields_formularios_relacion')
+          .select(`
+            orden,
+            field:fields_formulario_creacion_leads (
+              id,
+              nombre,
+              tipo,
+              opciones,
+              obligatorio,
+              tooltip,
+              dinamico,
+              depende_de,
+              estado,
+              campo_origen
+            )
+          `)
+          .eq('formulario_id', formData.id);
+        
+        if (fieldsError) throw fieldsError;
+        
+        // Transformar y ordenar campos
+        const fields = (fieldsData || [])
+          .filter(item => item.field && item.field.estado === 'activo')
+          .map(item => {
+            const ordenInfo = parseOrdenField(item.orden);
+            return {
+              ...item.field,
+              ordenRaw: item.orden,
+              seccion: ordenInfo.seccion,
+              orden: ordenInfo.orden
+            };
+          })
+          .sort((a, b) => a.orden - b.orden);
+        
+        setInfoGeneralFields(fields);
+        
+      } catch (error) {
+        console.error('Error cargando formulario Info General:', error);
+        setInfoGeneralFormulario(null);
+      } finally {
+        setLoadingInfoGeneral(false);
+      }
+    };
+    
+    fetchInfoGeneralFormulario();
+  }, [isOpen, lead?.card_id]);
+
+  // Cargar configuración del stepper dinámico
+  useEffect(() => {
+    const cargarConfigStepper = async () => {
+      
+      if (!lead?.fase_id_pipefy) {
+        console.log('[Stepper] No hay fase_id_pipefy, no se muestra stepper');
+        setStepperSteps([]);
+        setConfigStepper(null);
+        return;
+      }
+
+      try {
+        // Obtener config de la fase actual (sin .single() para evitar error 406)
+        const { data: configResults, error } = await supabase
+          .from('config_stepper')
+          .select('*')
+          .eq('fase_id_pipefy', String(lead.fase_id_pipefy));
+
+        const configActual = configResults?.[0] || null;
+
+        if (error || !configActual) {
+          setStepperSteps([]);
+          setConfigStepper(null);
+          return;
+        }
+
+        setConfigStepper(configActual);
+
+        // Determinar qué fases mostrar según el tipo
+        let fasesAMostrar = [];
+        let fasesFuturo = [];
+        let colorAUsar = configActual.color || 'verde';
+
+        // Obtener todas las configs para hacer lookup de nombres
+        const { data: allConfigs } = await supabase
+          .from('config_stepper')
+          .select('fase_id_pipefy, label_corto, nombre_fase');
+        
+        // Crear mapa de fase_id -> label_corto
+        const labelMap = {};
+        allConfigs?.forEach(c => {
+          labelMap[c.fase_id_pipefy] = c.label_corto || c.nombre_fase;
+        });
+
+        if (configActual.tipo === 'gestion') {
+          // Tipo gestión: usar fases_a_mostrar con color configurado + fases_futuro en gris
+          fasesAMostrar = parsearFases(configActual.fases_a_mostrar);
+          fasesFuturo = parsearFases(configActual.fases_futuro);
+        } else if (configActual.tipo === 'finalizada' || configActual.tipo === 'interes_futuro') {
+          // Tipo finalizada/interes_futuro: buscar config de fase_anterior
+          if (lead.fase_anterior) {
+            // Buscar la config que coincida con la fase_anterior (puede ser por nombre o id)
+            const configAnterior = allConfigs?.find(c => 
+              c.nombre_fase === lead.fase_anterior || 
+              c.fase_id_pipefy === lead.fase_anterior
+            );
+            
+            if (configAnterior) {
+              // Necesitamos obtener fases_a_mostrar y fases_futuro de configAnterior
+              const { data: configAnteriorFull } = await supabase
+                .from('config_stepper')
+                .select('*')
+                .eq('fase_id_pipefy', configAnterior.fase_id_pipefy);
+              
+              if (configAnteriorFull?.[0]) {
+                fasesAMostrar = parsearFases(configAnteriorFull[0].fases_a_mostrar);
+                fasesFuturo = parsearFases(configAnteriorFull[0].fases_futuro);
+              }
+            }
+          }
+          // El color es el de la fase ACTUAL (donde está el lead)
+          colorAUsar = configActual.color || 'rojo';
+        }
+
+        // Construir el stepper final con nombres reales
+        const stepsFinales = [
+          ...fasesAMostrar.map(f => ({ 
+            ...f, 
+            tipo: 'mostrar',
+            labelReal: labelMap[f.faseId] || f.label 
+          })),
+          ...fasesFuturo.map(f => ({ 
+            ...f, 
+            tipo: 'futuro',
+            labelReal: labelMap[f.faseId] || f.label 
+          }))
+        ];
+
+        setStepperSteps(stepsFinales);
+        setStepperColor(colorAUsar);
+
+      } catch (error) {
+        console.error('Error cargando config stepper:', error);
+        setStepperSteps([]);
+        setConfigStepper(null);
+      }
+    };
+
+    cargarConfigStepper();
+  }, [lead?.fase_id_pipefy, lead?.fase_anterior]);
+
+  // useEffect para cargar historial de fases
+  useEffect(() => {
+    const cargarHistorialFases = async () => {
+      if (!lead?.card_id) {
+        setHistorialFases([]);
+        return;
+      }
+
+      setLoadingHistorialFases(true);
+      try {
+        const { data, error } = await supabase
+          .from('historial')
+          .select('*')
+          .eq('lead_id', lead.card_id)
+          .eq('modulo', 'comercial')
+          .order('created_at', { ascending: true }); // Más antiguo primero
+
+        if (error) throw error;
+        setHistorialFases(data || []);
+        // Resetear paginación
+        setHistorialFasesExpanded({});
+        setHistorialFasesPaginacion({});
+      } catch (error) {
+        console.error('Error cargando historial de fases:', error);
+        setHistorialFases([]);
+      } finally {
+        setLoadingHistorialFases(false);
+      }
+    };
+
+    cargarHistorialFases();
+  }, [lead?.card_id]);
+
+  // Helper para obtener el valor actual (local o del lead)
+  const getFieldValue = (fieldName) => {
+    if (localLeadData.hasOwnProperty(fieldName)) {
+      return localLeadData[fieldName];
+    }
+    return lead?.[fieldName];
+  };
+
+  // Función para toggle de lead HOT 🔥
+  const handleToggleHot = async () => {
+    if (!lead?.card_id || togglingHot) return;
+
+    try {
+      setTogglingHot(true);
+      const newValue = !isHot;
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ is_hot: newValue })
+        .eq('card_id', lead.card_id);
+
+      if (error) throw error;
+
+      setIsHot(newValue);
+      onRefreshData?.();
+    } catch (error) {
+      console.error('Error actualizando estado hot:', error);
+    } finally {
+      setTogglingHot(false);
+    }
+  };
+
+  // Función para cambiar la fase del lead
+  const handleCambiarFase = async (nuevaFase) => {
+    if (!lead?.card_id || cambiandoFase || nuevaFase === faseLocal) return;
+    
+    setCambiandoFase(true);
+    setFaseDropdownOpen(false);
+    
+    // Actualización optimista
+    const faseAnterior = faseLocal;
+    setFaseLocal(nuevaFase);
+    
+    try {
+      const response = await fetch('https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: lead.card_id,
+          fase_destino: nuevaFase
+        })
+      });
+      
+      if (!response.ok) throw new Error('Error en webhook');
+      
+      // Mostrar toast de éxito
+      setToastMessage(`Fase actualizada a "${nuevaFase}"`);
+      setTimeout(() => setToastMessage(null), 3000);
+      
+    } catch (error) {
+      console.error('Error cambiando fase:', error);
+      // Revertir si hay error
+      setFaseLocal(faseAnterior);
+      setToastMessage('Error al cambiar la fase');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setCambiandoFase(false);
+    }
+  };
+
+  // Obtener información del comercial actual
+  const comercialEmailActual = getFieldValue('comercial_email') || lead?.comercial_email;
+  const comercialActual = comerciales.find(c => c.email === comercialEmailActual);
+  const nombreComercialActual = comercialActual?.nombre || comercialEmailActual?.split('@')[0] || 'Sin asignar';
+
+  // Función para guardar un campo editado
+  // Campos que se sincronizan con Respond.io
+  const CAMPOS_RESPOND_IO = [
+    'nombre', 'telefono', 'email', 'ocupacion', 'pais', 'motivacion', 
+    'motivacion_detalle', 'nivel_ingles', 'ano_residencia', 'lugar_trabajo',
+    'universidad', 'como_adquirio_ingles', 'como_adquirio_ingles_detalle',
+    'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por',
+    'fuente_dato', 'rango_de_inversion', 'hizo_pitch'
+  ];
+
+  const handleSaveField = async (fieldName, value) => {
+    if (!lead?.card_id) return;
+    
+    // Actualización optimista inmediata
+    setLocalLeadData(prev => ({ ...prev, [fieldName]: value || null }));
+    setEditingField(null);
+    setEditValue('');
+    setSearchSelectQuery('');
+    
+    try {
+      setSavingField(fieldName);
+      
+      const { error } = await supabase
+        .from('leads')
+        .update({ [fieldName]: value || null })
+        .eq('card_id', lead.card_id);
+      
+      if (error) throw error;
+      
+      // Sincronizar con Respond.io si es un campo relevante
+      if (CAMPOS_RESPOND_IO.includes(fieldName)) {
+        try {
+          await fetch('https://api.mdenglish.us/webhook/actualizar_respond_io', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              card_id: lead.card_id,
+              campo_actualizado: fieldName,
+              valor_nuevo: value || null,
+              respond_io_url: lead.respond_io_url,
+              lead_data: {
+                nombre: fieldName === 'nombre' ? value : (getFieldValue('nombre') || lead.nombre),
+                telefono: fieldName === 'telefono' ? value : (getFieldValue('telefono') || lead.telefono),
+                email: fieldName === 'email' ? value : (getFieldValue('email') || lead.email),
+                ocupacion: fieldName === 'ocupacion' ? value : (getFieldValue('ocupacion') || lead.ocupacion),
+                pais: fieldName === 'pais' ? value : (getFieldValue('pais') || lead.pais),
+                motivacion: fieldName === 'motivacion' ? value : (getFieldValue('motivacion') || lead.motivacion),
+                motivacion_detalle: fieldName === 'motivacion_detalle' ? value : (getFieldValue('motivacion_detalle') || lead.motivacion_detalle),
+                nivel_ingles: fieldName === 'nivel_ingles' ? value : (getFieldValue('nivel_ingles') || lead.nivel_ingles),
+                ano_residencia: fieldName === 'ano_residencia' ? value : (getFieldValue('ano_residencia') || lead.ano_residencia),
+                lugar_trabajo: fieldName === 'lugar_trabajo' ? value : (getFieldValue('lugar_trabajo') || lead.lugar_trabajo),
+                universidad: fieldName === 'universidad' ? value : (getFieldValue('universidad') || lead.universidad),
+                como_adquirio_ingles: fieldName === 'como_adquirio_ingles' ? value : (getFieldValue('como_adquirio_ingles') || lead.como_adquirio_ingles),
+                como_adquirio_ingles_detalle: fieldName === 'como_adquirio_ingles_detalle' ? value : (getFieldValue('como_adquirio_ingles_detalle') || lead.como_adquirio_ingles_detalle),
+                cuando_empezar: fieldName === 'cuando_empezar' ? value : (getFieldValue('cuando_empezar') || lead.cuando_empezar),
+                especialidad: fieldName === 'especialidad' ? value : (getFieldValue('especialidad') || lead.especialidad),
+                plan_pago: fieldName === 'plan_pago' ? value : (getFieldValue('plan_pago') || lead.plan_pago),
+                consulta_decision: fieldName === 'consulta_decision' ? value : (getFieldValue('consulta_decision') || lead.consulta_decision),
+                referido_por: fieldName === 'referido_por' ? value : (getFieldValue('referido_por') || lead.referido_por),
+                fuente_dato: fieldName === 'fuente_dato' ? value : (getFieldValue('fuente_dato') || lead.fuente_dato),
+                rango_de_inversion: fieldName === 'rango_de_inversion' ? value : (getFieldValue('rango_de_inversion') || lead.rango_de_inversion),
+                hizo_pitch: fieldName === 'hizo_pitch' ? value : (getFieldValue('hizo_pitch') || lead.hizo_pitch)
+              }
+            })
+          });
+        } catch (webhookError) {
+          console.error('Error sincronizando con Respond.io:', webhookError);
+          // No revertimos el cambio local porque Supabase sí se actualizó
+        }
+      }
+      
+      // Refrescar datos en background
+      onRefreshData?.();
+    } catch (error) {
+      console.error('Error guardando campo:', error);
+      // Revertir cambio local si falla
+      setLocalLeadData(prev => {
+        const newData = { ...prev };
+        delete newData[fieldName];
+        return newData;
+      });
+      alert('Error al guardar. Intenta de nuevo.');
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  // Función para iniciar edición de un campo
+  const startEditing = (fieldName, currentValue) => {
+    setEditingField(fieldName);
+    setEditValue(currentValue || '');
+    setSearchSelectQuery('');
+  };
+
+  // Función para cancelar edición
+  const cancelEditing = () => {
+    setEditingField(null);
+    setEditValue('');
+    setSearchSelectQuery('');
+  };
+
+  // Handler para confirmar reasignación de comercial
+  const handleConfirmarReasignacion = async () => {
+    if (!comercialSeleccionado || !lead?.card_id) return;
+
+    try {
+      setReasignando(true);
+      
+      // Obtener datos actualizados del lead desde la base de datos
+      const { data: leadActualizado } = await supabase
+        .from('leads')
+        .select('respond_io_url')
+        .eq('card_id', lead.card_id)
+        .single();
+      
+      // Enviar al webhook de n8n
+      const payload = {
+        card_id: lead.card_id,
+        lead_nombre: lead.nombre,
+        comercial_anterior_email: lead.comercial_email,
+        comercial_anterior_nombre: nombreComercialActual,
+        comercial_nuevo_email: comercialSeleccionado.email,
+        comercial_nuevo_nombre: comercialSeleccionado.nombre,
+        usuario_que_reasigna: userEmail,
+        respond_io_url: leadActualizado?.respond_io_url || lead.respond_io_url || null
+      };
+
+      const response = await fetch('https://api.mdenglish.us/webhook/reasignar-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al reasignar');
+      }
+
+      // Actualizar el lead en Supabase - incluyendo el nuevo comercial
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({ 
+          comercial_email: comercialSeleccionado.email,
+          estado_gestion: 'sin_gestionar',
+          revisado: false,
+          fecha_asignacion: new Date().toISOString()
+        })
+        .eq('card_id', lead.card_id);
+
+      if (updateError) {
+        console.error('Error actualizando estado del lead:', updateError);
+      }
+
+      // Actualización optimista inmediata del comercial
+      setLocalLeadData(prev => ({ 
+        ...prev, 
+        comercial_email: comercialSeleccionado.email 
+      }));
+
+      // Crear notificación para el comercial nuevo (usando template de config_notificaciones)
+      try {
+        // Obtener el template de la config (buscar por tipo, no por UUID)
+        const { data: configNotif } = await supabase
+          .from('config_notificaciones')
+          .select('id, descripcion_template')
+          .eq('tipo', 'Se te ha reasignado un nuevo lead')
+          .eq('activo', true)
+          .single();
+        
+        if (configNotif) {
+          // Reemplazar variables en el template
+          let descripcionFinal = configNotif.descripcion_template
+            .replace('{{nombre}}', lead.nombre || 'Lead')
+            .replace('{{reasignado_por}}', userName || userEmail);
+          
+          const { error: notifError } = await supabase
+            .from('notificaciones')
+            .insert({
+              config_id: configNotif.id,
+              card_id: lead.card_id,
+              comercial_email: comercialSeleccionado.email,
+              nombre_lead: lead.nombre,
+              descripcion: descripcionFinal,
+              datos_extra: {
+                comercial_anterior: lead.comercial_email,
+                reasignado_por: userEmail
+              }
+            });
+          
+          if (notifError) {
+            console.error('Error creando notificación de reasignación:', notifError);
+          }
+        }
+      } catch (notifErr) {
+        console.error('Error creando notificación:', notifErr);
+      }
+
+      // Cerrar modales y refrescar
+      setMostrarModalReasignar(false);
+      setComercialDropdownOpen(false);
+      setComercialSeleccionado(null);
+      
+      // Refrescar datos
+      onRefreshData?.();
+      
+      alert(`Lead reasignado exitosamente a ${comercialSeleccionado.nombre}`);
+
+    } catch (error) {
+      console.error('Error reasignando lead:', error);
+      alert('No se pudo reasignar el lead. Intenta nuevamente.');
+    } finally {
+      setReasignando(false);
+    }
+  };
+
+  // Cerrar dropdown de comerciales al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.comercial-dropdown')) {
+        setComercialDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Cerrar dropdown de categorías al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.categoria-dropdown')) {
+        setCategoriaDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Focus en input de búsqueda cuando se abre dropdown de categoría
+  useEffect(() => {
+    if (categoriaDropdownOpen) {
+      setTimeout(() => {
+        // Intenta hacer focus en el ref disponible (seguimiento o recordatorio)
+        if (categoriaSearchRef.current) {
+          categoriaSearchRef.current.focus();
+        } else if (categoriaRecordatorioSearchRef.current) {
+          categoriaRecordatorioSearchRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [categoriaDropdownOpen]);
 
   // Función para generar resumen con IA
   const handleGenerarResumen = async () => {
@@ -340,39 +1355,24 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
 
   // Enviar nuevo mensaje
   const handleEnviarMensaje = async () => {
-    console.log('Intentando enviar...', { 
-      mensaje: nuevoMensaje.trim(), 
-      card_id: lead?.card_id, 
-      enviando: enviandoMensaje,
-      userEmail 
-    });
-    
-    if (!nuevoMensaje.trim()) {
-      console.log('Mensaje vacío');
-      return;
-    }
-    if (!lead?.card_id) {
-      console.log('No hay card_id');
-      return;
-    }
-    if (enviandoMensaje) {
-      console.log('Ya está enviando');
-      return;
-    }
+    if (!lead?.card_id) return;
+    if (enviandoMensaje) return;
     
     try {
       setEnviandoMensaje(true);
       
+      // Si no hay texto, usar "Sin detalle"
+      const textoFinal = nuevoMensaje.trim() || 'Sin detalle';
+      
       const nuevoComentario = {
         lead_id: lead.card_id,
-        texto: nuevoMensaje.trim(),
+        texto: textoFinal,
         autor_email: userEmail || 'unknown',
         origen: 'Seguimiento',
         fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
+        etapa_funnel: lead.etapa_funnel || null,
+        categoria: categoriaSeleccionada || 'Otro'
       };
-      
-      console.log('Enviando comentario:', nuevoComentario);
       
       const { data, error } = await supabase
         .from('comentarios')
@@ -380,9 +1380,37 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
         .select()
         .single();
       
-      console.log('Respuesta:', { data, error });
-      
       if (error) throw error;
+      
+      // Enviar al webhook de Respond
+      let respondOk = false;
+      try {
+        const webhookResponse = await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.id,
+            lead_id: lead.card_id,
+            texto: textoFinal,
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Seguimiento',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: categoriaSeleccionada || 'Otro',
+            created_at: data.created_at,
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null
+          })
+        });
+        const webhookResult = await webhookResponse.json();
+        if (webhookResult?.result === 'ok') {
+          respondOk = true;
+        }
+      } catch (webhookError) {
+        console.error('Error enviando webhook seguimiento:', webhookError);
+      }
       
       // Agregar al inicio de la lista con el nombre y fecha
       const comentarioConNombre = {
@@ -392,21 +1420,31 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       };
       setRecordatorios(prev => [comentarioConNombre, ...prev]);
       setNuevoMensaje('');
+      setCategoriaSeleccionada('Otro'); // Reset a default
+      
+      // Toast de éxito (unificado si Respond respondió ok)
+      const mensajeToast = respondOk 
+        ? '¡Listo! El seguimiento ya está registrado en OV y Respond.'
+        : 'Se creó tu seguimiento exitosamente';
+      setToastMessage(mensajeToast);
+      setTimeout(() => setToastMessage(null), 3000);
       
     } catch (error) {
       console.error('Error enviando comentario:', error);
-      alert('Error al enviar: ' + error.message);
+      setToastMessage('Error al crear el seguimiento');
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setEnviandoMensaje(false);
     }
   };
 
-  // Manejar scroll para infinite scroll (con flex-col-reverse, scrollTop negativo indica arriba)
+  // Manejar scroll para infinite scroll (con flex-col-reverse)
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Con flex-col-reverse: scrollTop cercano a -(scrollHeight - clientHeight) = arriba (mensajes antiguos)
-    // Cargar más cuando esté cerca del tope (scroll hacia arriba)
-    if (Math.abs(scrollTop) + clientHeight >= scrollHeight - 100) {
+    // Con flex-col-reverse el scroll empieza en 0 y va negativo hacia arriba
+    // Detectamos si está cerca del tope (mensajes antiguos)
+    const isNearTop = scrollTop <= -scrollHeight + clientHeight + 150;
+    if (isNearTop && !loadingRecordatorios && hasMoreRecordatorios) {
       loadMoreRecordatorios();
     }
   };
@@ -420,8 +1458,57 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       setFiltroEtapa(null);
       setFiltroFase(null);
       fetchRecordatorios(0, true);
+      
+      // Scroll al final para ver mensajes recientes e input (estilo chat)
+      setTimeout(() => {
+        // Scroll del contenedor de mensajes
+        if (recordatoriosContainerRef.current) {
+          recordatoriosContainerRef.current.scrollTop = recordatoriosContainerRef.current.scrollHeight;
+        }
+        // Scroll del sidebar (contenedor padre)
+        if (sidebarContentRef.current) {
+          sidebarContentRef.current.scrollTop = sidebarContentRef.current.scrollHeight;
+        }
+      }, 300);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatorios]);
+
+  // Cargar categorías de seguimiento
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        setLoadingCategorias(true);
+        const { data, error } = await supabase
+          .from('config_categorias')
+          .select('id, categoria, posicion')
+          .eq('modulo', 'comercial')
+          .eq('estado', true)
+          .order('posicion', { ascending: true });
+        
+        if (error) throw error;
+        
+        setCategorias(data || []);
+        // Asegurar que "Otro" esté seleccionado por defecto
+        const tieneOtro = data?.some(c => c.categoria === 'Otro');
+        if (tieneOtro) {
+          setCategoriaSeleccionada('Otro');
+        } else if (data?.length > 0) {
+          setCategoriaSeleccionada(data[0].categoria);
+        }
+      } catch (error) {
+        console.error('Error cargando categorías:', error);
+        // Fallback: solo "Otro"
+        setCategorias([{ id: 'default', categoria: 'Otro' }]);
+        setCategoriaSeleccionada('Otro');
+      } finally {
+        setLoadingCategorias(false);
+      }
+    };
+    
+    if (isOpen && (activeTab === 'seguimiento' || activeTab === 'recordatorio')) {
+      cargarCategorias();
+    }
+  }, [isOpen, activeTab]);
 
   // Cargar URL de booking del usuario
   const fetchBookingUrl = useCallback(async () => {
@@ -523,8 +1610,191 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       setTextoRecordatorio('');
       setErrorRecordatorio(null);
       setSubTabRecordatorio('programar'); // Siempre iniciar en "Programar"
+      
+      // Scroll al inicio para el tab de recordatorio
+      setTimeout(() => {
+        if (sidebarContentRef.current) {
+          sidebarContentRef.current.scrollTop = 0;
+        }
+      }, 100);
     }
   }, [isOpen, lead?.card_id, activeTab, fetchRecordatoriosCalendario, fetchRecordatorioActivo]);
+
+  // Cargar configuración de recordatorio automático (TICI)
+  const fetchConfigRecordatorioAuto = useCallback(async () => {
+    if (!lead?.card_id || !lead?.numero_de_recordatorio_automatico || !lead?.fase_nombre_pipefy) {
+      setConfigRecordatorioAuto(null);
+      return;
+    }
+    
+    try {
+      setLoadingConfigTici(true);
+      
+      const { data, error } = await supabase
+        .from('config_recordatorios_automaticos')
+        .select('*')
+        .eq('numero', lead.numero_de_recordatorio_automatico)
+        .eq('fase', lead.fase_nombre_pipefy)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error cargando config TICI:', error);
+      }
+      
+      setConfigRecordatorioAuto(data || null);
+    } catch (error) {
+      console.error('Error en fetchConfigRecordatorioAuto:', error);
+      setConfigRecordatorioAuto(null);
+    } finally {
+      setLoadingConfigTici(false);
+    }
+  }, [lead?.card_id, lead?.numero_de_recordatorio_automatico, lead?.fase_nombre_pipefy]);
+
+  // Cargar historial de recordatorios automáticos (TICI)
+  const fetchHistorialTici = useCallback(async () => {
+    if (!lead?.card_id) return;
+    
+    try {
+      setLoadingHistorialTici(true);
+      
+      const { data, error } = await supabase
+        .from('recordatorios_automaticos')
+        .select('*')
+        .eq('card_id', lead.card_id)
+        .order('numero', { ascending: true });
+      
+      if (error) {
+        console.error('Error cargando historial TICI:', error);
+        setHistorialTici({});
+        return;
+      }
+      
+      // Agrupar por fase (nombre) - incluir TODAS las fases que tengan registros
+      const agrupado = {};
+      (data || []).forEach(r => {
+        const faseKey = r.fase || 'Sin fase';
+        if (!agrupado[faseKey]) {
+          agrupado[faseKey] = [];
+        }
+        agrupado[faseKey].push(r);
+      });
+      
+      // Ordenar registros dentro de cada fase por numero
+      Object.keys(agrupado).forEach(fase => {
+        agrupado[fase].sort((a, b) => (a.numero || 0) - (b.numero || 0));
+      });
+      
+      setHistorialTici(agrupado);
+      
+      // Inicializar índices en 0 para cada fase
+      const indices = {};
+      Object.keys(agrupado).forEach(fase => {
+        indices[fase] = 0;
+      });
+      setIndiceTiciPorFase(indices);
+      
+    } catch (error) {
+      console.error('Error en fetchHistorialTici:', error);
+      setHistorialTici({});
+    } finally {
+      setLoadingHistorialTici(false);
+    }
+  }, [lead?.card_id]);
+
+  // Cargar datos de TICI cuando se abre el tab
+  useEffect(() => {
+    if (isOpen && lead?.card_id && activeTab === 'tici') {
+      fetchConfigRecordatorioAuto();
+      fetchHistorialTici();
+      setSubTabTici('programado');
+    }
+  }, [isOpen, lead?.card_id, activeTab, fetchConfigRecordatorioAuto, fetchHistorialTici]);
+
+  // Countdown en tiempo real para recordatorio automático
+  useEffect(() => {
+    if (!lead?.fecha_recordatorio_automatico || activeTab !== 'tici') {
+      setTiempoRestante({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
+      return;
+    }
+
+    const calcularTiempoRestante = () => {
+      const fechaRecordatorio = new Date(lead.fecha_recordatorio_automatico);
+      const ahora = new Date();
+      const diffMs = fechaRecordatorio - ahora;
+      
+      if (diffMs <= 0) {
+        setTiempoRestante({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
+        return;
+      }
+      
+      const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const horas = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const segundos = Math.floor((diffMs % (1000 * 60)) / 1000);
+      
+      setTiempoRestante({ dias, horas, minutos, segundos });
+    };
+
+    calcularTiempoRestante();
+    const interval = setInterval(calcularTiempoRestante, 1000);
+    
+    return () => clearInterval(interval);
+  }, [lead?.fecha_recordatorio_automatico, activeTab]);
+
+  // Handler para posponer recordatorio automático
+  const handlePosponerRecordatorio = async () => {
+    if (!configRecordatorioAuto || !lead) return;
+    
+    try {
+      setPosponiendo(true);
+      
+      const payload = {
+        ...configRecordatorioAuto,
+        pais: lead.pais,
+        current_phase: lead.current_phase,
+        telefono: lead.telefono,
+        card_id: lead.card_id,
+        nombre: lead.nombre,
+        fase_nombre_pipefy: lead.fase_nombre_pipefy,
+        fecha_recordatorio_automatico: lead.fecha_recordatorio_automatico
+      };
+      
+      const response = await fetch('https://api.mdenglish.us/webhook/posponer_recordatorio_automatico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al posponer recordatorio');
+      }
+      
+      // Esperar y parsear la respuesta del webhook
+      const result = await response.json();
+      
+      // Verificar que el webhook respondió correctamente
+      if (result?.result === 'ok') {
+        // Refrescar datos del lead directamente desde la base de datos
+        await refreshLeadData();
+        // También refrescar la configuración del recordatorio
+        fetchConfigRecordatorioAuto();
+        // Refrescar datos del dashboard en background
+        onRefreshData?.();
+        // Mostrar toast de éxito
+        setToastMessage('Recordatorio pospuesto exitosamente');
+        setTimeout(() => setToastMessage(null), 3000);
+      } else {
+        throw new Error('Respuesta inesperada del webhook');
+      }
+      
+    } catch (error) {
+      console.error('Error posponiendo recordatorio:', error);
+      setToastMessage('Error al posponer el recordatorio');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setPosponiendo(false);
+    }
+  };
 
   // Función para programar recordatorio
   const handleProgramarRecordatorio = async () => {
@@ -553,31 +1823,16 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       const fechaCompleta = new Date(fechaSeleccionada);
       fechaCompleta.setHours(hora24, minutos, 0, 0);
       
-      // 1. Crear comentario en tabla comentarios
-      const nuevoComentario = {
-        lead_id: lead.card_id,
-        texto: textoRecordatorio.trim(),
-        autor_email: userEmail || 'unknown',
-        origen: 'Recordatorio',
-        fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
-      };
-      
-      const { error: errorComentario } = await supabase
-        .from('comentarios')
-        .insert([nuevoComentario]);
-      
-      if (errorComentario) throw errorComentario;
-      
-      // 2. Crear recordatorio
+      // Crear recordatorio (el trigger en BD creará el comentario automáticamente)
       const nuevoRecordatorioData = {
         lead_id: lead.card_id,
         fecha_programada: fechaCompleta.toISOString(),
         observacion: textoRecordatorio.trim(),
-        creado_por: userName,
+        creado_por: userEmail,
         estado: 'Programado',
         fase: lead.fase_nombre_pipefy || null,
-        etapa_funnel: lead.etapa_funnel || null
+        etapa_funnel: lead.etapa_funnel || null,
+        categoria: categoriaSeleccionada || 'Otro'
       };
       
       const { error: errorRecordatorioInsert } = await supabase
@@ -608,9 +1863,46 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
       
       if (errorLead) throw errorLead;
       
-      // Éxito - guardar fecha para mostrar en modal y limpiar formulario
+      // Enviar al webhook de Respond
+      let respondOk = false;
+      try {
+        const webhookResponse = await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: null,
+            lead_id: lead.card_id,
+            texto: textoRecordatorio.trim(),
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Recordatorio',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: categoriaSeleccionada || 'Otro',
+            created_at: new Date().toISOString(),
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null,
+            fecha_programada: fechaCompleta.toISOString()
+          })
+        });
+        const webhookResult = await webhookResponse.json();
+        if (webhookResult?.result === 'ok') {
+          respondOk = true;
+        }
+      } catch (webhookError) {
+        console.error('Error enviando webhook recordatorio:', webhookError);
+      }
+      
+      // Toast de éxito (unificado si Respond respondió ok)
+      const mensajeToast = respondOk 
+        ? '¡Listo! El recordatorio ya está registrado en OV y Respond.'
+        : 'Se creó tu recordatorio exitosamente';
+      setToastMessage(mensajeToast);
+      setTimeout(() => setToastMessage(null), 3000);
+      
+      // Éxito - limpiar formulario
       setFechaRecordatorioCreado(fechaCompleta);
-      setMostrarConfirmacion(true);
       setFechaSeleccionada(null);
       setTextoRecordatorio('');
       setHoraInput('09');
@@ -689,7 +1981,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
         .eq('card_id', lead.card_id)
         .select();
       
-      console.log('Update lead resultado:', { dataLead, errorLead, card_id: lead.card_id });
       
       if (errorLead) {
         console.error('Error actualizando lead:', errorLead);
@@ -733,10 +2024,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date(today);
-    maxDate.setDate(maxDate.getDate() + 30);
+    maxDate.setMonth(maxDate.getMonth() + 6);
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
-    // Permitir desde hoy (inclusive) hasta 30 días en el futuro
     return checkDate >= today && checkDate <= maxDate;
   };
   
@@ -794,22 +2084,40 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
     });
   };
 
+  // Efecto para manejar apertura/cierre del sidebar
   useEffect(() => {
     if (isOpen) {
       setIsAnimating(true);
-      setActiveTab(initialTab); // Usar el tab inicial pasado como prop
       // Prevenir scroll del body cuando el sidebar está abierto
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
+      // Cancelar cualquier edición pendiente al cerrar el sidebar
+      setEditingField(null);
+      setEditValue('');
+      setSavingField(null);
+      setSearchSelectQuery('');
     }
     
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, lead]);
+  }, [isOpen]);
+  
+  // Efecto separado para resetear el tab solo cuando cambia el lead (card_id diferente)
+  useEffect(() => {
+    if (isOpen && leadProp?.card_id) {
+      setActiveTab(initialTab);
+    }
+  }, [leadProp?.card_id, isOpen, initialTab]);
 
   const handleClose = () => {
+    // Cancelar cualquier edición pendiente antes de cerrar
+    setEditingField(null);
+    setEditValue('');
+    setSavingField(null);
+    setSearchSelectQuery('');
+    
     setIsAnimating(false);
     setTimeout(onClose, 300); // Esperar a que termine la animación
   };
@@ -819,10 +2127,6 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
 
   const gestionStatus = getGestionStatus(lead);
   const statusBadge = statusBadges[gestionStatus];
-  const currentStepIndex = funnelSteps.findIndex(
-    step => step.id === lead.etapa_funnel || step.id === lead.fase_nombre_pipefy
-  );
-  const isMatriculaCaida = lead.etapa_funnel === 'Matrícula caída' || lead.fase_nombre_pipefy === 'Matrícula caída';
 
   return (
     <>
@@ -845,75 +2149,239 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
           
           {/* Header */}
           <div className="flex-shrink-0 px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
               {/* Info del lead */}
-              <div className="flex items-center gap-4">
-                {/* Avatar con bandera */}
-                <div className="relative">
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                {/* Avatar con bandera - oculto en mobile */}
+                <div className="relative hidden sm:block flex-shrink-0">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-3xl shadow-lg">
                     {getCountryFlag(lead.pais)}
                   </div>
                 </div>
                 
                 {/* Nombre y ocupación */}
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    {lead.nombre || 'Sin nombre'}
-                  </h2>
-                  <p className="text-sm text-slate-500 flex items-center gap-2 mt-0.5">
+                <div className="flex-1 min-w-0">
+                  {editingField === 'nombre' ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="flex-1 text-lg sm:text-xl font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/30 min-w-0"
+                        autoFocus
+                        placeholder="Nombre del lead"
+                      />
+                      <button
+                        onClick={() => handleSaveField('nombre', editValue)}
+                        className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 flex-shrink-0"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-slate-200 text-slate-500 rounded-lg hover:bg-slate-300 flex-shrink-0"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <h2 
+                      className="text-lg sm:text-xl font-bold text-slate-800 cursor-pointer hover:text-[#1717AF] transition-colors group flex items-center gap-2 truncate"
+                      onClick={() => startEditing('nombre', getFieldValue('nombre'))}
+                    >
+                      <span className="truncate">{getFieldValue('nombre') || 'Sin nombre'}</span>
+                      <Edit2 size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </h2>
+                  )}
+                  
+                  {/* País en mobile (visible solo en mobile) */}
+                  <p className="text-xs text-slate-400 sm:hidden mt-0.5">{lead.pais || 'Sin país'}</p>
+                  
+                  {/* Comercial asignado con dropdown de reasignación (disponible para todos) */}
+                  <div className="relative comercial-dropdown mt-1">
+                    {comerciales.length > 0 ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setComercialDropdownOpen(!comercialDropdownOpen);
+                          }}
+                          className="text-sm text-slate-500 flex items-center gap-1.5 hover:text-[#1717AF] transition-colors"
+                        >
+                          <Users size={14} />
+                          <span>De: {nombreComercialActual}</span>
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${comercialDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        
+                        {/* Dropdown de comerciales */}
+                        {comercialDropdownOpen && (
+                          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
+                            <div className="px-4 py-2 border-b border-slate-100">
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Reasignar a:</p>
+                            </div>
+                            {comerciales
+                              .filter(c => c.email !== lead?.comercial_email)
+                              .map((comercial) => {
+                                // Solo mostrar indicador de conexión para comerciales (puede_ver_todos = false)
+                                const mostrarConexion = comercial.puede_ver_todos !== true;
+                                const online = mostrarConexion ? isUserOnline(comercial.ultima_conexion) : false;
+                                const connectionStatus = mostrarConexion ? formatLastConnection(comercial.ultima_conexion) : null;
+                                
+                                return (
+                                  <button
+                                    key={comercial.email}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setComercialSeleccionado(comercial);
+                                      setMostrarModalReasignar(true);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-slate-50 ${
+                                      comercialSeleccionado?.email === comercial.email
+                                        ? 'bg-[#1717AF]/10 text-[#1717AF]'
+                                        : 'text-slate-600'
+                                    }`}
+                                  >
+                                    {mostrarConexion ? (
+                                      <>
+                                        <div className="flex items-center gap-2">
+                                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                          <span className="font-medium">{comercial.nombre}</span>
+                                        </div>
+                                        <div className={`text-xs ml-4 ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                          {connectionStatus}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="font-medium">{comercial.nombre}</div>
+                                        <div className="text-xs text-slate-400 truncate">{comercial.email}</div>
+                                      </>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            {comerciales.filter(c => c.email !== lead?.comercial_email).length === 0 && (
+                              <p className="px-4 py-3 text-sm text-slate-400 text-center">No hay otros comerciales disponibles</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500 flex items-center gap-1.5">
+                        <Users size={14} />
+                        <span>De: {nombreComercialActual}</span>
+                      </p>
+                    )}
+                  </div>
+                  
+                  <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
                     <Briefcase size={14} />
                     {lead.ocupacion || 'Ocupación no especificada'}
                   </p>
-                  {/* Badge de estado */}
-                  <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full ${statusBadge.bg}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
-                    <span className={`text-xs font-semibold ${statusBadge.text}`}>
-                      {statusBadge.label}
-                    </span>
+                  {/* Badges de fase y tag */}
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    {/* Dropdown de fase */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setFaseDropdownOpen(!faseDropdownOpen)}
+                        disabled={cambiandoFase}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+                          cambiandoFase 
+                            ? 'bg-slate-100 text-slate-400 cursor-wait'
+                            : 'bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/20 cursor-pointer'
+                        }`}
+                      >
+                        {cambiandoFase ? (
+                          <RefreshCcw size={12} className="animate-spin" />
+                        ) : (
+                          <ChevronDown size={12} className={`transition-transform ${faseDropdownOpen ? 'rotate-180' : ''}`} />
+                        )}
+                        {faseLocal || lead.fase_nombre_pipefy || 'Sin fase'}
+                      </button>
+                      
+                      {/* Dropdown de fases */}
+                      {faseDropdownOpen && (
+                        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 max-h-64 overflow-y-auto">
+                          {funnelSteps.map((fase) => (
+                            <button
+                              key={fase.id}
+                              onClick={() => handleCambiarFase(fase.label || fase.id)}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                                (faseLocal || lead.fase_nombre_pipefy) === (fase.label || fase.id)
+                                  ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                                  : 'text-slate-700'
+                              }`}
+                            >
+                              {fase.label || fase.id}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Tag del lead con colores dinámicos */}
+                    {lead.label && (() => {
+                      const tagConfig = configTags[lead.label];
+                      const bgColor = tagConfig?.color_tag || '#8B5CF6'; // Violeta por defecto
+                      const textColor = tagConfig?.color_letra_tag || '#FFFFFF'; // Blanco por defecto
+                      return (
+                        <span 
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+                          style={{ backgroundColor: bgColor, color: textColor }}
+                        >
+                          <Tag size={10} />
+                          {lead.label}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
               
               {/* Acciones y cerrar */}
-              <div className="flex items-center gap-2">
-                {/* Acciones rápidas */}
-                <div className="flex items-center gap-1 mr-2">
-                  {/* Marcar como pendiente */}
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                {/* Acciones rápidas - más compactas en mobile */}
+                <div className="flex items-center gap-0.5 sm:gap-1 sm:mr-2">
+                  {/* Marcar como HOT 🔥 */}
+                  <button
+                    onClick={handleToggleHot}
+                    disabled={togglingHot}
+                    className={`p-2 sm:p-2.5 rounded-xl transition-all duration-200 ${
+                      isHot
+                        ? 'text-orange-600 bg-gradient-to-br from-orange-100 to-red-100 shadow-md shadow-orange-200 ring-2 ring-orange-300'
+                        : 'text-slate-400 bg-slate-50 hover:bg-orange-50 hover:text-orange-500'
+                    }`}
+                    title={isHot ? "Quitar marca de lead caliente" : "Marcar como lead caliente"}
+                  >
+                    <Flame size={18} className={`sm:w-5 sm:h-5 ${togglingHot ? 'animate-pulse' : ''}`} />
+                  </button>
+                  
+                  {/* Marcar como pendiente - oculto en mobile muy pequeño */}
                   {onMarcarNoRevisado && (
                     <button
                       onClick={() => lead.revisado !== false && onMarcarNoRevisado(lead)}
                       disabled={lead.revisado === false}
-                      className={`p-2.5 rounded-xl transition-all duration-200 ${
+                      className={`hidden xs:block p-2 sm:p-2.5 rounded-xl transition-all duration-200 ${
                         lead.revisado === false
                           ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
                           : 'text-amber-600 bg-amber-50 hover:bg-amber-100'
                       }`}
                       title={lead.revisado === false ? "Este lead ya está pendiente" : "Marcar como no leído"}
                     >
-                      <RotateCcw size={20} />
+                      <RotateCcw size={18} className="sm:w-5 sm:h-5" />
                     </button>
                   )}
                   
-                  <button
-                    onClick={() => lead.respond_io_url && window.open(lead.respond_io_url, '_blank')}
-                    disabled={!lead.respond_io_url}
-                    className={`p-2.5 rounded-xl transition-all duration-200 ${
-                      lead.respond_io_url 
-                        ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' 
-                        : 'text-slate-300 bg-slate-50 cursor-not-allowed'
-                    }`}
-                    title="Ir a la conversación de WhatsApp"
-                  >
-                    <MessageCircle size={20} />
-                  </button>
+                  {/* WhatsApp con contador de ventana 24h */}
+                  <WhatsAppButtonSidebar lead={lead} size={18} onCrearRespond={handleCrearRespond} />
                 </div>
                 
-                {/* Botón cerrar */}
+                {/* Botón cerrar - siempre visible */}
                 <button
                   onClick={handleClose}
                   className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all duration-200"
                 >
-                  <X size={24} />
+                  <X size={22} className="sm:w-6 sm:h-6" />
                 </button>
               </div>
             </div>
@@ -972,83 +2440,75 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
             </div>
           )}
 
-          {/* Stepper del funnel */}
-          <div className="flex-shrink-0 px-6 py-5 bg-slate-50/50 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              {funnelSteps.map((step, index) => {
-                const isCompleted = index < currentStepIndex;
-                const isCurrent = index === currentStepIndex;
-                const isFuture = index > currentStepIndex;
-                const isLast = index === funnelSteps.length - 1;
-                const isMatriculaCaidaStep = step.id === 'Matrícula caída';
-                
-                // Colores según estado
-                let stepColor = 'bg-slate-200 text-slate-400';
-                let lineColor = 'bg-slate-200';
-                let dotColor = 'bg-slate-300';
-                
-                if (isMatriculaCaida) {
-                  // Si está en matrícula caída, todo naranja
-                  stepColor = 'bg-orange-100 text-orange-400';
-                  lineColor = 'bg-orange-200';
-                  dotColor = isMatriculaCaidaStep && isCurrent ? 'bg-orange-500' : 'bg-orange-300';
-                } else if (isCompleted) {
-                  stepColor = 'bg-emerald-100 text-emerald-600';
-                  lineColor = 'bg-emerald-400';
-                  dotColor = 'bg-emerald-500';
-                } else if (isCurrent) {
-                  stepColor = 'bg-emerald-500 text-white shadow-lg shadow-emerald-200';
-                  dotColor = 'bg-emerald-500';
-                }
+          {/* Stepper del funnel - Dinámico */}
+          {stepperSteps.length > 0 && (
+            <div className="flex-shrink-0 px-6 pt-5 pb-14 bg-slate-50/50 border-b border-slate-100">
+              <div className="flex items-center justify-between">
+                {stepperSteps.map((step, index) => {
+                  const isLast = index === stepperSteps.length - 1;
+                  const isFuturo = step.tipo === 'futuro';
+                  
+                  // Obtener colores (soporta hex o nombre)
+                  const colores = isFuturo 
+                    ? getStepperColors('gris')
+                    : getStepperColors(stepperColor);
+                  
+                  const colorHex = colores.hex;
+                  const grisHex = '#CBD5E1';
+                  const labelText = step.labelReal || step.label;
 
-                return (
-                  <div key={step.id} className="flex items-center flex-1 last:flex-none">
-                    {/* Step */}
-                    <div className="flex flex-col items-center relative group">
-                      {/* Círculo/Dot */}
-                      <div 
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${stepColor}`}
-                        title={step.label}
-                      >
-                        {isCompleted && !isMatriculaCaida ? (
-                          <CheckCircle2 size={16} />
-                        ) : isCurrent ? (
-                          <div className="w-2.5 h-2.5 rounded-full bg-current" />
-                        ) : isMatriculaCaidaStep && isMatriculaCaida ? (
-                          <XCircle size={16} />
-                        ) : (
-                          <Circle size={14} />
-                        )}
-                      </div>
-                      
-                      {/* Tooltip con fase actual del lead (solo en el paso actual) */}
-                      {isCurrent && lead.fase_nombre_pipefy && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg max-w-[200px] text-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 shadow-lg">
-                          {lead.fase_nombre_pipefy}
+                  return (
+                    <div key={`${step.faseId}-${index}`} className="flex items-center flex-1 last:flex-none">
+                      {/* Step */}
+                      <div className="flex flex-col items-center relative group">
+                        {/* Círculo/Dot */}
+                        <div 
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${colores.bgLight}`}
+                          style={{ 
+                            backgroundColor: isFuturo ? '#E2E8F0' : undefined,
+                            opacity: isFuturo ? 0.7 : 1
+                          }}
+                          title={labelText}
+                        >
+                          {isFuturo ? (
+                            <Circle size={14} className="text-slate-400" />
+                          ) : (
+                            <div 
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: colorHex }}
+                            />
+                          )}
+                        </div>
+                        
+                        {/* Tooltip para mobile (visible al hacer tap) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-medium rounded-lg opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap max-w-[120px] text-center truncate sm:hidden">
+                          {labelText}
                           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
                         </div>
-                      )}
+                        
+                        {/* Label corto (oculto en mobile, visible en desktop) */}
+                        <span 
+                          className="absolute -bottom-8 text-[9px] font-medium text-center leading-tight max-w-[65px] line-clamp-3 hidden sm:block"
+                          style={{ color: isFuturo ? '#94A3B8' : colorHex }}
+                          title={labelText}
+                        >
+                          {labelText}
+                        </span>
+                      </div>
                       
-                      {/* Label corto (visible para el actual) */}
-                      <span className={`absolute -bottom-6 text-[10px] font-medium whitespace-nowrap transition-opacity ${
-                        isCurrent ? 'opacity-100' : 'opacity-0'
-                      } ${isMatriculaCaida ? 'text-orange-600' : isCurrent ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {step.shortLabel}
-                      </span>
+                      {/* Línea conectora */}
+                      {!isLast && (
+                        <div 
+                          className="flex-1 h-0.5 mx-0.5 sm:mx-1 transition-colors duration-300"
+                          style={{ backgroundColor: isFuturo ? grisHex : colorHex }}
+                        />
+                      )}
                     </div>
-                    
-                    {/* Línea conectora */}
-                    {!isLast && (
-                      <div className={`flex-1 h-0.5 mx-1 transition-colors duration-300 ${
-                        isMatriculaCaida ? 'bg-orange-200' : 
-                        isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
-                      }`} />
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tabs */}
           <div className="flex-shrink-0 px-6 pt-4 border-b border-slate-100">
@@ -1076,251 +2536,678 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
           </div>
 
           {/* Contenido del tab - con scroll */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div ref={sidebarContentRef} className="flex-1 overflow-y-auto p-6">
             {activeTab === 'info' && (
-              <div className="space-y-6">
-                {/* Datos de contacto */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Teléfono */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <Phone size={18} className="text-slate-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-400 font-medium">Teléfono</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.telefono || 'No disponible'}</p>
-                    </div>
-                    {lead.telefono && (
-                      <button
-                        onClick={() => handleCopy(lead.telefono, 'telefono')}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          copiedField === 'telefono'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                        }`}
-                        title={copiedField === 'telefono' ? '¡Copiado!' : 'Copiar teléfono'}
-                      >
-                        {copiedField === 'telefono' ? (
-                          <Check size={16} />
-                        ) : (
-                          <Copy size={16} />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Correo */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl group">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <Mail size={18} className="text-slate-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-400 font-medium">Correo</p>
-                      <p className="text-sm font-semibold text-slate-700 truncate">{lead.email || 'No disponible'}</p>
-                    </div>
-                    {lead.email && (
-                      <button
-                        onClick={() => handleCopy(lead.email, 'email')}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          copiedField === 'email'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'text-slate-400 hover:bg-white hover:text-slate-600 hover:shadow-sm opacity-0 group-hover:opacity-100'
-                        }`}
-                        title={copiedField === 'email' ? '¡Copiado!' : 'Copiar correo'}
-                      >
-                        {copiedField === 'email' ? (
-                          <Check size={16} />
-                        ) : (
-                          <Copy size={16} />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* País */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <MapPin size={18} className="text-slate-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-medium">País</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.pais || 'No especificado'}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Nivel de inglés */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      <BarChart3 size={18} className="text-slate-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-medium">Nivel de inglés</p>
-                      <p className="text-sm font-semibold text-slate-700">{lead.nivel_ingles || 'No evaluado'}</p>
-                    </div>
-                  </div>
+              <div className="flex flex-col h-full">
+                {/* Sub-tabs */}
+                <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    onClick={() => setSubActiveTab('informacion')}
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                      subActiveTab === 'informacion'
+                        ? 'bg-white text-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Información
+                  </button>
+                  <button
+                    onClick={() => setSubActiveTab('resumen-ia')}
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                      subActiveTab === 'resumen-ia'
+                        ? 'bg-white text-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Resumen IA
+                  </button>
                 </div>
 
-                {/* Motivación */}
-                <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Star size={18} className="text-amber-500" />
-                    <h4 className="font-semibold text-slate-700">Motivación</h4>
-                  </div>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    {lead.motivacion || 'El cliente no ha especificado su motivación para aprender inglés.'}
-                  </p>
-                </div>
-
-                {/* Resumen IA */}
-                <div className="p-5 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl border border-violet-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={18} className="text-violet-500" />
-                    <h4 className="font-semibold text-slate-700">Resumen inteligente</h4>
-                    <span className="text-[10px] font-medium text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">
-                      IA
-                    </span>
-                  </div>
-                  
-                  {resumenIA ? (
-                    <div className="space-y-2">
-                      <div className="w-full min-h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                        {resumenIA}
-                      </div>
-                      {resumenIAFecha && (
-                        <p className="text-[11px] text-violet-400 italic text-right">
-                          Generado el {new Date(resumenIAFecha).toLocaleDateString('es-ES', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric'
-                          })} a las {new Date(resumenIAFecha).toLocaleTimeString('es-ES', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-400 flex items-center justify-center">
-                      {generandoResumen ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 size={16} className="animate-spin" />
-                          Generando resumen...
-                        </span>
+                {/* Contenido del sub-tab */}
+                <div className="flex-1 overflow-y-auto">
+                  {subActiveTab === 'informacion' && (
+                    <div className="space-y-5">
+                      {/* Versión dinámica del formulario Info General */}
+                      {loadingInfoGeneral ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
+                        </div>
+                      ) : infoGeneralFormulario ? (
+                        /* FORMULARIO DINÁMICO */
+                        (() => {
+                          // Obtener valor del campo desde el lead
+                          const getFieldValueDynamic = (field) => {
+                            if (!field.campo_origen) return null;
+                            const [tabla, columna] = field.campo_origen.split(',').map(s => s.trim());
+                            if (tabla === 'leads' && lead) {
+                              return localLeadData[columna] !== undefined ? localLeadData[columna] : lead[columna];
+                            }
+                            return null;
+                          };
+                          
+                          // Verificar si un campo debe mostrarse (dependencias)
+                          const shouldShowField = (field) => {
+                            if (!field.dinamico || !field.depende_de) return true;
+                            const dep = parseDependeDeField(field.depende_de);
+                            if (!dep) return true;
+                            
+                            // Buscar el campo del que depende
+                            const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
+                            if (!parentField) return true;
+                            
+                            const parentValue = getFieldValueDynamic(parentField);
+                            return parentValue === dep.valor;
+                          };
+                          
+                          // Renderizar un campo según su tipo
+                          const renderDynamicField = (field) => {
+                            if (!shouldShowField(field)) return null;
+                            
+                            const value = getFieldValueDynamic(field);
+                            const displayValue = value || 'No disponible';
+                            const isEditing = editingField === field.nombre;
+                            const isSaving = savingField === field.nombre;
+                            const [, columna] = (field.campo_origen || ',').split(',').map(s => s.trim());
+                            
+                            // Campo tipo SELECT
+                            if (field.tipo === 'select' && field.opciones) {
+                              const opciones = parseOpcionesField(field.opciones).map(o => o.value);
+                              const filteredOptions = opciones.filter(opt => 
+                                opt.toLowerCase().includes(infoGeneralSearchQuery.toLowerCase())
+                              );
+                              
+                              if (isEditing) {
+                                return (
+                                  <div key={field.id} className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold">{field.nombre}</p>
+                                      <button
+                                        onClick={cancelEditing}
+                                        className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                    <div className="relative mb-2">
+                                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input
+                                        ref={infoGeneralSearchRef}
+                                        type="text"
+                                        value={infoGeneralSearchQuery}
+                                        onChange={(e) => setInfoGeneralSearchQuery(e.target.value)}
+                                        placeholder="Buscar..."
+                                        className="w-full pl-7 pr-2 py-1.5 text-sm bg-slate-50 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                        autoFocus
+                                      />
+                                    </div>
+                                    <div className="max-h-36 overflow-y-auto rounded-lg bg-slate-50">
+                                      {filteredOptions.length > 0 ? (
+                                        filteredOptions.map((opt) => (
+                                          <button
+                                            key={opt}
+                                            onClick={() => handleSaveField(columna, opt)}
+                                            disabled={isSaving}
+                                            className={`w-full px-2.5 py-1.5 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                              opt === value 
+                                                ? 'bg-[#1717AF] text-white font-medium' 
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                          >
+                                            {opt}
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <p className="px-2.5 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div 
+                                  key={field.id}
+                                  className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200"
+                                  onClick={() => { startEditing(field.nombre, value); setInfoGeneralSearchQuery(''); }}
+                                >
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                      <ClipboardList size={14} className="text-slate-500" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{field.nombre}</p>
+                                      <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                        {displayValue}
+                                      </p>
+                                    </div>
+                                    <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <ChevronDown size={10} />
+                                    </div>
+                                  </div>
+                                  {isSaving && (
+                                    <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                      <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            
+                            // Campo tipo TEXTO
+                            if (isEditing) {
+                              return (
+                                <div key={field.id} className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                  <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold mb-1.5">{field.nombre}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                      placeholder="No disponible"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => handleSaveField(columna, editValue)}
+                                      disabled={isSaving}
+                                      className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 disabled:opacity-50 transition-colors"
+                                    >
+                                      {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    </button>
+                                    <button
+                                      onClick={cancelEditing}
+                                      className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div 
+                                key={field.id}
+                                className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200"
+                                onClick={() => startEditing(field.nombre, value)}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                    <FileText size={14} className="text-slate-500" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{field.nombre}</p>
+                                    <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                      {displayValue}
+                                    </p>
+                                  </div>
+                                  <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Edit2 size={10} />
+                                  </div>
+                                </div>
+                                {isSaving && (
+                                  <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                    <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+                          
+                          // Si tiene secciones, agrupar por sección
+                          if (infoGeneralFormulario.tiene_secciones && infoGeneralSecciones.length > 0) {
+                            return (
+                              <>
+                                {infoGeneralSecciones.map((seccion) => {
+                                  const camposSeccion = infoGeneralFields
+                                    .filter(f => f.seccion === seccion.nombre)
+                                    .sort((a, b) => a.orden - b.orden);
+                                  
+                                  if (camposSeccion.length === 0) return null;
+                                  
+                                  return (
+                                    <div key={seccion.nombre} className="space-y-2">
+                                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                        <ClipboardList size={12} className="text-[#1717AF]" />
+                                        {seccion.nombre}
+                                      </h3>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {camposSeccion.map(field => renderDynamicField(field))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </>
+                            );
+                          }
+                          
+                          // Sin secciones, mostrar todos los campos en orden
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {infoGeneralFields.map(field => renderDynamicField(field))}
+                            </div>
+                          );
+                        })()
                       ) : (
-                        'Haz clic en "Generar" para crear un resumen con IA'
+                      /* FORMULARIO ESTÁTICO (fallback) */
+                      (() => {
+                        const EditableTextField = ({ fieldName, label, icon: Icon, placeholder = 'No especificado', copyable = false }) => {
+                          const value = getFieldValue(fieldName);
+                          const isEditing = editingField === fieldName;
+                          const isSaving = savingField === fieldName;
+                          const displayValue = value || placeholder;
+                          const needsTruncate = displayValue.length > 60;
+                          
+                          if (isEditing) {
+                            return (
+                              <div className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold mb-1.5">{label}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    className="flex-1 px-2 py-1.5 text-sm bg-slate-100 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                    placeholder={placeholder}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveField(fieldName, editValue)}
+                                    disabled={isSaving}
+                                    className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 disabled:opacity-50 transition-colors"
+                                  >
+                                    {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                  </button>
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div 
+                              className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-slate-200"
+                              onClick={() => startEditing(fieldName, value)}
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                  <Icon size={14} className="text-slate-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{label}</p>
+                                  <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'} line-clamp-2`}>
+                                    {needsTruncate ? displayValue.substring(0, 60) + '...' : displayValue}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {copyable && value && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopy(value, fieldName);
+                                      }}
+                                      className={`p-1 rounded-md transition-all duration-150 ${
+                                        copiedField === fieldName
+                                          ? 'bg-emerald-100 text-emerald-600'
+                                          : 'text-slate-400 hover:bg-white hover:text-slate-600'
+                                      }`}
+                                    >
+                                      {copiedField === fieldName ? <Check size={12} /> : <Copy size={12} />}
+                                    </button>
+                                  )}
+                                  {needsTruncate && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setModalTextoCompleto({ label, value: displayValue });
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-[#1717AF] rounded-md"
+                                    >
+                                      <MoreHorizontal size={12} />
+                                    </button>
+                                  )}
+                                  <div className="p-1 text-slate-300">
+                                    <Edit2 size={10} />
+                                  </div>
+                                </div>
+                              </div>
+                              {isSaving && (
+                                <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                  <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
+
+                        // Componente para campo editable con select y búsqueda - UI mejorada
+                        const EditableSelectField = ({ fieldName, label, icon: Icon, options, placeholder = 'No especificado', detailFieldName = null }) => {
+                          const value = getFieldValue(fieldName);
+                          const isEditing = editingField === fieldName;
+                          const isSaving = savingField === fieldName;
+                          const displayValue = value || placeholder;
+                          const needsTruncate = displayValue.length > 60;
+                          
+                          const filteredOptions = options.filter(opt => 
+                            opt.toLowerCase().includes(searchSelectQuery.toLowerCase())
+                          );
+                          
+                          if (isEditing) {
+                            return (
+                              <div className="relative p-3 bg-white rounded-xl border border-[#1717AF]/30 shadow-sm shadow-[#1717AF]/5 transition-all duration-200">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-[10px] uppercase tracking-wider text-[#1717AF] font-semibold">{label}</p>
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                                <div className="relative mb-2">
+                                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    value={searchSelectQuery}
+                                    onChange={(e) => setSearchSelectQuery(e.target.value)}
+                                    placeholder="Buscar..."
+                                    className="w-full pl-7 pr-2 py-1.5 text-sm bg-slate-50 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="max-h-36 overflow-y-auto rounded-lg bg-slate-50">
+                                  {filteredOptions.length > 0 ? (
+                                    filteredOptions.map((opt) => (
+                                      <button
+                                        key={opt}
+                                        onClick={() => {
+                                          handleSaveField(fieldName, opt);
+                                          if (opt !== 'Otro' && detailFieldName && value === 'Otro') {
+                                            handleSaveField(detailFieldName, null);
+                                          }
+                                        }}
+                                        disabled={isSaving}
+                                        className={`w-full px-2.5 py-1.5 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                          opt === value 
+                                            ? 'bg-[#1717AF] text-white font-medium' 
+                                            : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        {opt}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <p className="px-2.5 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div 
+                              className="relative p-3 bg-white rounded-2xl border border-slate-100 group cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-slate-200"
+                              onClick={() => startEditing(fieldName, value)}
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0 mt-0.5">
+                                  <Icon size={14} className="text-slate-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">{label}</p>
+                                  <p className={`text-sm leading-snug ${value ? 'text-slate-700' : 'text-slate-400 italic'} line-clamp-2`}>
+                                    {needsTruncate ? displayValue.substring(0, 60) + '...' : displayValue}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {needsTruncate && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setModalTextoCompleto({ label, value: displayValue });
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-[#1717AF] rounded-md"
+                                    >
+                                      <MoreHorizontal size={12} />
+                                    </button>
+                                  )}
+                                  <div className="p-1 text-slate-300">
+                                    <ChevronDown size={10} />
+                                  </div>
+                                </div>
+                              </div>
+                              {isSaving && (
+                                <div className="absolute inset-0 bg-white/50 rounded-xl flex items-center justify-center">
+                                  <Loader2 size={14} className="animate-spin text-[#1717AF]" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
+
+                        const ocupacion = getFieldValue('ocupacion');
+                        const motivacion = getFieldValue('motivacion');
+                        const comoAdquirioIngles = getFieldValue('como_adquirio_ingles');
+
+                        return (
+                          <>
+                            {/* CONTACTO */}
+                            <div className="space-y-2">
+                              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                <Phone size={12} className="text-[#1717AF]" />
+                                Contacto
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <EditableTextField fieldName="telefono" label="Teléfono" icon={Phone} placeholder="No disponible" copyable={true} />
+                                <EditableTextField fieldName="email" label="Correo" icon={Mail} placeholder="No disponible" copyable={true} />
+                                <EditableSelectField fieldName="consulta_decision" label="Consulta la decisión" icon={MessageCircle} options={OPCIONES_CONSULTA_DECISION} />
+                                {getFieldValue('referido_por') && (
+                                  <EditableTextField fieldName="referido_por" label="Referido por" icon={Star} />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* OCUPACIÓN */}
+                            <div className="space-y-2">
+                              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                <Briefcase size={12} className="text-[#1717AF]" />
+                                Ocupación
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <EditableSelectField fieldName="ocupacion" label="Ocupación" icon={Briefcase} options={OPCIONES_OCUPACION} />
+                                
+                                {ocupacion === 'Estudiante' && (
+                                  <EditableTextField fieldName="universidad" label="Universidad" icon={ClipboardList} />
+                                )}
+                                
+                                {ocupacion === 'Médico General' && (
+                                  <EditableTextField fieldName="lugar_trabajo" label="Lugar de trabajo" icon={MapPin} />
+                                )}
+                                
+                                {ocupacion === 'Residente' && (
+                                  <>
+                                    <EditableSelectField fieldName="ano_residencia" label="Año de residencia" icon={BarChart3} options={OPCIONES_ANO_RESIDENCIA} />
+                                    <EditableTextField fieldName="lugar_trabajo" label="Lugar de trabajo" icon={MapPin} />
+                                  </>
+                                )}
+                                
+                                {ocupacion === 'Especialista' && (
+                                  <>
+                                    <EditableSelectField fieldName="especialidad" label="Especialidad" icon={Star} options={OPCIONES_ESPECIALIDAD} />
+                                    <EditableTextField fieldName="lugar_trabajo" label="Lugar de trabajo" icon={MapPin} />
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* MOTIVACIÓN */}
+                            <div className="space-y-2">
+                              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                <Star size={12} className="text-[#1717AF]" />
+                                Motivación
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <EditableSelectField fieldName="motivacion" label="Motivación" icon={Star} options={OPCIONES_MOTIVACION} detailFieldName="motivacion_detalle" />
+                                
+                                {motivacion === 'Otro' && (
+                                  <EditableTextField fieldName="motivacion_detalle" label="Detalle motivación" icon={MessageCircle} />
+                                )}
+                                
+                                <EditableSelectField fieldName="cuando_empezar" label="Cuando empezaría" icon={Clock} options={OPCIONES_CUANDO_EMPEZAR} />
+                              </div>
+                            </div>
+
+                            {/* NIVEL DE INGLÉS */}
+                            <div className="space-y-2">
+                              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                <BarChart3 size={12} className="text-[#1717AF]" />
+                                Nivel de inglés
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <EditableSelectField fieldName="nivel_ingles" label="Nivel de inglés" icon={BarChart3} options={OPCIONES_NIVEL_INGLES} />
+                                <EditableSelectField fieldName="como_adquirio_ingles" label="Cómo adquirió inglés" icon={ClipboardList} options={OPCIONES_COMO_ADQUIRIO_INGLES} detailFieldName="como_adquirio_ingles_detalle" />
+                                
+                                {comoAdquirioIngles === 'Otro' && (
+                                  <EditableTextField fieldName="como_adquirio_ingles_detalle" label="Detalle cómo adquirió" icon={MessageCircle} />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* PLAN DE PAGO */}
+                            <div className="space-y-2">
+                              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                                <FileText size={12} className="text-[#1717AF]" />
+                                Plan de pago
+                              </h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <EditableSelectField fieldName="plan_pago" label="Plan de pago" icon={FileText} options={OPCIONES_PLAN_PAGO} />
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()
                       )}
                     </div>
                   )}
-                  
-                  <div className="flex justify-end mt-3">
-                    <button 
-                      onClick={handleGenerarResumen}
-                      disabled={generandoResumen}
-                      className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-violet-200 flex items-center gap-2 ${
-                        generandoResumen 
-                          ? 'bg-violet-400 cursor-not-allowed' 
-                          : 'bg-violet-600 hover:bg-violet-700'
-                      }`}
-                    >
-                      {generandoResumen ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Generando...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={14} />
-                          {resumenIA ? 'Regenerar' : 'Generar'}
-                        </>
-                      )}
-                    </button>
-                  </div>
+
+                  {subActiveTab === 'resumen-ia' && (
+                    <div className="space-y-6">
+                      {/* Resumen IA */}
+                      <div className="p-5 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl border border-violet-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles size={18} className="text-violet-500" />
+                          <h4 className="font-semibold text-slate-700">Resumen inteligente</h4>
+                          <span className="text-[10px] font-medium text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">
+                            IA
+                          </span>
+                        </div>
+                        
+                        {resumenIA ? (
+                          <div className="space-y-2">
+                            <div className="w-full min-h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                              {resumenIA}
+                            </div>
+                            {resumenIAFecha && (
+                              <p className="text-[11px] text-violet-400 italic text-right">
+                                Generado el {new Date(resumenIAFecha).toLocaleDateString('es-ES', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })} a las {new Date(resumenIAFecha).toLocaleTimeString('es-ES', {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-28 p-3 bg-white/70 border border-violet-200 rounded-xl text-sm text-slate-400 flex items-center justify-center">
+                            {generandoResumen ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 size={16} className="animate-spin" />
+                                Generando resumen...
+                              </span>
+                            ) : (
+                              'Haz clic en "Generar" para crear un resumen con IA'
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-end mt-3">
+                          <button 
+                            onClick={handleGenerarResumen}
+                            disabled={generandoResumen}
+                            className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-violet-200 flex items-center gap-2 ${
+                              generandoResumen 
+                                ? 'bg-violet-400 cursor-not-allowed' 
+                                : 'bg-violet-600 hover:bg-violet-700'
+                            }`}
+                          >
+                            {generandoResumen ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                Generando...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={14} />
+                                {resumenIA ? 'Regenerar' : 'Generar'}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === 'seguimiento' && (() => {
-              // Obtener etapas y fases únicas de los comentarios
-              const etapasUnicas = [...new Set(recordatorios.map(c => c.etapa_funnel).filter(Boolean))];
-              const fasesUnicas = [...new Set(recordatorios.map(c => c.fase).filter(Boolean))];
-              
-              // Filtrar comentarios
-              const comentariosFiltrados = recordatorios.filter(c => {
-                if (filtroEtapa && c.etapa_funnel !== filtroEtapa) return false;
-                if (filtroFase && c.fase !== filtroFase) return false;
-                return true;
-              });
-              
               return (
-              <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
-                {/* Filtros sutiles */}
-                {(etapasUnicas.length > 0 || fasesUnicas.length > 0) && (
-                  <div className="flex-shrink-0 mb-3 flex flex-wrap gap-2">
-                    {/* Filtro por etapa */}
-                    {etapasUnicas.length > 0 && (
-                      <select
-                        value={filtroEtapa || ''}
-                        onChange={(e) => setFiltroEtapa(e.target.value || null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                      >
-                        <option value="">Todas las etapas</option>
-                        {etapasUnicas.map(etapa => (
-                          <option key={etapa} value={etapa}>{etapa}</option>
-                        ))}
-                      </select>
-                    )}
-                    
-                    {/* Filtro por fase */}
-                    {fasesUnicas.length > 0 && (
-                      <select
-                        value={filtroFase || ''}
-                        onChange={(e) => setFiltroFase(e.target.value || null)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] cursor-pointer"
-                      >
-                        <option value="">Todas las fases</option>
-                        {fasesUnicas.map(fase => (
-                          <option key={fase} value={fase}>{fase}</option>
-                        ))}
-                      </select>
-                    )}
-                    
-                    {/* Botón limpiar filtros */}
-                    {(filtroEtapa || filtroFase) && (
-                      <button
-                        onClick={() => { setFiltroEtapa(null); setFiltroFase(null); }}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                      >
-                        Limpiar
-                      </button>
-                    )}
-                  </div>
-                )}
-                
-                {/* Lista de seguimientos con scroll - estilo WhatsApp */}
+              <div className="flex flex-col" style={{ height: 'calc(100vh - 380px)', minHeight: '300px' }}>
+                {/* Lista de seguimientos - scroll */}
                 <div 
                   ref={recordatoriosContainerRef}
                   onScroll={handleScroll}
-                  className="flex-1 overflow-y-auto flex flex-col-reverse gap-4 pr-2 mb-4"
+                  className="flex-1 overflow-y-auto space-y-3 pr-1"
                 >
-                  {comentariosFiltrados.length === 0 && !loadingRecordatorios ? (
+                  {recordatorios.length === 0 && !loadingRecordatorios ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                         <MessageCircle size={28} className="text-slate-400" />
                       </div>
                       <h3 className="text-lg font-semibold text-slate-700 mb-2">
-                        {(filtroEtapa || filtroFase) ? 'Sin resultados' : 'Sin seguimiento'}
+                        Sin seguimiento
                       </h3>
                       <p className="text-sm text-slate-400">
-                        {(filtroEtapa || filtroFase) 
-                          ? 'No hay mensajes con los filtros seleccionados' 
-                          : 'Aún no hay mensajes de seguimiento para este lead'}
+                        Aún no hay mensajes de seguimiento para este lead
                       </p>
                     </div>
                   ) : (
                     <>
-                      {/* Mensajes en orden inverso (más reciente abajo) */}
-                      {comentariosFiltrados.map((comentario, index) => {
+                      {/* Inicio del historial */}
+                      {!hasMoreRecordatorios && recordatorios.length > 0 && (
+                        <p className="text-center text-xs text-slate-400 py-3">
+                          Inicio del historial
+                        </p>
+                      )}
+                      
+                      {/* Loader para cargar más */}
+                      {loadingRecordatorios && (
+                        <div className="flex justify-center py-4">
+                          <Loader2 size={24} className="text-[#1717AF] animate-spin" />
+                        </div>
+                      )}
+                      
+                      {/* Mensajes ordenados: reciente abajo (estilo chat) */}
+                      {[...recordatorios].reverse().map((comentario, index) => {
                         // Obtener nombre del autor (del join con usuarios o del email)
                         const nombreAutor = comentario.usuarios?.nombre || 
                           (comentario.autor_email === userEmail ? userName : comentario.autor_email?.split('@')[0]) || 
@@ -1329,58 +3216,120 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                         return (
                           <div 
                             key={comentario.id || index}
-                            className="bg-slate-50 rounded-2xl p-4 border border-slate-100 hover:border-slate-200 transition-all duration-200"
+                            className="bg-white rounded-xl border border-slate-100 overflow-hidden hover:border-slate-200 transition-all duration-200"
+                            style={{ borderLeft: '3px solid #10b981' }}
                           >
-                            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                              {comentario.texto}
-                            </p>
+                            {/* Contenido del mensaje */}
+                            <div className="p-4 pb-3">
+                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                <span className="font-semibold text-slate-600">Categoría: </span>
+                                <span className="text-[#1717AF]">{comentario.categoria || 'Otro'}</span>
+                                <span className="font-semibold text-slate-600 ml-2">Detalle: </span>
+                                {comentario.texto}
+                              </p>
+                            </div>
                             
-                            {/* Badge de fase y etapa (si existe) */}
-                            {(comentario.fase || comentario.etapa_funnel) && (
-                              <div className="mt-3 mb-2 flex flex-wrap gap-2">
-                                {comentario.etapa_funnel && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 text-xs font-medium rounded-lg">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    {comentario.etapa_funnel}
-                                  </span>
-                                )}
-                                {comentario.fase && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-lg">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                    {comentario.fase}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center justify-end gap-2 text-xs text-slate-400 mt-2">
-                              <span>{formatearFechaRecordatorio(comentario.created_at)}</span>
-                              <span className="text-slate-300">•</span>
-                              <span className="font-medium text-slate-500">{nombreAutor}</span>
+                            {/* Footer con fase, fecha y autor */}
+                            <div className="px-4 py-2.5 bg-slate-50/50 flex items-center gap-4 text-xs">
+                              {/* Fase */}
+                              {comentario.fase && (
+                                <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                  {comentario.fase}
+                                </span>
+                              )}
+                              
+                              {/* Fecha */}
+                              <span className="text-slate-400">
+                                {formatearFechaRecordatorio(comentario.created_at)}
+                              </span>
+                              
+                              {/* Autor */}
+                              <span className="font-medium text-slate-500 ml-auto">
+                                {nombreAutor}
+                              </span>
                             </div>
                           </div>
                         );
                       })}
-                      
-                      {/* Loader para infinite scroll (arriba al cargar más antiguos) */}
-                      {loadingRecordatorios && (
-                        <div className="flex justify-center py-4">
-                          <Loader2 size={24} className="text-[#1717AF] animate-spin" />
-                        </div>
-                      )}
-                      
-                      {/* Mensaje de fin de lista (arriba) */}
-                      {!hasMoreRecordatorios && recordatorios.length > 0 && (
-                        <p className="text-center text-xs text-slate-400 py-2">
-                          Inicio del historial
-                        </p>
-                      )}
                     </>
                   )}
                 </div>
                 
-                {/* Campo para nuevo mensaje */}
-                <div className="border-t border-slate-100 pt-4">
+                {/* Campo para nuevo mensaje - ABAJO (como WhatsApp) */}
+                <div ref={seguimientoInputRef} className="flex-shrink-0 border-t border-slate-100 pt-4 mt-2">
+                  {/* Dropdown de categoría con buscador */}
+                  <div className="mb-3 relative categoria-dropdown">
+                    <label className="text-xs text-slate-500 mb-1.5 block font-medium">Categoría</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategoriaDropdownOpen(!categoriaDropdownOpen);
+                        setCategoriaBusqueda('');
+                      }}
+                      disabled={loadingCategorias}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center justify-between"
+                    >
+                      <span className={categoriaSeleccionada ? 'text-slate-700' : 'text-slate-400'}>
+                        {loadingCategorias ? 'Cargando...' : (categoriaSeleccionada || 'Seleccionar categoría')}
+                      </span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform ${categoriaDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown con buscador */}
+                    {categoriaDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
+                        {/* Input de búsqueda */}
+                        <div className="p-2 border-b border-slate-100">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              ref={categoriaSearchRef}
+                              type="text"
+                              value={categoriaBusqueda}
+                              onChange={(e) => setCategoriaBusqueda(e.target.value)}
+                              placeholder="Buscar categoría..."
+                              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Lista de opciones */}
+                        <div className="max-h-40 overflow-y-auto">
+                          {(() => {
+                            const filtradas = categorias.filter(cat => 
+                              cat.categoria.toLowerCase().includes(categoriaBusqueda.toLowerCase())
+                            );
+                            
+                            if (filtradas.length === 0) {
+                              return <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>;
+                            }
+                            
+                            return filtradas.map((cat) => (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => {
+                                  setCategoriaSeleccionada(cat.categoria);
+                                  setCategoriaDropdownOpen(false);
+                                  setCategoriaBusqueda('');
+                                }}
+                                className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                                  cat.categoria === categoriaSeleccionada 
+                                    ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium' 
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {cat.categoria}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Input de mensaje */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
@@ -1392,7 +3341,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                             handleEnviarMensaje();
                           }
                         }}
-                        placeholder="Escribe acá el seguimiento del cliente..."
+                        placeholder="Escribe el detalle del seguimiento (opcional)..."
                         rows={1}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none transition-all duration-200"
                         style={{ minHeight: '42px', maxHeight: '120px' }}
@@ -1400,9 +3349,9 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                     </div>
                     <button
                       onClick={handleEnviarMensaje}
-                      disabled={!nuevoMensaje.trim() || enviandoMensaje}
+                      disabled={enviandoMensaje}
                       className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                        nuevoMensaje.trim() && !enviandoMensaje
+                        !enviandoMensaje
                           ? 'bg-[#1717AF] text-white hover:bg-[#02214A] shadow-lg shadow-[#1717AF]/20'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       }`}
@@ -1415,7 +3364,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    Enter para enviar • Shift + Enter para nueva línea
+                    Enter para enviar • Si no escribes detalle, se guardará "Sin detalle"
                   </p>
                 </div>
               </div>
@@ -1469,23 +3418,23 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
               return (
                 <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
                   {/* Sub-tabs */}
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
                     <button
                       onClick={() => setSubTabRecordatorio('programar')}
-                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                         subTabRecordatorio === 'programar'
-                          ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
                       Programar
                     </button>
                     <button
                       onClick={() => setSubTabRecordatorio('historial')}
-                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                         subTabRecordatorio === 'historial'
-                          ? 'bg-[#1717AF] text-white shadow-lg shadow-[#1717AF]/20'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
                       Historial
@@ -1825,6 +3774,77 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                       </div>
                     </div>
                     
+                    {/* Dropdown de categoría con buscador */}
+                    <div className="mb-3 relative categoria-dropdown">
+                      <label className="text-xs text-slate-500 mb-1.5 block font-medium">Selecciona categoría del seguimiento (por defecto quedará "Otro")</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoriaDropdownOpen(!categoriaDropdownOpen);
+                          setCategoriaBusqueda('');
+                        }}
+                        disabled={loadingCategorias}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center justify-between"
+                      >
+                        <span className={categoriaSeleccionada ? 'text-slate-700' : 'text-slate-400'}>
+                          {loadingCategorias ? 'Cargando...' : (categoriaSeleccionada || 'Seleccionar categoría')}
+                        </span>
+                        <ChevronDown size={16} className={`text-slate-400 transition-transform ${categoriaDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      
+                      {/* Dropdown con buscador */}
+                      {categoriaDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
+                          {/* Input de búsqueda */}
+                          <div className="p-2 border-b border-slate-100">
+                            <div className="relative">
+                              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input
+                                ref={categoriaRecordatorioSearchRef}
+                                type="text"
+                                value={categoriaBusqueda}
+                                onChange={(e) => setCategoriaBusqueda(e.target.value)}
+                                placeholder="Buscar categoría..."
+                                className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* Lista de opciones */}
+                          <div className="max-h-40 overflow-y-auto">
+                            {(() => {
+                              const filtradas = categorias.filter(cat => 
+                                cat.categoria.toLowerCase().includes(categoriaBusqueda.toLowerCase())
+                              );
+                              
+                              if (filtradas.length === 0) {
+                                return <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>;
+                              }
+                              
+                              return filtradas.map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCategoriaSeleccionada(cat.categoria);
+                                    setCategoriaDropdownOpen(false);
+                                    setCategoriaBusqueda('');
+                                  }}
+                                  className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                                    cat.categoria === categoriaSeleccionada 
+                                      ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium' 
+                                      : 'text-slate-700'
+                                  }`}
+                                >
+                                  {cat.categoria}
+                                </button>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
                     {/* Textarea */}
                     <div className="mb-3">
                       <label className="text-xs text-slate-500 mb-1 block">Detalle del recordatorio</label>
@@ -1877,7 +3897,7 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
                     
                     {/* Nota sobre límite */}
                     <p className="text-xs text-slate-400 text-center mt-2">
-                      Puedes programar desde hoy (mín. 10 min) hasta 30 días en el futuro
+                      Puedes programar desde hoy (mín. 10 min) hasta 6 meses en el futuro
                     </p>
                   </div>
                   </>
@@ -1888,34 +3908,828 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
               );
             })()}
 
-            {activeTab === 'formulario' && (
+            {activeTab === 'historial' && (
               <div className="h-full">
-                {lead.url_formulario_fase ? (
-                  <div className="h-[calc(100vh-320px)] min-h-[400px] rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
-                    <iframe
-                      src={lead.url_formulario_fase}
-                      className="w-full h-full"
-                      title="Formulario de Pipefy"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
+                {/* Sub-tabs para filtrar por tipo */}
+                <div className="mb-4">
+                  <div className="flex gap-2 border-b border-slate-200">
+                    {['Gestión', 'Finalizado'].map((tipo) => {
+                      // Contar fases únicas (agrupadas) por tipo
+                      const fasesDelTipo = historialFases.filter(h => h.tipo === (tipo === 'Gestión' ? 'Gestión' : 'Finalizado'));
+                      const fasesUnicas = [...new Set(fasesDelTipo.map(h => h.nombre_fase))];
+                      const contador = fasesUnicas.length;
+                      
+                      return (
+                        <button
+                          key={tipo}
+                          onClick={() => setHistorialFasesTab(tipo)}
+                          className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
+                            historialFasesTab === tipo
+                              ? 'text-[#1717AF]'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Fase de {tipo.toLowerCase()} ({contador})
+                          {historialFasesTab === tipo && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1717AF] rounded-full" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                      <FileText size={28} className="text-slate-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin formulario</h3>
-                    <p className="text-sm text-slate-400">Este lead no tiene un formulario asociado</p>
+                </div>
+
+                {/* Loading state */}
+                {loadingHistorialFases && (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 size={24} className="animate-spin text-[#1717AF]" />
                   </div>
                 )}
+
+                {/* Empty state */}
+                {!loadingHistorialFases && (() => {
+                  const fasesDelTipo = historialFases.filter(h => h.tipo === historialFasesTab);
+                  return fasesDelTipo.length === 0;
+                })() && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                      <History size={28} className="text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin historial</h3>
+                    <p className="text-sm text-slate-400">
+                      No hay registros de {historialFasesTab === 'Gestión' ? 'fases de gestión' : 'fases de finalización'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Historial agrupado */}
+                {!loadingHistorialFases && (() => {
+                  const fasesDelTipo = historialFases.filter(h => h.tipo === historialFasesTab);
+                  if (fasesDelTipo.length === 0) return null;
+
+                  // Agrupar por nombre_fase manteniendo el orden de primera aparición
+                  const gruposOrdenados = [];
+                  const gruposMap = {};
+                  
+                  fasesDelTipo.forEach(item => {
+                    if (!gruposMap[item.nombre_fase]) {
+                      gruposMap[item.nombre_fase] = [];
+                      gruposOrdenados.push(item.nombre_fase);
+                    }
+                    gruposMap[item.nombre_fase].push(item);
+                  });
+
+                  return (
+                    <div className="space-y-3">
+                      {gruposOrdenados.map((nombreFase) => {
+                        const items = gruposMap[nombreFase];
+                        const count = items.length;
+                        const isExpanded = historialFasesExpanded[nombreFase] || false;
+                        const currentIndex = historialFasesPaginacion[nombreFase] || 0;
+                        const currentItem = items[currentIndex];
+
+                        // Formatear fecha del último item (más reciente) para el header (Enero 23/26)
+                        const ultimoItem = items[items.length - 1];
+                        const fechaHeader = (() => {
+                          if (!ultimoItem?.created_at) return '';
+                          const fecha = new Date(ultimoItem.created_at);
+                          const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                          const mes = meses[fecha.getMonth()];
+                          const dia = fecha.getDate().toString().padStart(2, '0');
+                          const año = fecha.getFullYear().toString().slice(-2);
+                          return `${mes} ${dia}/${año}`;
+                        })();
+
+                        return (
+                          <div
+                            key={nombreFase}
+                            className="bg-white border border-slate-200 rounded-xl overflow-hidden"
+                          >
+                            {/* Header de la tarjeta */}
+                            <button
+                              onClick={() => setHistorialFasesExpanded(prev => ({
+                                ...prev,
+                                [nombreFase]: !prev[nombreFase]
+                              }))}
+                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium text-slate-800">
+                                  {nombreFase} {count > 1 && <span className="text-slate-500">({count})</span>}
+                                </span>
+                                <span className="text-sm text-slate-500">{fechaHeader}</span>
+                              </div>
+                              <ChevronDown 
+                                size={18} 
+                                className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                              />
+                            </button>
+
+                            {/* Contenido expandido */}
+                            {isExpanded && currentItem && (
+                              <div className="px-4 pb-4 border-t border-slate-100">
+                                <div className="pt-3 space-y-2">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <CalendarDays size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Fecha:</span>{' '}
+                                      {new Date(currentItem.created_at).toLocaleDateString('es-ES', {
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric'
+                                      })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Clock size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Hora:</span>{' '}
+                                      {new Date(currentItem.created_at).toLocaleTimeString('es-ES', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: true
+                                      })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <RotateCcw size={14} className="text-slate-400" />
+                                    <span className="text-slate-600">
+                                      <span className="font-medium">Origen:</span>{' '}
+                                      {currentItem.fase_anterior || 'Sin fase anterior'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Paginador horizontal */}
+                                {count > 1 && (
+                                  <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHistorialFasesPaginacion(prev => ({
+                                          ...prev,
+                                          [nombreFase]: Math.max(0, currentIndex - 1)
+                                        }));
+                                      }}
+                                      disabled={currentIndex === 0}
+                                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <ChevronLeft size={16} className="text-slate-500" />
+                                    </button>
+                                    <span className="text-xs text-slate-500 font-medium">
+                                      {'<'} {currentIndex + 1}/{count} {'>'}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHistorialFasesPaginacion(prev => ({
+                                          ...prev,
+                                          [nombreFase]: Math.min(count - 1, currentIndex + 1)
+                                        }));
+                                      }}
+                                      disabled={currentIndex === count - 1}
+                                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <ChevronRight size={16} className="text-slate-500" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
+
+            {activeTab === 'tici' && (() => {
+              // Determinar el estado del tab TICI
+              // Convertir fase_id_pipefy a string para comparación consistente
+              const faseIdString = lead?.fase_id_pipefy?.toString();
+              const faseAplica = FASES_RECORDATORIO_AUTOMATICO.includes(faseIdString);
+              const fechaRecordatorio = lead?.fecha_recordatorio_automatico ? new Date(lead.fecha_recordatorio_automatico) : null;
+              const ahora = new Date();
+              const tieneRecordatorioProgramado = faseAplica && fechaRecordatorio && fechaRecordatorio >= ahora;
+              
+              // Formatear tiempo de activación
+              const formatearTiempoActivacion = (segundos) => {
+                if (!segundos) return '';
+                const horas = Math.floor(segundos / 3600);
+                if (horas >= 24) {
+                  const dias = Math.floor(horas / 24);
+                  const horasRestantes = horas % 24;
+                  if (horasRestantes === 0) {
+                    return `${dias} ${dias === 1 ? 'día' : 'días'}`;
+                  }
+                  return `${dias} ${dias === 1 ? 'día' : 'días'} y ${horasRestantes} ${horasRestantes === 1 ? 'hora' : 'horas'}`;
+                }
+                return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+              };
+
+              // Formatear fecha del recordatorio
+              const formatearFechaRecordatorio = (fecha) => {
+                if (!fecha) return '';
+                const f = new Date(fecha);
+                const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                const dia = f.getDate();
+                const mes = meses[f.getMonth()];
+                const año = f.getFullYear();
+                let horas = f.getHours();
+                const minutos = f.getMinutes().toString().padStart(2, '0');
+                const ampm = horas >= 12 ? 'pm' : 'am';
+                horas = horas % 12 || 12;
+                return `${dia} de ${mes} de ${año} a las ${horas}:${minutos} ${ampm}`;
+              };
+
+              // Formatear countdown
+              const formatearCountdown = () => {
+                const { dias, horas, minutos, segundos } = tiempoRestante;
+                const partes = [];
+                if (dias > 0) partes.push(`${dias} ${dias === 1 ? 'día' : 'días'}`);
+                if (horas > 0) partes.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
+                if (minutos > 0) partes.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+                partes.push(`${segundos} ${segundos === 1 ? 'segundo' : 'segundos'}`);
+                return partes.join(', ');
+              };
+
+              // Determinar tipo de template
+              const tipoTemplate = configRecordatorioAuto?.template?.startsWith('Correo') ? 'correo' : 'whatsapp';
+
+              return (
+                <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
+                  {/* Sub-tabs */}
+                  <div className="flex gap-1 mb-4 flex-shrink-0 p-1 bg-slate-100 rounded-lg">
+                    <button
+                      onClick={() => setSubTabTici('programado')}
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                        subTabTici === 'programado'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Programado
+                    </button>
+                    <button
+                      onClick={() => setSubTabTici('historial')}
+                      className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                        subTabTici === 'historial'
+                          ? 'bg-white text-slate-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Historial
+                    </button>
+                  </div>
+
+                  {/* Contenido de Programado */}
+                  {subTabTici === 'programado' && (
+                    <div className="flex-1 overflow-y-auto">
+                      {loadingConfigTici ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
+                        </div>
+                      ) : !faseAplica ? (
+                        // Estado 1: La fase no aplica
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                            <Sparkles size={32} className="text-slate-300" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                            Fase sin recordatorio automático
+                          </h3>
+                          <p className="text-sm text-slate-400 max-w-xs">
+                            La fase actual del lead no tiene configurados recordatorios automáticos.
+                          </p>
+                        </div>
+                      ) : !tieneRecordatorioProgramado ? (
+                        // Estado 2: Sin recordatorio programado
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-20 h-20 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
+                            <Clock size={32} className="text-amber-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                            Sin recordatorio programado
+                          </h3>
+                          <p className="text-sm text-slate-400 max-w-xs">
+                            No hay un recordatorio automático activo para este lead en la fase actual.
+                          </p>
+                        </div>
+                      ) : (
+                        // Estado 3: Con recordatorio programado
+                        <div className="space-y-4">
+                          {/* Card principal */}
+                          <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-5 space-y-4">
+                            {/* Título y previsualizar */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="font-semibold text-slate-800">
+                                  Recordatorio automático #{lead?.numero_de_recordatorio_automatico || 1}
+                                </h4>
+                                <p className="text-sm text-slate-500">
+                                  Etapa: {lead?.fase_nombre_pipefy || 'Sin etapa'}
+                                </p>
+                              </div>
+                              
+                              {/* Botón Previsualizar */}
+                              <button
+                                onClick={() => {
+                                  setShowPreviewModal(true);
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#1717AF] hover:bg-[#1717AF]/5 rounded-lg transition-colors"
+                              >
+                                Previsualizar
+                                {tipoTemplate === 'correo' ? (
+                                  <Mail size={16} className="text-[#1717AF]" />
+                                ) : (
+                                  <MessageCircle size={16} className="text-[#25D366]" />
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Fecha de envío con countdown */}
+                            <div className="bg-white rounded-xl p-4 border border-slate-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <CalendarDays size={16} className="text-[#1717AF]" />
+                                <span className="text-sm font-medium text-slate-700">Se enviará el</span>
+                              </div>
+                              <p className="text-base font-semibold text-slate-800 mb-1">
+                                {formatearFechaRecordatorio(lead?.fecha_recordatorio_automatico)}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+                                  {formatearCountdown()}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Información detallada del recordatorio */}
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                              {/* Regla */}
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Regla</p>
+                                <p className="text-sm text-slate-700 leading-relaxed">
+                                  {lead?.numero_de_recordatorio_automatico === 1 ? (
+                                    <>
+                                      Este recordatorio automático se programó{' '}
+                                      <span className="font-semibold text-slate-800">
+                                        {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                      </span>{' '}
+                                      después de que el lead entró en la fase{' '}
+                                      <span className="font-semibold text-slate-800">"{lead?.fase_nombre_pipefy}"</span>.
+                                    </>
+                                  ) : (
+                                    <>
+                                      Este recordatorio automático se programó{' '}
+                                      <span className="font-semibold text-slate-800">
+                                        {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                      </span>{' '}
+                                      después de que se envió el recordatorio{' '}
+                                      <span className="font-semibold text-slate-800">#{lead?.numero_de_recordatorio_automatico - 1}</span>.
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+                              
+                              {/* WhatsApp */}
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">No te preocupes</p>
+                                <p className="text-sm text-slate-700 leading-relaxed">
+                                  Si el lead te escribe por WhatsApp antes de que se cumpla el recordatorio, este se reprograma automáticamente{' '}
+                                  <span className="font-semibold text-slate-800">
+                                    {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                  </span>{' '}
+                                  después de su último mensaje.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Importante - Posponer */}
+                            <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">Importante</p>
+                              <p className="text-sm text-amber-800 leading-relaxed">
+                                Si logras contactarlo por otro medio, selecciona "Posponer" y el recordatorio se moverá{' '}
+                                <span className="font-semibold">
+                                  {formatearTiempoActivacion(configRecordatorioAuto?.tiempo_activacion)}
+                                </span>{' '}
+                                desde el momento en que lo indiques.
+                              </p>
+                            </div>
+
+                            {/* Botón Posponer */}
+                            <button
+                              onClick={handlePosponerRecordatorio}
+                              disabled={posponiendo}
+                              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1717AF] to-indigo-600 text-white font-semibold hover:from-[#0f0f8a] hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {posponiendo ? (
+                                <>
+                                  <Loader2 size={18} className="animate-spin" />
+                                  Posponiendo...
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw size={18} />
+                                  Posponer
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contenido de Historial TICI */}
+                  {subTabTici === 'historial' && (
+                    <div className="flex-1 overflow-y-auto">
+                      {loadingHistorialTici ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 size={24} className="animate-spin text-[#1717AF]" />
+                        </div>
+                      ) : Object.values(historialTici).every(arr => arr.length === 0) ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                            <History size={28} className="text-slate-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-slate-700 mb-2">Sin historial</h3>
+                          <p className="text-sm text-slate-400">
+                            No hay recordatorios automáticos enviados para este lead.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(() => {
+                            // Orden específico de fases para el historial
+                            const ordenFases = {
+                              'Sin contacto': 1,
+                              'Gestionando': 2,
+                              'Pendiente de agenda': 3
+                            };
+                            
+                            return Object.keys(historialTici)
+                              .filter(fase => historialTici[fase].length > 0)
+                              .sort((a, b) => {
+                                const ordenA = ordenFases[a] || 999;
+                                const ordenB = ordenFases[b] || 999;
+                                return ordenA - ordenB;
+                              });
+                          })().map(fase => {
+                            const registros = historialTici[fase] || [];
+                            const estaAbierto = acordeonTiciAbierto === fase;
+                            const indiceActual = indiceTiciPorFase[fase] || 0;
+                            const registroActual = registros[indiceActual];
+                            const faseName = fase;
+                            
+                            return (
+                              <div key={fase} className="border border-slate-200 rounded-xl overflow-hidden">
+                                {/* Header del acordeón */}
+                                <button
+                                  onClick={() => setAcordeonTiciAbierto(estaAbierto ? null : fase)}
+                                  className={`w-full px-4 py-3 flex items-center justify-between transition-colors ${
+                                    estaAbierto ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-slate-700">{faseName}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      registros.length > 0 ? 'bg-[#1717AF]/10 text-[#1717AF]' : 'bg-slate-100 text-slate-400'
+                                    }`}>
+                                      {registros.length} {registros.length === 1 ? 'enviado' : 'enviados'}
+                                    </span>
+                                  </div>
+                                  <ChevronDown 
+                                    size={18} 
+                                    className={`text-slate-400 transition-transform ${estaAbierto ? 'rotate-180' : ''}`} 
+                                  />
+                                </button>
+                                
+                                {/* Contenido del acordeón */}
+                                {estaAbierto && registros.length > 0 && (
+                                  <div className="p-4 border-t border-slate-100 bg-white">
+                                    {/* Navegación horizontal */}
+                                    {registros.length > 1 && (
+                                      <div className="flex items-center justify-between mb-4">
+                                        <button
+                                          onClick={() => setIndiceTiciPorFase(prev => ({
+                                            ...prev,
+                                            [fase]: Math.max(0, indiceActual - 1)
+                                          }))}
+                                          disabled={indiceActual === 0}
+                                          className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <ChevronLeft size={18} className="text-slate-600" />
+                                        </button>
+                                        <span className="text-xs text-slate-500">
+                                          {indiceActual + 1} de {registros.length}
+                                        </span>
+                                        <button
+                                          onClick={() => setIndiceTiciPorFase(prev => ({
+                                            ...prev,
+                                            [fase]: Math.min(registros.length - 1, indiceActual + 1)
+                                          }))}
+                                          disabled={indiceActual === registros.length - 1}
+                                          className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <ChevronRight size={18} className="text-slate-600" />
+                                        </button>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Card del registro */}
+                                    <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 p-4 space-y-3">
+                                      {/* Header con número y etapa */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-lg bg-[#1717AF]/10 flex items-center justify-center">
+                                            <Sparkles size={16} className="text-[#1717AF]" />
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-semibold text-slate-800">
+                                              Recordatorio automático #{registroActual?.numero}
+                                            </p>
+                                            <p className="text-xs text-slate-500">
+                                              Etapa: {registroActual?.fase}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Fecha de envío */}
+                                      <div className="bg-white rounded-lg p-3 border border-slate-100">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <CalendarDays size={14} className="text-green-600" />
+                                          <span className="text-xs font-medium text-slate-600">Se envió el</span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-800">
+                                          {(() => {
+                                            if (!registroActual?.created_at) return 'Fecha no disponible';
+                                            const fecha = new Date(registroActual.created_at);
+                                            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                                            const dia = fecha.getDate();
+                                            const mes = meses[fecha.getMonth()];
+                                            const año = fecha.getFullYear();
+                                            let horas = fecha.getHours();
+                                            const minutos = fecha.getMinutes().toString().padStart(2, '0');
+                                            const ampm = horas >= 12 ? 'PM' : 'AM';
+                                            horas = horas % 12 || 12;
+                                            return `${dia} de ${mes} de ${año} a las ${horas}:${minutos} ${ampm}`;
+                                          })()}
+                                        </p>
+                                      </div>
+                                      
+                                      {/* Regla */}
+                                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Regla</p>
+                                        <p className="text-sm text-slate-700 leading-relaxed">
+                                          {registroActual?.numero === 1 ? (
+                                            <>
+                                              Este recordatorio automático se programó{' '}
+                                              <span className="font-semibold text-slate-800">
+                                                {formatearTiempoActivacion(registroActual?.tiempo_activacion)}
+                                              </span>{' '}
+                                              después de que el lead entró en la fase{' '}
+                                              <span className="font-semibold text-slate-800">"{registroActual?.fase}"</span>.
+                                            </>
+                                          ) : (
+                                            <>
+                                              Este recordatorio automático se programó{' '}
+                                              <span className="font-semibold text-slate-800">
+                                                {formatearTiempoActivacion(registroActual?.tiempo_activacion)}
+                                              </span>{' '}
+                                              después de que se envió el recordatorio{' '}
+                                              <span className="font-semibold text-slate-800">#{registroActual?.numero - 1}</span>.
+                                            </>
+                                          )}
+                                        </p>
+                                      </div>
+                                      
+                                      {/* Botón Previsualizar */}
+                                      {registroActual?.preview && (
+                                        <button
+                                          onClick={() => setPreviewHistorialTici(registroActual)}
+                                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors text-sm font-medium"
+                                        >
+                                          {registroActual?.template?.startsWith('Correo') ? (
+                                            <Mail size={16} />
+                                          ) : (
+                                            <MessageCircle size={16} />
+                                          )}
+                                          Previsualizar
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
           </div>
         </div>
       </div>
+
+      {/* Modal de previsualización TICI */}
+      {showPreviewModal && configRecordatorioAuto && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => setShowPreviewModal(false)}
+          />
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-h-[85vh] ${
+            configRecordatorioAuto.template?.startsWith('Correo') ? 'max-w-3xl' : 'max-w-lg'
+          }`}>
+            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh]">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  {configRecordatorioAuto.template?.startsWith('Correo') ? (
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Mail size={20} className="text-blue-600" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <MessageCircle size={20} className="text-green-600" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Previsualización</h3>
+                    <p className="text-xs text-slate-500">{configRecordatorioAuto.template}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {configRecordatorioAuto.template?.startsWith('Correo') ? (
+                  <div 
+                    className="email-preview-container"
+                    style={{
+                      maxWidth: '100%',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <style>
+                      {`
+                        .email-preview-container table {
+                          max-width: 100% !important;
+                          width: 100% !important;
+                        }
+                        .email-preview-container img {
+                          max-width: 100% !important;
+                          height: auto !important;
+                        }
+                        .email-preview-container td,
+                        .email-preview-container th {
+                          word-break: break-word !important;
+                        }
+                        .email-preview-container .r0-o,
+                        .email-preview-container [class*="r0-o"] {
+                          width: 100% !important;
+                          max-width: 100% !important;
+                        }
+                      `}
+                    </style>
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: configRecordatorioAuto.preview || '<p>Sin contenido disponible</p>' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-[#E5DDD5] rounded-xl p-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm max-w-[85%]">
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                        {configRecordatorioAuto.preview || 'Sin contenido disponible'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal de previsualización TICI Historial */}
+      {previewHistorialTici && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => setPreviewHistorialTici(null)}
+          />
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-h-[85vh] ${
+            previewHistorialTici.template?.startsWith('Correo') ? 'max-w-3xl' : 'max-w-lg'
+          }`}>
+            <div className="bg-white rounded-2xl shadow-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh]">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  {previewHistorialTici.template?.startsWith('Correo') ? (
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Mail size={20} className="text-blue-600" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <MessageCircle size={20} className="text-green-600" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Previsualización</h3>
+                    <p className="text-xs text-slate-500">{previewHistorialTici.template}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPreviewHistorialTici(null)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {previewHistorialTici.template?.startsWith('Correo') ? (
+                  <div 
+                    className="email-preview-container"
+                    style={{
+                      maxWidth: '100%',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <style>
+                      {`
+                        .email-preview-container table {
+                          max-width: 100% !important;
+                          width: 100% !important;
+                        }
+                        .email-preview-container img {
+                          max-width: 100% !important;
+                          height: auto !important;
+                        }
+                        .email-preview-container td,
+                        .email-preview-container th {
+                          word-break: break-word !important;
+                        }
+                        .email-preview-container .r0-o,
+                        .email-preview-container [class*="r0-o"] {
+                          width: 100% !important;
+                          max-width: 100% !important;
+                        }
+                      `}
+                    </style>
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: previewHistorialTici.preview || '<p>Sin contenido disponible</p>' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-[#E5DDD5] rounded-xl p-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm max-w-[85%]">
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                        {previewHistorialTici.preview || 'Sin contenido disponible'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+                <button
+                  onClick={() => setPreviewHistorialTici(null)}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Modal de confirmación de recordatorio */}
       {mostrarConfirmacion && (
@@ -2032,9 +4846,130 @@ const LeadSidebar = ({ lead, isOpen, onClose, initialTab = 'info', onMarcarNoRev
           </div>
         </>
       )}
+
+      {/* Modal de confirmación para reasignar lead */}
+      {mostrarModalReasignar && comercialSeleccionado && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300"
+            onClick={() => {
+              setMostrarModalReasignar(false);
+              setComercialSeleccionado(null);
+            }}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-md">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 text-center mx-4">
+              {/* Ícono */}
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#1717AF] to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                <Users size={40} className="text-white" />
+              </div>
+              
+              {/* Título */}
+              <h3 className="text-xl font-bold text-slate-800 mb-3">
+                ¿Reasignar lead?
+              </h3>
+              
+              {/* Mensaje */}
+              <p className="text-slate-600 mb-6">
+                ¿Estás seguro que quieres reasignar el lead de{' '}
+                <span className="font-semibold text-slate-800">{nombreComercialActual}</span>{' '}
+                a{' '}
+                <span className="font-semibold text-[#1717AF]">{comercialSeleccionado.nombre}</span>?
+              </p>
+              
+              {/* Botones */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setMostrarModalReasignar(false);
+                    setComercialSeleccionado(null);
+                  }}
+                  disabled={reasignando}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition-all duration-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarReasignacion}
+                  disabled={reasignando}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#1717AF] to-indigo-600 text-white font-semibold hover:from-[#1414A0] hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                >
+                  {reasignando ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Reasignando...
+                    </>
+                  ) : (
+                    'Sí, reasignar'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal para ver texto completo */}
+      {modalTextoCompleto && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-[60]"
+            onClick={() => setModalTextoCompleto(null)}
+          />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md bg-white rounded-2xl shadow-2xl z-[61] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">{modalTextoCompleto.label}</h3>
+              <button
+                onClick={() => setModalTextoCompleto(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                {modalTextoCompleto.value}
+              </p>
+            </div>
+            <button
+              onClick={() => setModalTextoCompleto(null)}
+              className="w-full mt-4 py-3 rounded-xl bg-[#1717AF] text-white font-medium hover:bg-[#1717AF]/90 transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Toast de confirmación */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] animate-fade-in">
+          <div className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 ${
+            toastMessage.includes('Error') 
+              ? 'bg-rose-600 text-white' 
+              : 'bg-emerald-600 text-white'
+          }`}>
+            {toastMessage.includes('Error') ? (
+              <AlertCircle size={18} />
+            ) : (
+              <Check size={18} />
+            )}
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal para crear lead en Respond.io */}
+      <CrearRespondModal
+        isOpen={crearRespondModalOpen}
+        onClose={() => setCrearRespondModalOpen(false)}
+        lead={lead}
+        onSuccess={handleRespondSuccess}
+      />
     </>
   );
 };
 
 export default LeadSidebar;
+
 
