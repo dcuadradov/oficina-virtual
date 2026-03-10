@@ -1132,19 +1132,20 @@ export default function Dashboard() {
                 <CalendarDays size={18} />
                 Mis Pitch
               </button>
-              {puedeVerTodos && (
-                <button
-                  onClick={() => setActiveView('metricas')}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
-                    activeView === 'metricas'
-                      ? 'bg-white text-[#1717AF] shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <BarChart3 size={18} />
-                  Métricas
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setActiveView('metricas');
+                  if (!puedeVerTodos) setMetricasSubTab('performance');
+                }}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                  activeView === 'metricas'
+                    ? 'bg-white text-[#1717AF] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <BarChart3 size={18} />
+                Métricas
+              </button>
             </div>
 
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
@@ -1333,28 +1334,30 @@ export default function Dashboard() {
                 />
 
                 {/* Sub-tabs de Métricas */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setMetricasSubTab('asignaciones')}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                      metricasSubTab === 'asignaciones'
-                        ? 'bg-[#1717AF] text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Asignaciones
-                  </button>
-                  <button
-                    onClick={() => setMetricasSubTab('performance')}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                      metricasSubTab === 'performance'
-                        ? 'bg-[#1717AF] text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Performance
-                  </button>
-                </div>
+                {puedeVerTodos && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setMetricasSubTab('asignaciones')}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        metricasSubTab === 'asignaciones'
+                          ? 'bg-[#1717AF] text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Asignaciones
+                    </button>
+                    <button
+                      onClick={() => setMetricasSubTab('performance')}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        metricasSubTab === 'performance'
+                          ? 'bg-[#1717AF] text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Performance
+                    </button>
+                  </div>
+                )}
 
                 {/* Contenido de Métricas */}
                 {metricasSubTab === 'asignaciones' && (
