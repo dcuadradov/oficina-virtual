@@ -399,13 +399,23 @@ export default function MetricasPerformance({
         m.total++;
 
         // Determine advancement: lead has a historial entry for a LATER stage after this one
+        // For Pitch/Posible matrícula/Pago pendiente, only specific target stages count
+        const advanceTargets = {
+          'Pitch': ['Posible matrícula', 'Pago pendiente', 'Matrícula'],
+          'Posible matrícula': ['Pago pendiente', 'Matrícula'],
+          'Pago pendiente': ['Matrícula'],
+        };
+        const validTargets = advanceTargets[stageName] || null;
+
         let advanced = false;
         let advanceTimeHours = null;
 
         if (stageEntries.length > 0) {
           const lastStageEntry = stageEntries[stageEntries.length - 1];
           const nextDifferentEntry = history.find(
-            h => h.created_at > lastStageEntry.created_at && h.etapa !== stageName
+            h => h.created_at > lastStageEntry.created_at
+              && h.etapa !== stageName
+              && (!validTargets || validTargets.includes(h.etapa))
           );
 
           if (nextDifferentEntry) {
@@ -415,9 +425,16 @@ export default function MetricasPerformance({
         }
 
         if (!advanced && !isCurrentlyInStage) {
-          const currentIdx = FUNNEL_STAGES.indexOf(lead.etapa_funnel);
-          if (currentIdx > stageIndex) {
-            advanced = true;
+          const currentEtapa = lead.etapa_funnel;
+          if (validTargets) {
+            if (validTargets.includes(currentEtapa)) {
+              advanced = true;
+            }
+          } else {
+            const currentIdx = FUNNEL_STAGES.indexOf(currentEtapa);
+            if (currentIdx > stageIndex) {
+              advanced = true;
+            }
           }
         }
 
