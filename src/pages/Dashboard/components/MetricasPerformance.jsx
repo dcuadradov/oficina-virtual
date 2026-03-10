@@ -283,7 +283,7 @@ export default function MetricasPerformance({
       // 2. Fetch ALL leads (no date filter — leads may have been created before the period but passed through the stage during it)
       let leadsQuery = supabase
         .from('leads')
-        .select('card_id, etapa_funnel, comercial_email')
+        .select('card_id, etapa_funnel, comercial_email, created_at')
         .neq('etapa_funnel', 'No mostrar');
 
       if (selectedTag) {
@@ -379,10 +379,12 @@ export default function MetricasPerformance({
 
         if (stageEntries.length === 0 && !isCurrentlyInStage) return;
 
-        // Date range filter: only count if lead had a stage entry within the period, or is currently in stage
+        // Date range filter: only count if lead had a stage entry within the period,
+        // or is currently in the stage AND was created within the period
         if (rangeStart && rangeEnd) {
           const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
-          if (!hasEntryInRange && !isCurrentlyInStage) return;
+          const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
+          if (!hasEntryInRange && !(isCurrentlyInStage && createdInRange)) return;
         }
 
         if (!metricsPerComercial[comercialEmail]) {
