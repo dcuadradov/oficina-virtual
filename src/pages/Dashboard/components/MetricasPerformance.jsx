@@ -204,13 +204,13 @@ export default function MetricasPerformance({
         }
       });
 
-      // Only consider active comercials
-      const activeEmails = new Set(comerciales.map(c => c.email));
-      comerciales.forEach(c => {
+      // Only consider comercials with disponibilidad = 'Activo'
+      const disponibleEmails = new Set(comerciales.filter(c => c.disponibilidad === 'Activo').map(c => c.email));
+      comerciales.filter(c => c.disponibilidad === 'Activo').forEach(c => {
         if (!byComercial[c.email]) byComercial[c.email] = { count: 0, times: [] };
       });
 
-      const entries = Object.entries(byComercial).filter(([email]) => activeEmails.has(email));
+      const entries = Object.entries(byComercial).filter(([email]) => disponibleEmails.has(email));
       // Sort: most matrículas first; tiebreak by fewest pitches (better converter)
       entries.sort((a, b) => {
         if (b[1].count !== a[1].count) return b[1].count - a[1].count;
@@ -488,10 +488,10 @@ export default function MetricasPerformance({
         };
       });
 
-      // 9. Find top and low (by tasa de avance, min 1 lead, only active users)
-      const activeEmails = new Set(comerciales.map(c => c.email));
+      // 9. Find top and low (by tasa de avance, min 1 lead, only disponibilidad = 'Activo')
+      const disponibleEmails = new Set(comerciales.filter(c => c.disponibilidad === 'Activo').map(c => c.email));
       const sortedComercials = Object.entries(processedComercials)
-        .filter(([email, m]) => m.total >= 1 && activeEmails.has(email))
+        .filter(([email, m]) => m.total >= 1 && disponibleEmails.has(email))
         .sort((a, b) => b[1].tasaAvance - a[1].tasaAvance);
 
       const topEntry = sortedComercials[0] || null;
