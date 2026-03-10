@@ -9,6 +9,7 @@ import PitchCalendar from './components/PitchCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
+import MetricasPerformance from './components/MetricasPerformance';
 import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3 } from 'lucide-react';
 
 // Configuración de paginación
@@ -1343,6 +1344,16 @@ export default function Dashboard() {
                   >
                     Asignaciones
                   </button>
+                  <button
+                    onClick={() => setMetricasSubTab('performance')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      metricasSubTab === 'performance'
+                        ? 'bg-[#1717AF] text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Performance
+                  </button>
                 </div>
 
                 {/* Contenido de Métricas */}
@@ -1354,6 +1365,18 @@ export default function Dashboard() {
                     selectedDia={selectedDia}
                     selectedTag={selectedTag}
                     puedeVerTodos={puedeVerTodos}
+                  />
+                )}
+
+                {metricasSubTab === 'performance' && (
+                  <MetricasPerformance
+                    selectedComercial={selectedComercial}
+                    selectedMes={selectedMes}
+                    selectedPeriodo={selectedPeriodo}
+                    selectedDia={selectedDia}
+                    selectedTag={selectedTag}
+                    puedeVerTodos={puedeVerTodos}
+                    comerciales={comerciales}
                   />
                 )}
               </>
