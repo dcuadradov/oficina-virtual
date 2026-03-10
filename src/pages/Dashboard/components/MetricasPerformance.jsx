@@ -280,15 +280,12 @@ export default function MetricasPerformance({
         }
       });
 
-      // 2. Fetch ALL leads (no comercial filter — we need all for top/low comparison)
+      // 2. Fetch ALL leads (no date filter — leads may have been created before the period but passed through the stage during it)
       let leadsQuery = supabase
         .from('leads')
         .select('card_id, etapa_funnel, comercial_email')
         .neq('etapa_funnel', 'No mostrar');
 
-      if (fechaInicio && fechaFin) {
-        leadsQuery = leadsQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-      }
       if (selectedTag) {
         leadsQuery = leadsQuery.eq('label', selectedTag);
       }
@@ -305,7 +302,7 @@ export default function MetricasPerformance({
         return;
       }
 
-      // 3. Fetch historial with pagination (Supabase defaults to 1000 rows max)
+      // 3. Fetch historial with pagination (no date filter — we need full history for advancement detection)
       const BATCH = 1000;
       let allHistorial = [];
       let histFrom = 0;
@@ -317,7 +314,6 @@ export default function MetricasPerformance({
           .eq('modulo', 'comercial')
           .order('created_at', { ascending: true })
           .range(histFrom, histFrom + BATCH - 1);
-        if (fechaInicio) hq = hq.gte('created_at', fechaInicio);
         const { data: hBatch, error: hErr } = await hq;
         if (hErr) { console.warn('historial query error:', hErr); break; }
         allHistorial = allHistorial.concat(hBatch || []);
@@ -368,6 +364,8 @@ export default function MetricasPerformance({
 
       // 7. Calculate per-comercial metrics
       const metricsPerComercial = {};
+      const rangeStart = fechaInicio ? new Date(fechaInicio) : null;
+      const rangeEnd = fechaFin ? new Date(fechaFin) : null;
 
       allLeadIds.forEach(leadId => {
         const lead = leadMap[leadId];
@@ -375,11 +373,17 @@ export default function MetricasPerformance({
         const history = historialByLead[leadId] || [];
         const seguimientos = seguimientosByLead[leadId] || [];
 
-        // Check if lead passed through or is currently in this stage
+        // Check if lead passed through this stage
         const stageEntries = history.filter(h => h.etapa === stageName);
         const isCurrentlyInStage = lead.etapa_funnel === stageName;
 
         if (stageEntries.length === 0 && !isCurrentlyInStage) return;
+
+        // Date range filter: only count if lead had a stage entry within the period, or is currently in stage
+        if (rangeStart && rangeEnd) {
+          const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
+          if (!hasEntryInRange && !isCurrentlyInStage) return;
+        }
 
         if (!metricsPerComercial[comercialEmail]) {
           metricsPerComercial[comercialEmail] = {
