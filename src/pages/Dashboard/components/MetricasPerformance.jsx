@@ -401,28 +401,26 @@ export default function MetricasPerformance({
           }
         }
 
+        const newBucket = () => ({
+          total: 0, avanzaron: 0, tiemposAvance: [],
+          conSeguimiento: 0, sinSeguimiento: 0,
+          seguimientosAvanzan: [], seguimientosNoAvanzan: [],
+          tiemposSeguimientoAvanzan: [], tiemposSeguimientoNoAvanzan: [],
+        });
+
         if (!metricsPerComercial[comercialEmail]) {
           metricsPerComercial[comercialEmail] = {
-            total: 0,
-            asignadosPeriodo: 0,
-            asignadosPrevio: 0,
-            avanzaron: 0,
-            tiemposAvance: [],
-            conSeguimiento: 0,
-            sinSeguimiento: 0,
-            seguimientosAvanzan: [],
-            seguimientosNoAvanzan: [],
-            tiemposSeguimientoAvanzan: [],
-            tiemposSeguimientoNoAvanzan: [],
+            all: newBucket(), periodo: newBucket(), previo: newBucket(),
           };
         }
 
-        const m = metricsPerComercial[comercialEmail];
-        m.total++;
-        if (isAsignadoPeriodo) m.asignadosPeriodo++;
-        if (isAsignadoPrevio) m.asignadosPrevio++;
+        const buckets = [metricsPerComercial[comercialEmail].all];
+        if (isAsignadoPeriodo) buckets.push(metricsPerComercial[comercialEmail].periodo);
+        if (isAsignadoPrevio) buckets.push(metricsPerComercial[comercialEmail].previo);
 
-        // Determine advancement: lead has a historial entry for a LATER stage after ANY of its entries in this stage
+        buckets.forEach(b => b.total++);
+
+        // Determine advancement
         const advanceTargets = {
           'Pitch': ['Posible matrícula', 'Pago pendiente', 'Matrícula'],
           'Reprogramar': ['Posible matrícula', 'Pago pendiente', 'Matrícula'],
@@ -434,14 +432,12 @@ export default function MetricasPerformance({
         let advanced = false;
         let advanceTimeHours = null;
 
-        // Check each entry in the stage — if ANY led to advancement, count it
         for (const entry of stageEntries) {
           const nextDifferentEntry = history.find(
             h => h.created_at > entry.created_at
               && h.etapa !== stageName
               && (!validTargets || validTargets.includes(h.etapa))
           );
-
           if (nextDifferentEntry) {
             advanced = true;
             advanceTimeHours = (nextDifferentEntry.created_at - entry.created_at) / (1000 * 60 * 60);
@@ -452,66 +448,59 @@ export default function MetricasPerformance({
         if (!advanced && !isCurrentlyInStage) {
           const currentEtapa = lead.etapa_funnel;
           if (validTargets) {
-            if (validTargets.includes(currentEtapa)) {
-              advanced = true;
-            }
+            if (validTargets.includes(currentEtapa)) advanced = true;
           } else {
-            const currentIdx = FUNNEL_STAGES.indexOf(currentEtapa);
-            if (currentIdx > stageIndex) {
-              advanced = true;
-            }
+            if (FUNNEL_STAGES.indexOf(currentEtapa) > stageIndex) advanced = true;
           }
         }
 
         if (advanced) {
-          m.avanzaron++;
-          if (advanceTimeHours !== null) {
-            m.tiemposAvance.push(advanceTimeHours);
-          }
+          buckets.forEach(b => {
+            b.avanzaron++;
+            if (advanceTimeHours !== null) b.tiemposAvance.push(advanceTimeHours);
+          });
         }
 
         // Seguimientos
         if (seguimientos.length > 0) {
-          m.conSeguimiento++;
+          buckets.forEach(b => b.conSeguimiento++);
           const segTimeDiffs = [];
           for (let i = 1; i < seguimientos.length; i++) {
             segTimeDiffs.push((seguimientos[i] - seguimientos[i - 1]) / (1000 * 60 * 60));
           }
-
           if (advanced) {
-            m.seguimientosAvanzan.push(seguimientos.length);
-            m.tiemposSeguimientoAvanzan.push(...segTimeDiffs);
+            buckets.forEach(b => { b.seguimientosAvanzan.push(seguimientos.length); b.tiemposSeguimientoAvanzan.push(...segTimeDiffs); });
           } else {
-            m.seguimientosNoAvanzan.push(seguimientos.length);
-            m.tiemposSeguimientoNoAvanzan.push(...segTimeDiffs);
+            buckets.forEach(b => { b.seguimientosNoAvanzan.push(seguimientos.length); b.tiemposSeguimientoNoAvanzan.push(...segTimeDiffs); });
           }
         } else {
-          m.sinSeguimiento++;
-          if (advanced) {
-            m.seguimientosAvanzan.push(0);
-          } else {
-            m.seguimientosNoAvanzan.push(0);
-          }
+          buckets.forEach(b => b.sinSeguimiento++);
+          if (advanced) { buckets.forEach(b => b.seguimientosAvanzan.push(0)); }
+          else { buckets.forEach(b => b.seguimientosNoAvanzan.push(0)); }
         }
       });
 
       // 8. Aggregate per comercial
+      const aggregateBucket = (b) => ({
+        total: b.total,
+        avanzaron: b.avanzaron,
+        tasaAvance: b.total > 0 ? (b.avanzaron / b.total) * 100 : 0,
+        tiempoPromedioAvance: avgOf(b.tiemposAvance),
+        conSeguimiento: b.conSeguimiento,
+        sinSeguimiento: b.sinSeguimiento,
+        promedioSeguimientosAvanzan: avgOf(b.seguimientosAvanzan),
+        promedioSeguimientosNoAvanzan: avgOf(b.seguimientosNoAvanzan),
+        tiempoPromedioSeguimientoAvanzan: avgOf(b.tiemposSeguimientoAvanzan),
+        tiempoPromedioSeguimientoNoAvanzan: avgOf(b.tiemposSeguimientoNoAvanzan),
+      });
+
       const processedComercials = {};
       Object.entries(metricsPerComercial).forEach(([email, m]) => {
         processedComercials[email] = {
           nombre: comercialNames[email] || email?.split('@')[0] || email,
-          total: m.total,
-          asignadosPeriodo: m.asignadosPeriodo,
-          asignadosPrevio: m.asignadosPrevio,
-          avanzaron: m.avanzaron,
-          tasaAvance: m.total > 0 ? (m.avanzaron / m.total) * 100 : 0,
-          tiempoPromedioAvance: avgOf(m.tiemposAvance),
-          conSeguimiento: m.conSeguimiento,
-          sinSeguimiento: m.sinSeguimiento,
-          promedioSeguimientosAvanzan: avgOf(m.seguimientosAvanzan),
-          promedioSeguimientosNoAvanzan: avgOf(m.seguimientosNoAvanzan),
-          tiempoPromedioSeguimientoAvanzan: avgOf(m.tiemposSeguimientoAvanzan),
-          tiempoPromedioSeguimientoNoAvanzan: avgOf(m.tiemposSeguimientoNoAvanzan),
+          ...aggregateBucket(m.all),
+          periodo: aggregateBucket(m.periodo),
+          previo: aggregateBucket(m.previo),
         };
       });
 
@@ -694,108 +683,11 @@ export default function MetricasPerformance({
 
             {/* Comparison Table */}
             {detailData.columns.length > 0 ? (
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                {/* Column Headers */}
-                <div className={`grid gap-0 ${
-                  detailData.columns.length === 3 ? 'grid-cols-[200px_1fr_1fr_1fr]' :
-                  detailData.columns.length === 2 ? 'grid-cols-[200px_1fr_1fr]' :
-                  'grid-cols-[200px_1fr]'
-                }`}>
-                  <div className="bg-slate-50 border-b border-r border-slate-200 px-4 py-3">
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Métrica</span>
-                  </div>
-                  {detailData.columns.map((col) => (
-                    <div
-                      key={col.type}
-                      className={`border-b border-slate-200 px-4 py-3 text-center ${
-                        col.type === 'selected' ? 'bg-[#02214A]/5' :
-                        col.type === 'top' ? 'bg-emerald-50/50' :
-                        'bg-rose-50/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-1.5">
-                        {col.type === 'top' && <Trophy size={13} className="text-emerald-500" />}
-                        {col.type === 'low' && <AlertTriangle size={13} className="text-rose-400" />}
-                        <span className={`text-sm font-semibold ${
-                          col.type === 'selected' ? 'text-[#02214A]' :
-                          col.type === 'top' ? 'text-emerald-700' :
-                          'text-rose-600'
-                        }`}>{col.label}</span>
-                      </div>
-                      <span className={`text-[10px] font-medium uppercase tracking-wider ${
-                        col.type === 'selected' ? 'text-slate-400' :
-                        col.type === 'top' ? 'text-emerald-500' :
-                        'text-rose-400'
-                      }`}>
-                        {col.type === 'selected' ? 'Seleccionado' :
-                         col.type === 'top' ? 'Top Performance' : 'Low Performance'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Metric Rows */}
-                <MetricRow
-                  label="Total leads"
+              <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+                <DetailTable
                   columns={detailData.columns}
-                  getValue={(d) => d.total}
-                />
-                {detailData.hasDateFilter && (
-                  <>
-                    <MetricRow
-                      label="↳ Asignados en el periodo"
-                      columns={detailData.columns}
-                      getValue={(d) => d.asignadosPeriodo}
-                    />
-                    <MetricRow
-                      label="↳ Asignados previamente"
-                      columns={detailData.columns}
-                      getValue={(d) => d.asignadosPrevio}
-                    />
-                  </>
-                )}
-                <MetricRow
-                  label="Avanzan de etapa"
-                  columns={detailData.columns}
-                  getValue={(d) => `${d.avanzaron} (${d.tasaAvance.toFixed(1)}%)`}
-                  highlight
-                />
-                <MetricRow
-                  label="Tiempo promedio de avance"
-                  columns={detailData.columns}
-                  getValue={(d) => formatDuration(d.tiempoPromedioAvance)}
-                />
-                <MetricRow
-                  label="Con seguimiento"
-                  columns={detailData.columns}
-                  getValue={(d) => d.total > 0 ? `${d.conSeguimiento} (${((d.conSeguimiento / d.total) * 100).toFixed(1)}%)` : '0'}
-                />
-                <MetricRow
-                  label="Sin seguimiento"
-                  columns={detailData.columns}
-                  getValue={(d) => d.total > 0 ? `${d.sinSeguimiento} (${((d.sinSeguimiento / d.total) * 100).toFixed(1)}%)` : '0'}
-                />
-                <MetricRow
-                  label="Prom. seguimientos (avanzan)"
-                  columns={detailData.columns}
-                  getValue={(d) => d.promedioSeguimientosAvanzan > 0 ? d.promedioSeguimientosAvanzan.toFixed(1) : '—'}
-                />
-                <MetricRow
-                  label="Prom. seguimientos (no avanzan)"
-                  columns={detailData.columns}
-                  getValue={(d) => d.promedioSeguimientosNoAvanzan > 0 ? d.promedioSeguimientosNoAvanzan.toFixed(1) : '—'}
-                />
-                <MetricRow
-                  label="Tiempo entre seguimientos (avanzan)"
-                  columns={detailData.columns}
-                  getValue={(d) => formatDuration(d.tiempoPromedioSeguimientoAvanzan)}
-                  isLast
-                />
-                <MetricRow
-                  label="Tiempo entre seguimientos (no avanzan)"
-                  columns={detailData.columns}
-                  getValue={(d) => formatDuration(d.tiempoPromedioSeguimientoNoAvanzan)}
-                  isLast
+                  hasDateFilter={detailData.hasDateFilter}
+                  formatDuration={formatDuration}
                 />
               </div>
             ) : (
@@ -1049,31 +941,103 @@ function HeaderKpi({ label, value, subtitle, color, icon, tooltip }) {
   );
 }
 
-function MetricRow({ label, columns, getValue, highlight, isLast }) {
-  const gridCols = columns.length === 3
-    ? 'grid-cols-[200px_1fr_1fr_1fr]'
-    : columns.length === 2
-    ? 'grid-cols-[200px_1fr_1fr]'
-    : 'grid-cols-[200px_1fr]';
+function DetailTable({ columns, hasDateFilter, formatDuration }) {
+  const subCols = hasDateFilter ? 3 : 1;
+  const totalDataCols = columns.length * subCols;
+  const gridTemplate = `180px repeat(${totalDataCols}, minmax(90px, 1fr))`;
+
+  const colBg = (type, subtle) => {
+    if (type === 'selected') return subtle ? 'bg-[#02214A]/[0.02]' : 'bg-[#02214A]/5';
+    if (type === 'top') return subtle ? 'bg-emerald-50/30' : 'bg-emerald-50/50';
+    return subtle ? 'bg-rose-50/30' : 'bg-rose-50/50';
+  };
+
+  const getDataForSub = (col, subIdx) => {
+    if (!hasDateFilter) return col.data;
+    if (subIdx === 0) return col.data.periodo;
+    if (subIdx === 1) return col.data.previo;
+    return col.data;
+  };
+
+  const subLabels = ['En el periodo', 'Previamente', 'Total'];
+
+  const metrics = [
+    { label: 'Total leads', getValue: (d) => d.total, highlight: false },
+    { label: 'Avanzan de etapa', getValue: (d) => `${d.avanzaron} (${d.tasaAvance.toFixed(1)}%)`, highlight: true },
+    { label: 'Tiempo prom. de avance', getValue: (d) => formatDuration(d.tiempoPromedioAvance) },
+    { label: 'Con seguimiento', getValue: (d) => d.total > 0 ? `${d.conSeguimiento} (${((d.conSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
+    { label: 'Sin seguimiento', getValue: (d) => d.total > 0 ? `${d.sinSeguimiento} (${((d.sinSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
+    { label: 'Prom. seg. (avanzan)', getValue: (d) => d.promedioSeguimientosAvanzan > 0 ? d.promedioSeguimientosAvanzan.toFixed(1) : '—' },
+    { label: 'Prom. seg. (no avanzan)', getValue: (d) => d.promedioSeguimientosNoAvanzan > 0 ? d.promedioSeguimientosNoAvanzan.toFixed(1) : '—' },
+    { label: 'Tiempo entre seg. (avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoAvanzan) },
+    { label: 'Tiempo entre seg. (no avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoNoAvanzan) },
+  ];
 
   return (
-    <div className={`grid gap-0 ${gridCols} ${!isLast ? 'border-b border-slate-100' : ''} ${highlight ? 'bg-slate-50/50' : ''}`}>
-      <div className="px-4 py-3 border-r border-slate-200 flex items-center">
-        <span className={`text-xs ${highlight ? 'font-semibold text-slate-700' : 'text-slate-600'}`}>{label}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: gridTemplate }}>
+      {/* Row 1: Commercial name headers */}
+      <div className="bg-slate-50 border-b border-r border-slate-200 px-3 py-3 flex items-center" style={{ gridRow: hasDateFilter ? 'span 2' : 'span 1' }}>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Métrica</span>
       </div>
       {columns.map((col) => (
         <div
           key={col.type}
-          className={`px-4 py-3 text-center flex items-center justify-center ${
-            col.type === 'selected' ? 'bg-[#02214A]/[0.02]' :
-            col.type === 'top' ? 'bg-emerald-50/30' :
-            'bg-rose-50/30'
-          }`}
+          className={`border-b border-slate-200 px-3 py-2.5 text-center ${colBg(col.type, false)}`}
+          style={{ gridColumn: `span ${subCols}` }}
         >
-          <span className={`text-sm tabular-nums ${highlight ? 'font-bold text-slate-800' : 'font-medium text-slate-700'}`}>
-            {getValue(col.data)}
+          <div className="flex items-center justify-center gap-1.5">
+            {col.type === 'top' && <Trophy size={12} className="text-emerald-500" />}
+            {col.type === 'low' && <AlertTriangle size={12} className="text-rose-400" />}
+            <span className={`text-sm font-semibold ${
+              col.type === 'selected' ? 'text-[#02214A]' :
+              col.type === 'top' ? 'text-emerald-700' : 'text-rose-600'
+            }`}>{col.label}</span>
+          </div>
+          <span className={`text-[10px] font-medium uppercase tracking-wider ${
+            col.type === 'selected' ? 'text-slate-400' :
+            col.type === 'top' ? 'text-emerald-500' : 'text-rose-400'
+          }`}>
+            {col.type === 'selected' ? 'Seleccionado' : col.type === 'top' ? 'Top Performance' : 'Low Performance'}
           </span>
         </div>
+      ))}
+
+      {/* Row 2: Sub-column headers (only with date filter) */}
+      {hasDateFilter && columns.map((col) => (
+        Array.from({ length: subCols }).map((_, si) => (
+          <div
+            key={`${col.type}-sub-${si}`}
+            className={`border-b border-slate-200 px-2 py-1.5 text-center ${colBg(col.type, true)}`}
+          >
+            <span className={`text-[10px] font-medium ${si === 2 ? 'text-slate-700 font-semibold' : 'text-slate-500'}`}>
+              {subLabels[si]}
+            </span>
+          </div>
+        ))
+      ))}
+
+      {/* Metric rows */}
+      {metrics.map((metric, mi) => (
+        <React.Fragment key={mi}>
+          <div className={`px-3 py-2.5 border-r border-slate-200 flex items-center ${mi < metrics.length - 1 ? 'border-b border-slate-100' : ''} ${metric.highlight ? 'bg-slate-50/50' : ''}`}>
+            <span className={`text-[11px] ${metric.highlight ? 'font-semibold text-slate-700' : 'text-slate-600'}`}>{metric.label}</span>
+          </div>
+          {columns.map((col) => (
+            Array.from({ length: subCols }).map((_, si) => {
+              const d = getDataForSub(col, si);
+              return (
+                <div
+                  key={`${col.type}-${mi}-${si}`}
+                  className={`px-2 py-2.5 text-center flex items-center justify-center ${colBg(col.type, true)} ${mi < metrics.length - 1 ? 'border-b border-slate-100' : ''} ${metric.highlight ? 'bg-slate-50/30' : ''} ${hasDateFilter && si === 2 ? 'border-l border-slate-100' : ''}`}
+                >
+                  <span className={`text-[12px] tabular-nums ${metric.highlight ? 'font-bold text-slate-800' : 'font-medium text-slate-700'} ${hasDateFilter && si < 2 ? 'text-slate-500' : ''}`}>
+                    {metric.getValue(d)}
+                  </span>
+                </div>
+              );
+            })
+          ))}
+        </React.Fragment>
       ))}
     </div>
   );
