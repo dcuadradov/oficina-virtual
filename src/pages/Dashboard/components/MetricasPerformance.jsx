@@ -390,10 +390,11 @@ export default function MetricasPerformance({
           if (hasEntryInRange || (isCurrentlyInStage && createdInRange)) {
             isAsignadoPeriodo = true;
           } else {
-            // Lead was in the stage before the period — check if managed (seguimiento) during the period
-            const hasSeguimientoInRange = seguimientos.some(s => s >= rangeStart && s <= rangeEnd);
             const hasStageHistory = stageEntries.length > 0 || isCurrentlyInStage;
-            if (hasStageHistory && hasSeguimientoInRange) {
+            const hasSeguimientoInRange = seguimientos.some(s => s >= rangeStart && s <= rangeEnd);
+            const hasHistorialActivityInRange = history.some(h => h.created_at >= rangeStart && h.created_at <= rangeEnd);
+            const wasActiveDuringPeriod = isCurrentlyInStage || hasSeguimientoInRange || hasHistorialActivityInRange;
+            if (hasStageHistory && wasActiveDuringPeriod) {
               isAsignadoPrevio = true;
             } else {
               return;
