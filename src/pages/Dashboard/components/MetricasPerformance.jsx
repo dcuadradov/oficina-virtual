@@ -392,8 +392,18 @@ export default function MetricasPerformance({
           } else {
             const hasStageHistory = stageEntries.length > 0 || isCurrentlyInStage;
             const hasSeguimientoInRange = seguimientos.some(s => s >= rangeStart && s <= rangeEnd);
-            const hasHistorialActivityInRange = history.some(h => h.created_at >= rangeStart && h.created_at <= rangeEnd);
-            const wasActiveDuringPeriod = isCurrentlyInStage || hasSeguimientoInRange || hasHistorialActivityInRange;
+            let leftStageDuringPeriod = false;
+            const sortedHist = [...history].sort((a, b) => a.created_at - b.created_at);
+            for (let i = 0; i < sortedHist.length; i++) {
+              if (sortedHist[i].etapa === stageName && i + 1 < sortedHist.length) {
+                const next = sortedHist[i + 1];
+                if (next.etapa !== stageName && next.created_at >= rangeStart && next.created_at <= rangeEnd) {
+                  leftStageDuringPeriod = true;
+                  break;
+                }
+              }
+            }
+            const wasActiveDuringPeriod = hasSeguimientoInRange || leftStageDuringPeriod;
             if (hasStageHistory && wasActiveDuringPeriod) {
               isAsignadoPrevio = true;
             } else {
@@ -414,12 +424,22 @@ export default function MetricasPerformance({
             all: newBucket(), periodo: newBucket(), previo: newBucket(),
           };
         }
+        if (!metricsPerComercial['__team__']) {
+          metricsPerComercial['__team__'] = {
+            all: newBucket(), periodo: newBucket(), previo: newBucket(),
+          };
+        }
 
         const buckets = [metricsPerComercial[comercialEmail].all];
         if (isAsignadoPeriodo) buckets.push(metricsPerComercial[comercialEmail].periodo);
         if (isAsignadoPrevio) buckets.push(metricsPerComercial[comercialEmail].previo);
 
-        buckets.forEach(b => b.total++);
+        const teamBuckets = [metricsPerComercial['__team__'].all];
+        if (isAsignadoPeriodo) teamBuckets.push(metricsPerComercial['__team__'].periodo);
+        if (isAsignadoPrevio) teamBuckets.push(metricsPerComercial['__team__'].previo);
+
+        const allBuckets = [...buckets, ...teamBuckets];
+        allBuckets.forEach(b => b.total++);
 
         // Determine advancement
         const advanceTargets = {
@@ -456,7 +476,7 @@ export default function MetricasPerformance({
         }
 
         if (advanced) {
-          buckets.forEach(b => {
+          allBuckets.forEach(b => {
             b.avanzaron++;
             if (advanceTimeHours !== null) b.tiemposAvance.push(advanceTimeHours);
           });
@@ -464,20 +484,20 @@ export default function MetricasPerformance({
 
         // Seguimientos
         if (seguimientos.length > 0) {
-          buckets.forEach(b => b.conSeguimiento++);
+          allBuckets.forEach(b => b.conSeguimiento++);
           const segTimeDiffs = [];
           for (let i = 1; i < seguimientos.length; i++) {
             segTimeDiffs.push((seguimientos[i] - seguimientos[i - 1]) / (1000 * 60 * 60));
           }
           if (advanced) {
-            buckets.forEach(b => { b.seguimientosAvanzan.push(seguimientos.length); b.tiemposSeguimientoAvanzan.push(...segTimeDiffs); });
+            allBuckets.forEach(b => { b.seguimientosAvanzan.push(seguimientos.length); b.tiemposSeguimientoAvanzan.push(...segTimeDiffs); });
           } else {
-            buckets.forEach(b => { b.seguimientosNoAvanzan.push(seguimientos.length); b.tiemposSeguimientoNoAvanzan.push(...segTimeDiffs); });
+            allBuckets.forEach(b => { b.seguimientosNoAvanzan.push(seguimientos.length); b.tiemposSeguimientoNoAvanzan.push(...segTimeDiffs); });
           }
         } else {
-          buckets.forEach(b => b.sinSeguimiento++);
-          if (advanced) { buckets.forEach(b => b.seguimientosAvanzan.push(0)); }
-          else { buckets.forEach(b => b.seguimientosNoAvanzan.push(0)); }
+          allBuckets.forEach(b => b.sinSeguimiento++);
+          if (advanced) { allBuckets.forEach(b => b.seguimientosAvanzan.push(0)); }
+          else { allBuckets.forEach(b => b.seguimientosNoAvanzan.push(0)); }
         }
       });
 
@@ -498,7 +518,7 @@ export default function MetricasPerformance({
       const processedComercials = {};
       Object.entries(metricsPerComercial).forEach(([email, m]) => {
         processedComercials[email] = {
-          nombre: comercialNames[email] || email?.split('@')[0] || email,
+          nombre: email === '__team__' ? 'Todo el equipo' : (comercialNames[email] || email?.split('@')[0] || email),
           ...aggregateBucket(m.all),
           periodo: aggregateBucket(m.periodo),
           previo: aggregateBucket(m.previo),
@@ -508,7 +528,7 @@ export default function MetricasPerformance({
       // 9. Find top and low (by tasa de avance, min 1 lead, only disponibilidad = 'Activo')
       const disponibleEmails = new Set(comerciales.filter(c => c.disponibilidad === 'Activo').map(c => c.email));
       const sortedComercials = Object.entries(processedComercials)
-        .filter(([email, m]) => m.total >= 1 && disponibleEmails.has(email))
+        .filter(([email, m]) => email !== '__team__' && m.total >= 1 && disponibleEmails.has(email))
         .sort((a, b) => b[1].tasaAvance - a[1].tasaAvance);
 
       const topEntry = sortedComercials[0] || null;
@@ -524,6 +544,12 @@ export default function MetricasPerformance({
           type: 'selected',
           label: comercialNames[selectedComercial] || selectedComercial?.split('@')[0],
           data: processedComercials[selectedComercial],
+        });
+      } else if (processedComercials['__team__']) {
+        columns.push({
+          type: 'team',
+          label: 'Todo el equipo',
+          data: processedComercials['__team__'],
         });
       }
 
@@ -543,18 +569,21 @@ export default function MetricasPerformance({
         });
       }
 
-      // Global KPIs
-      const globalTotal = Object.values(processedComercials).reduce((s, m) => s + m.total, 0);
-      const globalAvanzaron = Object.values(processedComercials).reduce((s, m) => s + m.avanzaron, 0);
-      const globalConSeg = Object.values(processedComercials).reduce((s, m) => s + m.conSeguimiento, 0);
+      // Global KPIs (use team aggregate)
+      const teamData = processedComercials['__team__'] || {};
+      const globalTotal = teamData.total || 0;
+      const globalAvanzaron = teamData.avanzaron || 0;
+      const globalConSeg = teamData.conSeguimiento || 0;
 
       const hasDateFilter = !!(rangeStart && rangeEnd);
+      const totalInStageNoFilter = Object.values(leadMap).filter(l => l.etapa_funnel === stageName).length;
 
       setDetailData({
         stageName,
         stageIndex,
         columns,
         hasDateFilter,
+        totalInStageNoFilter,
         kpis: {
           total: leadCounts[stageName] || globalTotal,
           detailTotal: globalTotal,
@@ -689,6 +718,7 @@ export default function MetricasPerformance({
                   columns={detailData.columns}
                   hasDateFilter={detailData.hasDateFilter}
                   formatDuration={formatDuration}
+                  totalInStageNoFilter={detailData.totalInStageNoFilter}
                 />
               </div>
             ) : (
@@ -942,13 +972,14 @@ function HeaderKpi({ label, value, subtitle, color, icon, tooltip }) {
   );
 }
 
-function DetailTable({ columns, hasDateFilter, formatDuration }) {
+function DetailTable({ columns, hasDateFilter, formatDuration, totalInStageNoFilter }) {
   const subCols = hasDateFilter ? 3 : 1;
   const totalDataCols = columns.length * subCols;
   const gridTemplate = `180px repeat(${totalDataCols}, minmax(90px, 1fr))`;
 
   const colBg = (type, subtle) => {
     if (type === 'selected') return subtle ? 'bg-[#02214A]/[0.02]' : 'bg-[#02214A]/5';
+    if (type === 'team') return subtle ? 'bg-blue-50/30' : 'bg-blue-50/50';
     if (type === 'top') return subtle ? 'bg-emerald-50/30' : 'bg-emerald-50/50';
     return subtle ? 'bg-rose-50/30' : 'bg-rose-50/50';
   };
@@ -963,13 +994,18 @@ function DetailTable({ columns, hasDateFilter, formatDuration }) {
   const subLabels = ['En el periodo', 'Previamente', 'Total'];
 
   const metrics = [
-    { label: 'Total leads', getValue: (d) => d.total, highlight: false },
+    { label: 'Total leads', getValue: (d, subIdx) => {
+      if (hasDateFilter && subIdx === 1 && totalInStageNoFilter > 0) {
+        return `${d.total} (${((d.total / totalInStageNoFilter) * 100).toFixed(1)}% de ${totalInStageNoFilter})`;
+      }
+      return d.total;
+    }, highlight: false },
     { label: 'Avanzan de etapa', getValue: (d) => `${d.avanzaron} (${d.tasaAvance.toFixed(1)}%)`, highlight: true },
     { label: 'Tiempo prom. de avance', getValue: (d) => formatDuration(d.tiempoPromedioAvance) },
     { label: 'Con seguimiento', getValue: (d) => d.total > 0 ? `${d.conSeguimiento} (${((d.conSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
     { label: 'Sin seguimiento', getValue: (d) => d.total > 0 ? `${d.sinSeguimiento} (${((d.sinSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
-    { label: 'Prom. seg. (avanzan)', getValue: (d) => d.promedioSeguimientosAvanzan > 0 ? d.promedioSeguimientosAvanzan.toFixed(1) : '—' },
-    { label: 'Prom. seg. (no avanzan)', getValue: (d) => d.promedioSeguimientosNoAvanzan > 0 ? d.promedioSeguimientosNoAvanzan.toFixed(1) : '—' },
+    { label: 'Prom. seg. (avanzan)', getValue: (d) => d.promedioSeguimientosAvanzan > 0 ? `${d.promedioSeguimientosAvanzan.toFixed(1)} (${d.total > 0 ? ((d.avanzaron / d.total) * 100).toFixed(1) : 0}%)` : '—' },
+    { label: 'Prom. seg. (no avanzan)', getValue: (d) => d.promedioSeguimientosNoAvanzan > 0 ? `${d.promedioSeguimientosNoAvanzan.toFixed(1)} (${d.total > 0 ? (((d.total - d.avanzaron) / d.total) * 100).toFixed(1) : 0}%)` : '—' },
     { label: 'Tiempo entre seg. (avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoAvanzan) },
     { label: 'Tiempo entre seg. (no avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoNoAvanzan) },
   ];
@@ -987,18 +1023,21 @@ function DetailTable({ columns, hasDateFilter, formatDuration }) {
           style={{ gridColumn: `span ${subCols}` }}
         >
           <div className="flex items-center justify-center gap-1.5">
+            {col.type === 'team' && <Users size={12} className="text-blue-500" />}
             {col.type === 'top' && <Trophy size={12} className="text-emerald-500" />}
             {col.type === 'low' && <AlertTriangle size={12} className="text-rose-400" />}
             <span className={`text-sm font-semibold ${
               col.type === 'selected' ? 'text-[#02214A]' :
+              col.type === 'team' ? 'text-blue-700' :
               col.type === 'top' ? 'text-emerald-700' : 'text-rose-600'
             }`}>{col.label}</span>
           </div>
           <span className={`text-[10px] font-medium uppercase tracking-wider ${
             col.type === 'selected' ? 'text-slate-400' :
+            col.type === 'team' ? 'text-blue-400' :
             col.type === 'top' ? 'text-emerald-500' : 'text-rose-400'
           }`}>
-            {col.type === 'selected' ? 'Seleccionado' : col.type === 'top' ? 'Top Performance' : 'Low Performance'}
+            {col.type === 'selected' ? 'Seleccionado' : col.type === 'team' ? 'Todo el equipo' : col.type === 'top' ? 'Top Performance' : 'Low Performance'}
           </span>
         </div>
       ))}
@@ -1032,7 +1071,7 @@ function DetailTable({ columns, hasDateFilter, formatDuration }) {
                   className={`px-2 py-2.5 text-center flex items-center justify-center ${colBg(col.type, true)} ${mi < metrics.length - 1 ? 'border-b border-slate-100' : ''} ${metric.highlight ? 'bg-slate-50/30' : ''} ${hasDateFilter && si === 2 ? 'border-l border-slate-100' : ''}`}
                 >
                   <span className={`text-[12px] tabular-nums ${metric.highlight ? 'font-bold text-slate-800' : 'font-medium text-slate-700'} ${hasDateFilter && si < 2 ? 'text-slate-500' : ''}`}>
-                    {metric.getValue(d)}
+                    {metric.getValue(d, si)}
                   </span>
                 </div>
               );
