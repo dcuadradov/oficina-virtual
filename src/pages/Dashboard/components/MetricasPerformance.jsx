@@ -384,10 +384,10 @@ export default function MetricasPerformance({
         let isAsignadoPrevio = false;
 
         if (rangeStart && rangeEnd) {
-          const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
           const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
+          const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
 
-          if (isCurrentlyInStage && createdInRange) {
+          if (hasEntryInRange || (isCurrentlyInStage && createdInRange)) {
             isAsignadoPeriodo = true;
           } else {
             const hasStageHistory = stageEntries.length > 0 || isCurrentlyInStage;
@@ -403,7 +403,7 @@ export default function MetricasPerformance({
                 }
               }
             }
-            const wasActiveDuringPeriod = hasSeguimientoInRange || leftStageDuringPeriod || hasEntryInRange;
+            const wasActiveDuringPeriod = hasSeguimientoInRange || leftStageDuringPeriod;
             if (hasStageHistory && wasActiveDuringPeriod) {
               isAsignadoPrevio = true;
             } else {
