@@ -384,10 +384,10 @@ export default function MetricasPerformance({
         let isAsignadoPrevio = false;
 
         if (rangeStart && rangeEnd) {
-          const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
           const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
+          const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
 
-          if (hasEntryInRange || (isCurrentlyInStage && createdInRange)) {
+          if (isCurrentlyInStage && createdInRange) {
             isAsignadoPeriodo = true;
           } else {
             const hasStageHistory = stageEntries.length > 0 || isCurrentlyInStage;
@@ -403,7 +403,7 @@ export default function MetricasPerformance({
                 }
               }
             }
-            const wasActiveDuringPeriod = hasSeguimientoInRange || leftStageDuringPeriod;
+            const wasActiveDuringPeriod = hasSeguimientoInRange || leftStageDuringPeriod || hasEntryInRange;
             if (hasStageHistory && wasActiveDuringPeriod) {
               isAsignadoPrevio = true;
             } else {
@@ -1004,8 +1004,8 @@ function DetailTable({ columns, hasDateFilter, formatDuration, totalInStageNoFil
     { label: 'Tiempo prom. de avance', getValue: (d) => formatDuration(d.tiempoPromedioAvance) },
     { label: 'Con seguimiento', getValue: (d) => d.total > 0 ? `${d.conSeguimiento} (${((d.conSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
     { label: 'Sin seguimiento', getValue: (d) => d.total > 0 ? `${d.sinSeguimiento} (${((d.sinSeguimiento / d.total) * 100).toFixed(1)}%)` : '0' },
-    { label: 'Prom. seg. (avanzan)', getValue: (d) => d.promedioSeguimientosAvanzan > 0 ? `${d.promedioSeguimientosAvanzan.toFixed(1)} (${d.total > 0 ? ((d.avanzaron / d.total) * 100).toFixed(1) : 0}%)` : '—' },
-    { label: 'Prom. seg. (no avanzan)', getValue: (d) => d.promedioSeguimientosNoAvanzan > 0 ? `${d.promedioSeguimientosNoAvanzan.toFixed(1)} (${d.total > 0 ? (((d.total - d.avanzaron) / d.total) * 100).toFixed(1) : 0}%)` : '—' },
+    { label: 'Prom. seg. (avanzan)', getValue: (d) => d.promedioSeguimientosAvanzan > 0 ? d.promedioSeguimientosAvanzan.toFixed(1) : '—' },
+    { label: 'Prom. seg. (no avanzan)', getValue: (d) => d.promedioSeguimientosNoAvanzan > 0 ? d.promedioSeguimientosNoAvanzan.toFixed(1) : '—' },
     { label: 'Tiempo entre seg. (avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoAvanzan) },
     { label: 'Tiempo entre seg. (no avanzan)', getValue: (d) => formatDuration(d.tiempoPromedioSeguimientoNoAvanzan) },
   ];
