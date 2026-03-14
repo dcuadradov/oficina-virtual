@@ -132,20 +132,26 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     try {
       const { data, error } = await supabase
         .from('notificaciones')
-        .select('config_id')
+        .select('config_id, estado_lectura')
         .eq('comercial_email', userEmail)
-        .eq('estado_lectura', 'nuevo');
+        .in('estado_lectura', ['nuevo', 'visto']);
       
       if (error) throw error;
       
-      const countMap = {};
+      const nuevoMap = {};
+      const vistoMap = {};
       (data || []).forEach(n => {
-        countMap[n.config_id] = (countMap[n.config_id] || 0) + 1;
+        if (n.estado_lectura === 'nuevo') {
+          nuevoMap[n.config_id] = (nuevoMap[n.config_id] || 0) + 1;
+        } else {
+          vistoMap[n.config_id] = (vistoMap[n.config_id] || 0) + 1;
+        }
       });
       
       return cats.map(cat => ({
         ...cat,
-        conteo: cat.configIds.reduce((sum, id) => sum + (countMap[id] || 0), 0)
+        conteo: cat.configIds.reduce((sum, id) => sum + (nuevoMap[id] || 0), 0),
+        conteoVisto: cat.configIds.reduce((sum, id) => sum + (vistoMap[id] || 0), 0),
       }));
     } catch (error) {
       console.error('Error fetching conteos:', error);
@@ -390,6 +396,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                 {categorias.map((cat) => {
                   const IconCat = getIcono(cat.icono);
                   const isSelected = selectedCategoria === cat.nombre;
+                  const visto = cat.conteoVisto || 0;
                   return (
                     <div key={cat.nombre} className="relative group">
                       <button
@@ -401,18 +408,27 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                         }`}
                       >
                         <IconCat size={19} strokeWidth={1.8} />
-                        <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full px-1 ${
-                          cat.conteo > 0
-                            ? 'bg-rose-500 text-white shadow-sm shadow-rose-200'
-                            : 'bg-slate-200 text-slate-400'
-                        }`}>
-                          {cat.conteo}
-                        </span>
+                        <div className="absolute -top-1.5 -right-1.5 flex items-center gap-px">
+                          <span className={`min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold px-1 ${
+                            visto > 0 ? 'rounded-l-full' : 'rounded-full'
+                          } ${
+                            cat.conteo > 0
+                              ? 'bg-rose-500 text-white shadow-sm shadow-rose-200'
+                              : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            {cat.conteo}
+                          </span>
+                          {visto > 0 && (
+                            <span className="min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-r-full px-1 bg-sky-400 text-white shadow-sm shadow-sky-200">
+                              {visto}
+                            </span>
+                          )}
+                        </div>
                       </button>
                       {/* Tooltip */}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
                         <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
-                          {cat.nombre}
+                          <span>{cat.conteo} {cat.conteo === 1 ? 'nueva' : 'nuevas'} y {visto} {visto === 1 ? 'vista' : 'vistas'}</span>
                           <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
                         </div>
                       </div>
@@ -455,7 +471,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                         esNuevo 
                           ? 'bg-blue-50/80 hover:bg-blue-100/80 border-l-4 border-l-[#1717AF]' 
                           : esVisto 
-                            ? 'bg-slate-50 hover:bg-slate-100 border-l-4 border-l-slate-300'
+                            ? 'bg-sky-50/60 hover:bg-sky-100/60 border-l-4 border-l-sky-300'
                             : 'bg-white hover:bg-slate-50'
                       }`}
                     >
@@ -464,7 +480,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                           esNuevo 
                             ? 'bg-[#1717AF] text-white' 
                             : esVisto
-                              ? 'bg-slate-200 text-slate-500'
+                              ? 'bg-sky-200 text-sky-600'
                               : 'bg-slate-100 text-slate-400'
                         }`}>
                           <IconComponent size={18} />
