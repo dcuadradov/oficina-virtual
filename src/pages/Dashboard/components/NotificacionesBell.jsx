@@ -420,7 +420,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                           </span>
                           {visto > 0 && (
                             <span className="min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-r-full px-1 bg-sky-400 text-white shadow-sm shadow-sky-200">
-                              {visto}
+                              {visto >= 100 ? '+99' : visto}
                             </span>
                           )}
                         </div>
