@@ -2,12 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
-// Config IDs para contar (prod)
-const CONFIG_IDS = {
-  'Nuevo WEB': '514a5826-12c2-4639-924e-9920c4d0e024',
-  'Nuevo META 1': 'e91b3860-5b8d-4d8a-a470-6e53f695bc36'
-};
-
 export default function MetricasAsignaciones({
   selectedComercial,
   selectedMes,
@@ -64,17 +58,20 @@ export default function MetricasAsignaciones({
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
       
-      // Config IDs para contar
-      let configIds = Object.values(CONFIG_IDS);
+      const { data: configData, error: configError } = await supabase
+        .from('config_notificaciones')
+        .select('id')
+        .eq('contador_nuevos_leads', true);
       
-      // Filtrar por tag si está seleccionado
-      if (selectedTag === 'Nuevo WEB') {
-        configIds = [CONFIG_IDS['Nuevo WEB']];
-      } else if (selectedTag === 'Nuevo META 1') {
-        configIds = [CONFIG_IDS['Nuevo META 1']];
+      if (configError) throw configError;
+      
+      const configIds = (configData || []).map(c => c.id);
+      if (configIds.length === 0) {
+        setMetricasData([]);
+        setMetricasTotalLeads(0);
+        return;
       }
       
-      // Query a notificaciones agrupando por comercial_email
       let query = supabase
         .from('notificaciones')
         .select('comercial_email, config_id')
