@@ -58,7 +58,8 @@ export default function MetricasPerformance({
   selectedDia,
   selectedTag,
   puedeVerTodos,
-  comerciales = []
+  comerciales = [],
+  dateFilterField = 'created_at'
 }) {
   const [leadCounts, setLeadCounts] = useState({});
   const [total, setTotal] = useState(0);
@@ -69,6 +70,7 @@ export default function MetricasPerformance({
   const [selectedStage, setSelectedStage] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
 
   const comercialNames = useMemo(() => {
     const map = {};
@@ -111,28 +113,42 @@ export default function MetricasPerformance({
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      let query = supabase
-        .from('leads')
-        .select('etapa_funnel')
-        .neq('etapa_funnel', 'No mostrar');
+      const PAGE_SIZE = 1000;
+      let allData = [];
+      let from = 0;
+      let keepFetching = true;
 
-      if (puedeVerTodos && selectedComercial) {
-        query = query.eq('comercial_email', selectedComercial);
+      while (keepFetching) {
+        let query = supabase
+          .from('leads')
+          .select('etapa_funnel')
+          .neq('etapa_funnel', 'No mostrar');
+
+        if (puedeVerTodos && selectedComercial) {
+          query = query.eq('comercial_email', selectedComercial);
+        }
+
+        if (fechaInicio && fechaFin) {
+          query = query.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+
+        if (selectedTag) {
+          query = query.eq('label', selectedTag);
+        }
+
+        const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+
+        allData = allData.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) {
+          keepFetching = false;
+        } else {
+          from += PAGE_SIZE;
+        }
       }
-
-      if (fechaInicio && fechaFin) {
-        query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-      }
-
-      if (selectedTag) {
-        query = query.eq('label', selectedTag);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
 
       const counts = {};
-      (data || []).forEach(lead => {
+      allData.forEach(lead => {
         const etapa = lead.etapa_funnel || 'Sin etapa';
         counts[etapa] = (counts[etapa] || 0) + 1;
       });
@@ -145,13 +161,11 @@ export default function MetricasPerformance({
     } finally {
       setLoading(false);
     }
-  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos]);
+  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos, dateFilterField]);
 
   const fetchHeaderKpis = useCallback(async () => {
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
-
-      // Fetch matrículas and pitch leads in parallel
       let matQuery = supabase
         .from('leads')
         .select('comercial_email, created_at')
@@ -163,8 +177,8 @@ export default function MetricasPerformance({
         .eq('etapa_funnel', 'Pitch');
 
       if (fechaInicio && fechaFin) {
-        matQuery = matQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-        pitchQuery = pitchQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
+        matQuery = matQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        pitchQuery = pitchQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
       }
       if (selectedTag) {
         matQuery = matQuery.eq('label', selectedTag);
@@ -249,7 +263,7 @@ export default function MetricasPerformance({
     } catch (error) {
       console.error('Error fetching header KPIs:', error);
     }
-  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos, comercialNames, comerciales]);
+  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos, comercialNames, comerciales, dateFilterField]);
 
   useEffect(() => {
     fetchLeadCounts();
@@ -283,7 +297,7 @@ export default function MetricasPerformance({
       // 2. Fetch ALL leads (no date filter — leads may have been created before the period but passed through the stage during it)
       let leadsQuery = supabase
         .from('leads')
-        .select('card_id, etapa_funnel, comercial_email, created_at')
+        .select('card_id, etapa_funnel, comercial_email, created_at, updated_at')
         .neq('etapa_funnel', 'No mostrar');
 
       if (selectedTag) {
@@ -385,7 +399,8 @@ export default function MetricasPerformance({
 
         if (rangeStart && rangeEnd) {
           const hasEntryInRange = stageEntries.some(e => e.created_at >= rangeStart && e.created_at <= rangeEnd);
-          const createdInRange = lead.created_at && new Date(lead.created_at) >= rangeStart && new Date(lead.created_at) <= rangeEnd;
+          const dateVal = lead[dateFilterField];
+          const createdInRange = dateVal && new Date(dateVal) >= rangeStart && new Date(dateVal) <= rangeEnd;
 
           if (hasEntryInRange || (isCurrentlyInStage && createdInRange)) {
             isAsignadoPeriodo = true;
@@ -605,7 +620,7 @@ export default function MetricasPerformance({
     } finally {
       setLoadingDetail(false);
     }
-  }, [parseDateFilters, selectedTag, comercialNames, selectedComercial, comerciales, leadCounts]);
+  }, [parseDateFilters, selectedTag, comercialNames, selectedComercial, comerciales, leadCounts, dateFilterField]);
 
   const handleOpenDetail = useCallback((stageName) => {
     setSelectedStage(stageName);

@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [selectedMes, setSelectedMes] = useState(null);
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
   const [selectedDia, setSelectedDia] = useState(null);
+  const [dateFilterField, setDateFilterField] = useState('created_at');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
@@ -564,84 +565,88 @@ export default function Dashboard() {
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      // Query única para obtener estado_gestion y etapa_funnel
-      let statsQuery = supabase
-        .from('leads')
-        .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
-        .neq('etapa_funnel', 'No mostrar');
-
-      // Aplicar filtro de comercial
-      if (puedeVerTodos && selectedComercial) {
-        statsQuery = statsQuery.eq('comercial_email', selectedComercial);
-      } else if (!puedeVerTodos) {
-        statsQuery = statsQuery.eq('comercial_email', userEmail);
-      }
-
-      // Aplicar filtros de fecha (por fecha de creación del lead)
-      if (fechaInicio && fechaFin) {
-        statsQuery = statsQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-      }
-
-      // Aplicar filtro por tag
-      if (selectedTag) {
-        statsQuery = statsQuery.eq('label', selectedTag);
-      }
-
-      // Aplicar filtro por fuente
-      if (selectedFuente) {
-        statsQuery = statsQuery.eq('fuente_dato', selectedFuente);
-      }
-
-      // Aplicar filtro por referido
-      if (selectedReferido) {
-        statsQuery = statsQuery.eq('referido_por', selectedReferido);
-      }
-
-      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
-      if (filtroWhatsApp === 'abierta') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        statsQuery = statsQuery
-          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
-          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
-      } else if (filtroWhatsApp === 'cerrada') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        statsQuery = statsQuery.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
-      }
-
-      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
-      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
-        statsQuery = statsQuery.in('card_id', nuevosLeadsCardIds);
-      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
-        // No hay nuevos leads
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
         setStatsData({ total: 0, porEstado: {}, porEtapa: {} });
         return;
       }
 
-      // Aplicar filtro de leads HOT
-      if (filtroHot) {
-        statsQuery = statsQuery.eq('is_hot', true);
-      }
+      const PAGE_SIZE = 1000;
+      let allLeads = [];
+      let from = 0;
+      let keepFetching = true;
 
-      // Aplicar filtro de recordatorios automáticos (Emdi)
+      const hace24Horas = (filtroWhatsApp === 'abierta' || filtroWhatsApp === 'cerrada')
+        ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        : null;
       const fasesEmdi = ['340832804', '339756097', '341769991'];
-      if (filtroEmdi === 'activo') {
-        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
-      } else if (filtroEmdi === 'inactivo') {
-        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+      const nowISO = new Date().toISOString();
+
+      while (keepFetching) {
+        let statsQuery = supabase
+          .from('leads')
+          .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
+          .neq('etapa_funnel', 'No mostrar');
+
+        if (puedeVerTodos && selectedComercial) {
+          statsQuery = statsQuery.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          statsQuery = statsQuery.eq('comercial_email', userEmail);
+        }
+
+        if (fechaInicio && fechaFin) {
+          statsQuery = statsQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+
+        if (selectedTag) {
+          statsQuery = statsQuery.eq('label', selectedTag);
+        }
+
+        if (selectedFuente) {
+          statsQuery = statsQuery.eq('fuente_dato', selectedFuente);
+        }
+
+        if (selectedReferido) {
+          statsQuery = statsQuery.eq('referido_por', selectedReferido);
+        }
+
+        if (filtroWhatsApp === 'abierta') {
+          statsQuery = statsQuery
+            .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          statsQuery = statsQuery.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          statsQuery = statsQuery.in('card_id', nuevosLeadsCardIds);
+        }
+
+        if (filtroHot) {
+          statsQuery = statsQuery.eq('is_hot', true);
+        }
+
+        if (filtroEmdi === 'activo') {
+          statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', nowISO);
+        } else if (filtroEmdi === 'inactivo') {
+          statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + nowISO);
+        }
+
+        if (filtroGestionWA === 'respond') {
+          statsQuery = statsQuery.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
+        }
+
+        const { data, error: statsError } = await statsQuery.range(from, from + PAGE_SIZE - 1);
+        if (statsError) throw statsError;
+
+        allLeads = allLeads.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) {
+          keepFetching = false;
+        } else {
+          from += PAGE_SIZE;
+        }
       }
-
-      // Aplicar filtro de gestión WhatsApp
-      if (filtroGestionWA === 'respond') {
-        statsQuery = statsQuery.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
-      } else if (filtroGestionWA === 'personal') {
-        statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
-      }
-
-      const { data: statsData, error: statsError } = await statsQuery.limit(10000);
-
-      if (statsError) throw statsError;
-
-      let allLeads = statsData || [];
 
       // Aplicar filtro por categoría de seguimiento (post-query porque requiere join con comentarios)
       if (selectedCategoria) {
@@ -683,7 +688,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -713,9 +718,8 @@ export default function Dashboard() {
       }
       // Si puede ver todos y no hay comercial seleccionado, traer todos los leads
 
-      // Aplicar filtros de fecha (por fecha de creación del lead)
       if (fechaInicio && fechaFin) {
-        query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
+        query = query.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
       }
 
       // Aplicar filtro por estado si está activo
@@ -862,7 +866,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -922,7 +926,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1180,6 +1184,8 @@ export default function Dashboard() {
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
                   onRefreshComerciales={fetchComerciales}
+                  dateFilterField={dateFilterField}
+                  onDateFilterFieldChange={setDateFilterField}
                 />
 
                 {/* KPIs - Debajo de los filtros */}
@@ -1331,6 +1337,9 @@ export default function Dashboard() {
                   onFiltroGestionWAChange={setFiltroGestionWA}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
+                  dateFilterField={dateFilterField}
+                  onDateFilterFieldChange={setDateFilterField}
+                  showDateFilterToggle={metricasSubTab !== 'asignaciones'}
                 />
 
                 {/* Sub-tabs de Métricas */}
@@ -1380,6 +1389,7 @@ export default function Dashboard() {
                     selectedTag={selectedTag}
                     puedeVerTodos={puedeVerTodos}
                     comerciales={comerciales}
+                    dateFilterField={dateFilterField}
                   />
                 )}
               </>

@@ -81,7 +81,6 @@ export default function MetricasAsignaciones({
       if (fechaInicio && fechaFin) {
         query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       } else {
-        // Por defecto: solo hoy (en zona horaria Colombia UTC-5)
         const opcionesFecha = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
         const fechaColombia = new Date().toLocaleDateString('en-CA', opcionesFecha);
         
@@ -91,8 +90,6 @@ export default function MetricasAsignaciones({
         
         const inicioHoyUTC = `${fechaColombia} 05:00:00+00`;
         const finHoyUTC = `${fechaManana} 05:00:00+00`;
-        
-        console.log('Filtro métricas - Fecha Colombia:', fechaColombia, '| Rango UTC:', inicioHoyUTC, '-', finHoyUTC);
         
         query = query.gte('created_at', inicioHoyUTC).lt('created_at', finHoyUTC);
       }

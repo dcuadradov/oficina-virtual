@@ -154,7 +154,10 @@ const DashboardFilters = ({
   showOnlyComercial = false,
   searchQuery = '',
   onSearchChange,
-  onRefreshComerciales
+  onRefreshComerciales,
+  dateFilterField = 'created_at',
+  onDateFilterFieldChange,
+  showDateFilterToggle = true
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -387,10 +390,84 @@ const DashboardFilters = ({
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  if (showOnlyComercial) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        {showComercialFilter && comerciales.length > 0 && (
+          <div className="relative filter-dropdown">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setComercialOpen(!comercialOpen);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                selectedComercial
+                  ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+              }`}
+            >
+              <Users size={16} />
+              <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
+              <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
+              {selectedComercial && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onComercialChange(null);
+                  }}
+                  className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </button>
+            
+            {comercialOpen && (
+              <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
+                <div className="px-4 pb-3 border-b border-slate-100">
+                  <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
+                </div>
+                <button
+                  onClick={() => { onComercialChange(null); setComercialOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${!selectedComercial ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-2"><Users size={14} /><span>Todos los comerciales</span></div>
+                </button>
+                <div className="h-px bg-slate-100 my-2" />
+                <div className="space-y-1">
+                  {comerciales.map((comercial) => {
+                    const online = isUserOnline(comercial.ultima_conexion);
+                    const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                    return (
+                      <button
+                        key={comercial.email}
+                        onClick={() => { onComercialChange(comercial.email); setComercialOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${selectedComercial === comercial.email ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <div>
+                          <span className="font-medium">{comercial.nombre}</span>
+                          <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>{connectionStatus}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* Campo de búsqueda - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+    <div className="flex flex-col gap-3">
+      {/* Fila 1: Búsqueda + Filtros de fecha + Pill */}
+      <div className="flex flex-wrap items-center gap-3">
+      {/* Campo de búsqueda */}
+      {(
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search size={16} className="text-slate-400" />
@@ -420,207 +497,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Comercial (solo si tiene permiso) */}
-      {showComercialFilter && comerciales.length > 0 && (
-        <div className="relative filter-dropdown">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setComercialOpen(!comercialOpen);
-              setMesOpen(false);
-              setPeriodoOpen(false);
-            }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedComercial
-                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
-            }`}
-          >
-            <Users size={16} />
-            <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
-            {selectedComercial && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onComercialChange(null);
-                }}
-                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </button>
-          
-          {comercialOpen && (
-            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
-              {/* Header con título */}
-              <div className="px-4 pb-3 border-b border-slate-100">
-                <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
-                <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
-              </div>
-              
-              {/* Opción "Todos los comerciales" */}
-              <button
-                onClick={() => {
-                  onComercialChange(null);
-                  setComercialOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${
-                  !selectedComercial 
-                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Users size={14} />
-                  <span>Todos los comerciales</span>
-                </div>
-              </button>
-              <div className="h-px bg-slate-100 my-2" />
-              
-              {/* Lista de comerciales con controles */}
-              <div className="space-y-1">
-                {comerciales.map((comercial, index) => {
-                  const online = isUserOnline(comercial.ultima_conexion);
-                  const connectionStatus = formatLastConnection(comercial.ultima_conexion);
-                  // Manejar disponibilidad como string ("Activo"/"Inactivo") o boolean, default: Activo
-                  const isDisponible = comercial.disponibilidad === 'Inactivo' ? false : 
-                                       comercial.disponibilidad === false ? false : true;
-                  const currentPerformance = comercial.performance || 'Top'; // Default Top
-                  const performanceOption = performanceOptions.find(p => p.value === currentPerformance) || performanceOptions[0];
-                  const isUpdatingDisp = updatingComercial === `${comercial.card_id}-disponibilidad`;
-                  const isUpdatingPerf = updatingComercial === `${comercial.card_id}-performance`;
-                  // Si es uno de los últimos 2 comerciales, abrir dropdown hacia arriba
-                  const isNearBottom = index >= comerciales.length - 2;
-                  
-                  return (
-                    <div
-                      key={comercial.email}
-                      className={`px-4 py-3 transition-colors ${
-                        selectedComercial === comercial.email
-                          ? 'bg-[#1717AF]/5'
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      {/* Fila principal: nombre y filtro */}
-                      <div className="flex items-center justify-between mb-2">
-                        <button
-                          onClick={() => {
-                            onComercialChange(comercial.email);
-                            setComercialOpen(false);
-                          }}
-                          className="flex items-center gap-2 flex-1 text-left"
-                        >
-                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          <div>
-                            <span className={`font-medium text-sm ${selectedComercial === comercial.email ? 'text-[#1717AF]' : 'text-slate-700'}`}>
-                              {comercial.nombre}
-                            </span>
-                            <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {connectionStatus}
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                      
-                      {/* Controles apilados verticalmente */}
-                      <div className="flex flex-col gap-2 ml-4 mt-1">
-                        {/* Toggle de disponibilidad */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-24">Disponibilidad:</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleComercialConfigUpdate(comercial, 'disponibilidad', !isDisponible);
-                            }}
-                            disabled={isUpdatingDisp}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                              isDisponible ? 'bg-emerald-500' : 'bg-slate-300'
-                            } ${isUpdatingDisp ? 'opacity-50' : ''}`}
-                          >
-                            {isUpdatingDisp ? (
-                              <span className="absolute inset-0 flex items-center justify-center">
-                                <Loader2 size={12} className="animate-spin text-white" />
-                              </span>
-                            ) : (
-                              <span
-                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                                  isDisponible ? 'translate-x-5' : 'translate-x-1'
-                                }`}
-                              />
-                            )}
-                          </button>
-                          <span className={`text-xs font-medium ${isDisponible ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {isDisponible ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </div>
-                        
-                        {/* Dropdown de Performance */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-24">Performance:</span>
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPerformanceDropdownOpen(performanceDropdownOpen === comercial.card_id ? null : comercial.card_id);
-                              }}
-                              disabled={isUpdatingPerf}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${performanceOption.bgLight} ${performanceOption.text} ${performanceOption.border} ${isUpdatingPerf ? 'opacity-50' : 'hover:shadow-sm'}`}
-                            >
-                              {isUpdatingPerf ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                <>
-                                  <span className={`w-2 h-2 rounded-full ${performanceOption.bg}`} />
-                                  <span>{performanceOption.label}</span>
-                                  <ChevronDown size={10} className={`transition-transform ${performanceDropdownOpen === comercial.card_id ? 'rotate-180' : ''}`} />
-                                </>
-                              )}
-                            </button>
-                            
-                            {/* Dropdown de opciones - abre hacia arriba si está cerca del final */}
-                            {performanceDropdownOpen === comercial.card_id && (
-                              <div className={`absolute left-0 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-[60] min-w-[140px] ${
-                                isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
-                              }`}>
-                                {performanceOptions.map((option) => (
-                                  <button
-                                    key={option.value}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (option.value !== currentPerformance) {
-                                        handleComercialConfigUpdate(comercial, 'performance', option.value);
-                                      } else {
-                                        setPerformanceDropdownOpen(null);
-                                      }
-                                    }}
-                                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2 ${
-                                      option.value === currentPerformance 
-                                        ? `${option.bgLight} ${option.text}` 
-                                        : 'text-slate-600 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    <span className={`w-2.5 h-2.5 rounded-full ${option.bg}`} />
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Filtro de Mes - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Mes */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -696,8 +574,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Periodo (Martes a Martes) - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Periodo (Martes a Martes) */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -782,8 +660,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Día con Calendario - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Día con Calendario */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -928,8 +806,234 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Categoría de Seguimiento - oculto si showOnlyComercial */}
-      {!showOnlyComercial && categorias.length > 0 && (
+      {/* Toggle Creación / Actualización */}
+      {showDateFilterToggle && onDateFilterFieldChange && (
+        <div className="relative group">
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+            <button
+              onClick={() => onDateFilterFieldChange('created_at')}
+              className={`px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                dateFilterField === 'created_at'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Creación
+            </button>
+            <button
+              onClick={() => onDateFilterFieldChange('updated_at')}
+              className={`px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                dateFilterField === 'updated_at'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Actualización
+            </button>
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+            <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
+              Filtrar fechas por {dateFilterField === 'created_at' ? 'creación' : 'última actualización'}
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+
+      {/* Fila 2: Comerciales + Tags + Fuente + Referido + Gestión WA */}
+      <div className="flex flex-wrap items-center gap-3">
+      {/* Filtro de Comercial (solo si tiene permiso) */}
+      {showComercialFilter && comerciales.length > 0 && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setComercialOpen(!comercialOpen);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedComercial
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <Users size={16} />
+            <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
+            {selectedComercial && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onComercialChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {comercialOpen && (
+            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
+              <div className="px-4 pb-3 border-b border-slate-100">
+                <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  onComercialChange(null);
+                  setComercialOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${
+                  !selectedComercial 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Users size={14} />
+                  <span>Todos los comerciales</span>
+                </div>
+              </button>
+              <div className="h-px bg-slate-100 my-2" />
+              
+              <div className="space-y-1">
+                {comerciales.map((comercial, index) => {
+                  const online = isUserOnline(comercial.ultima_conexion);
+                  const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                  const isDisponible = comercial.disponibilidad === 'Inactivo' ? false : 
+                                       comercial.disponibilidad === false ? false : true;
+                  const currentPerformance = comercial.performance || 'Top';
+                  const performanceOption = performanceOptions.find(p => p.value === currentPerformance) || performanceOptions[0];
+                  const isUpdatingDisp = updatingComercial === `${comercial.card_id}-disponibilidad`;
+                  const isUpdatingPerf = updatingComercial === `${comercial.card_id}-performance`;
+                  const isNearBottom = index >= comerciales.length - 2;
+                  
+                  return (
+                    <div
+                      key={comercial.email}
+                      className={`px-4 py-3 transition-colors ${
+                        selectedComercial === comercial.email
+                          ? 'bg-[#1717AF]/5'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <button
+                          onClick={() => {
+                            onComercialChange(comercial.email);
+                            setComercialOpen(false);
+                          }}
+                          className="flex items-center gap-2 flex-1 text-left"
+                        >
+                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <div>
+                            <span className={`font-medium text-sm ${selectedComercial === comercial.email ? 'text-[#1717AF]' : 'text-slate-700'}`}>
+                              {comercial.nombre}
+                            </span>
+                            <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {connectionStatus}
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 ml-4 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-24">Disponibilidad:</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleComercialConfigUpdate(comercial, 'disponibilidad', !isDisponible);
+                            }}
+                            disabled={isUpdatingDisp}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                              isDisponible ? 'bg-emerald-500' : 'bg-slate-300'
+                            } ${isUpdatingDisp ? 'opacity-50' : ''}`}
+                          >
+                            {isUpdatingDisp ? (
+                              <span className="absolute inset-0 flex items-center justify-center">
+                                <Loader2 size={12} className="animate-spin text-white" />
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                  isDisponible ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            )}
+                          </button>
+                          <span className={`text-xs font-medium ${isDisponible ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {isDisponible ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-24">Performance:</span>
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPerformanceDropdownOpen(performanceDropdownOpen === comercial.card_id ? null : comercial.card_id);
+                              }}
+                              disabled={isUpdatingPerf}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${performanceOption.bgLight} ${performanceOption.text} ${performanceOption.border} ${isUpdatingPerf ? 'opacity-50' : 'hover:shadow-sm'}`}
+                            >
+                              {isUpdatingPerf ? (
+                                <Loader2 size={10} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <span className={`w-2 h-2 rounded-full ${performanceOption.bg}`} />
+                                  <span>{performanceOption.label}</span>
+                                  <ChevronDown size={10} className={`transition-transform ${performanceDropdownOpen === comercial.card_id ? 'rotate-180' : ''}`} />
+                                </>
+                              )}
+                            </button>
+                            
+                            {performanceDropdownOpen === comercial.card_id && (
+                              <div className={`absolute left-0 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-[60] min-w-[140px] ${
+                                isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                              }`}>
+                                {performanceOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (option.value !== currentPerformance) {
+                                        handleComercialConfigUpdate(comercial, 'performance', option.value);
+                                      } else {
+                                        setPerformanceDropdownOpen(null);
+                                      }
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2 ${
+                                      option.value === currentPerformance 
+                                        ? `${option.bgLight} ${option.text}` 
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${option.bg}`} />
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de Categoría de Seguimiento */}
+      {categorias.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1079,7 +1183,7 @@ const DashboardFilters = ({
       )}
 
       {/* Filtro por Fuente */}
-      {!showOnlyComercial && fuentes.length > 0 && (
+      {fuentes.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1156,7 +1260,7 @@ const DashboardFilters = ({
       )}
 
       {/* Filtro por Referido */}
-      {!showOnlyComercial && referidos.length > 0 && (
+      {referidos.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1234,7 +1338,7 @@ const DashboardFilters = ({
       )}
       
       {/* Filtro por Gestión WhatsApp */}
-      {!showOnlyComercial && (
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1323,6 +1427,7 @@ const DashboardFilters = ({
           )}
         </div>
       )}
+      </div>
       
       {/* Toast de notificación */}
       {toastMessage && (
