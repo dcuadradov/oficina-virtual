@@ -404,13 +404,16 @@ const parseOrdenField = (ordenStr) => {
 const parseOpcionesField = (opcionesStr) => {
   if (!opcionesStr) return [];
   
-  // Usar | como separador para evitar conflictos con comas en el texto
   return opcionesStr.split('|').map(opt => {
+    const matchGrupo = opt.trim().match(/^(.+?)\s*\((.+?)-(\d+)\)$/);
+    if (matchGrupo) {
+      return { value: matchGrupo[1].trim(), grupo: matchGrupo[2].trim(), orden: parseInt(matchGrupo[3]) };
+    }
     const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
     if (match) {
-      return { value: match[1].trim(), orden: parseInt(match[2]) };
+      return { value: match[1].trim(), grupo: null, orden: parseInt(match[2]) };
     }
-    return { value: opt.trim(), orden: 999 };
+    return { value: opt.trim(), grupo: null, orden: 999 };
   }).sort((a, b) => a.orden - b.orden);
 };
 
@@ -424,6 +427,9 @@ const parseDependeDeField = (dependeDeStr) => {
   const parts = dependeDeStr.split('|').map(s => s.trim());
   if (parts.length >= 2) {
     return { fieldName: parts[0], valor: parts[1] };
+  }
+  if (parts.length === 1 && parts[0]) {
+    return { fieldName: parts[0], valor: null };
   }
   return null;
 };
@@ -2590,8 +2596,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             if (!field.dinamico || !field.depende_de) return true;
                             const dep = parseDependeDeField(field.depende_de);
                             if (!dep) return true;
+                            if (dep.valor === null) return true;
                             
-                            // Buscar el campo del que depende
                             const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
                             if (!parentField) return true;
                             
@@ -2611,7 +2617,16 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             
                             // Campo tipo SELECT
                             if (field.tipo === 'select' && field.opciones) {
-                              const opciones = parseOpcionesField(field.opciones).map(o => o.value);
+                              let parsedOpciones = parseOpcionesField(field.opciones);
+                              const dep = parseDependeDeField(field.depende_de);
+                              if (dep && dep.valor === null) {
+                                const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
+                                const parentValue = parentField ? getFieldValueDynamic(parentField) : null;
+                                if (parentValue) {
+                                  parsedOpciones = parsedOpciones.filter(o => o.grupo === parentValue);
+                                }
+                              }
+                              const opciones = parsedOpciones.map(o => o.value);
                               const filteredOptions = opciones.filter(opt => 
                                 opt.toLowerCase().includes(infoGeneralSearchQuery.toLowerCase())
                               );

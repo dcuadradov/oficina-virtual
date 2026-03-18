@@ -24,13 +24,16 @@ import { supabase } from '../../../supabaseClient';
 const parseOpciones = (opcionesStr) => {
   if (!opcionesStr) return [];
   
-  // Usar | como separador para evitar conflictos con comas en el texto
   return opcionesStr.split('|').map(opt => {
+    const matchGrupo = opt.trim().match(/^(.+?)\s*\((.+?)-(\d+)\)$/);
+    if (matchGrupo) {
+      return { value: matchGrupo[1].trim(), grupo: matchGrupo[2].trim(), orden: parseInt(matchGrupo[3]) };
+    }
     const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
     if (match) {
-      return { value: match[1].trim(), orden: parseInt(match[2]) };
+      return { value: match[1].trim(), grupo: null, orden: parseInt(match[2]) };
     }
-    return { value: opt.trim(), orden: 999 };
+    return { value: opt.trim(), grupo: null, orden: 999 };
   }).sort((a, b) => a.orden - b.orden);
 };
 
@@ -45,6 +48,9 @@ const parseDependeDe = (dependeDeStr) => {
   const parts = dependeDeStr.split('|').map(s => s.trim());
   if (parts.length >= 2) {
     return { fieldId: parts[0], valor: parts[1] };
+  }
+  if (parts.length === 1 && parts[0]) {
+    return { fieldId: parts[0], valor: null };
   }
   return null;
 };
@@ -313,6 +319,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
     
     const dependencia = parseDependeDe(field.depende_de);
     if (!dependencia) return true;
+    if (dependencia.valor === null) return true;
     
     return formData[dependencia.fieldId] === dependencia.valor;
   };
@@ -543,7 +550,11 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                 {fields.map((field) => {
                   if (!shouldShowField(field)) return null;
                   
-                  const opciones = parseOpciones(field.opciones);
+                  let opciones = parseOpciones(field.opciones);
+                  const dep = parseDependeDe(field.depende_de);
+                  if (dep && dep.valor === null && formData[dep.fieldId]) {
+                    opciones = opciones.filter(o => o.grupo === formData[dep.fieldId]);
+                  }
                   
                   return (
                     <div key={field.id}>
