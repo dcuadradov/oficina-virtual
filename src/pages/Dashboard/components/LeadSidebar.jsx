@@ -979,7 +979,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     'motivacion_detalle', 'nivel_ingles', 'ano_residencia', 'lugar_trabajo',
     'universidad', 'como_adquirio_ingles', 'como_adquirio_ingles_detalle',
     'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por',
-    'fuente_dato', 'rango_de_inversion', 'hizo_pitch'
+    'fuente_dato', 'rango_de_inversion', 'hizo_pitch', 'sexo', 'edad'
   ];
 
   const handleSaveField = async (fieldName, value) => {
@@ -1033,7 +1033,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                 referido_por: fieldName === 'referido_por' ? value : (getFieldValue('referido_por') || lead.referido_por),
                 fuente_dato: fieldName === 'fuente_dato' ? value : (getFieldValue('fuente_dato') || lead.fuente_dato),
                 rango_de_inversion: fieldName === 'rango_de_inversion' ? value : (getFieldValue('rango_de_inversion') || lead.rango_de_inversion),
-                hizo_pitch: fieldName === 'hizo_pitch' ? value : (getFieldValue('hizo_pitch') || lead.hizo_pitch)
+                hizo_pitch: fieldName === 'hizo_pitch' ? value : (getFieldValue('hizo_pitch') || lead.hizo_pitch),
+                sexo: fieldName === 'sexo' ? value : (getFieldValue('sexo') || lead.sexo),
+                edad: fieldName === 'edad' ? value : (getFieldValue('edad') || lead.edad)
               }
             })
           });
