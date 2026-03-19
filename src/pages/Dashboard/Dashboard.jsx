@@ -90,7 +90,8 @@ export default function Dashboard() {
   const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
   const [filtroGestionWA, setFiltroGestionWA] = useState(null); // null = todos, 'respond' = false, 'personal' = true
   const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false }); // Ordenamiento de la tabla
-  
+  const [monthConfigs, setMonthConfigs] = useState({});
+
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -452,14 +453,39 @@ export default function Dashboard() {
     return shortLabels[etapa] || etapa.substring(0, 10);
   };
 
+  // Cargar configuraciones de meses personalizados
+  const fetchMonthConfigs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_meses')
+        .select('mes, fecha_inicio, fecha_fin');
+      if (error) throw error;
+      const map = {};
+      (data || []).forEach(c => { map[c.mes] = c; });
+      setMonthConfigs(map);
+    } catch (error) {
+      console.error('Error cargando config_meses:', error.message);
+    }
+  }, []);
+
+  const handleSaveMonthConfig = useCallback(async (mes, fechaInicio, fechaFin) => {
+    try {
+      const { error } = await supabase
+        .from('config_meses')
+        .upsert({ mes, fecha_inicio: fechaInicio, fecha_fin: fechaFin || null, updated_at: new Date().toISOString() }, { onConflict: 'mes' });
+      if (error) throw error;
+      await fetchMonthConfigs();
+    } catch (error) {
+      console.error('Error guardando config_meses:', error.message);
+    }
+  }, [fetchMonthConfigs]);
+
   // Parsear filtros de fecha (ajustados a zona horaria Colombia UTC-5)
   const parseDateFilters = useCallback(() => {
     let fechaInicio = null;
     let fechaFin = null;
 
     if (selectedDia) {
-      // Día tiene formato: "2025-01-28"
-      // Convertir a UTC: 00:00 Colombia = 05:00 UTC
       const [year, month, day] = selectedDia.split('-').map(Number);
       const mananaDate = new Date(year, month - 1, day + 1);
       const fechaManana = `${mananaDate.getFullYear()}-${String(mananaDate.getMonth() + 1).padStart(2, '0')}-${String(mananaDate.getDate()).padStart(2, '0')}`;
@@ -467,9 +493,7 @@ export default function Dashboard() {
       fechaInicio = `${selectedDia} 05:00:00+00`;
       fechaFin = `${fechaManana} 05:00:00+00`;
     } else if (selectedPeriodo) {
-      // Periodo tiene formato: "2025-01-07_2025-01-14"
       const [inicio, fin] = selectedPeriodo.split('_');
-      // Convertir a UTC
       const [yearFin, monthFin, dayFin] = fin.split('-').map(Number);
       const finMasUno = new Date(yearFin, monthFin - 1, dayFin + 1);
       const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
@@ -477,20 +501,34 @@ export default function Dashboard() {
       fechaInicio = `${inicio} 05:00:00+00`;
       fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
-      // Mes tiene formato: "2025-01"
       const [año, mes] = selectedMes.split('-');
-      // Último día del mes
-      const ultimoDia = new Date(parseInt(año), parseInt(mes), 0).getDate();
-      // Primer día del mes siguiente
-      const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
-      const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
-      
-      fechaInicio = `${año}-${mes}-01 05:00:00+00`;
-      fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      const config = monthConfigs[selectedMes];
+
+      if (config) {
+        fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
+        if (config.fecha_fin) {
+          const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
+          const finMasUno = new Date(yF, mF - 1, dF + 1);
+          const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaFinMasUno} 05:00:00+00`;
+        } else {
+          // Mes actual sin fecha_fin configurada: hasta ahora
+          const now = new Date();
+          const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaManana} 05:00:00+00`;
+        }
+      } else {
+        // Sin configuración: rango tradicional del 1 al último día
+        const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
+        const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
+        fechaInicio = `${año}-${mes}-01 05:00:00+00`;
+        fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      }
     }
 
     return { fechaInicio, fechaFin };
-  }, [selectedDia, selectedMes, selectedPeriodo]);
+  }, [selectedDia, selectedMes, selectedPeriodo, monthConfigs]);
 
   // Función para calcular ventanas de WhatsApp abiertas (< 24 horas)
   const fetchVentanasAbiertas = useCallback(async () => {
@@ -878,6 +916,7 @@ export default function Dashboard() {
       fetchReferidos();
       fetchColoresFases();
       fetchEtapasFunnel();
+      fetchMonthConfigs();
       fetchStats();
       fetchVentanasAbiertas();
       fetchNuevosLeads();
@@ -1186,6 +1225,9 @@ export default function Dashboard() {
                   onRefreshComerciales={fetchComerciales}
                   dateFilterField={dateFilterField}
                   onDateFilterFieldChange={setDateFilterField}
+                  puedeVerTodos={puedeVerTodos}
+                  monthConfigs={monthConfigs}
+                  onSaveMonthConfig={handleSaveMonthConfig}
                 />
 
                 {/* KPIs - Debajo de los filtros */}
@@ -1340,6 +1382,9 @@ export default function Dashboard() {
                   dateFilterField={dateFilterField}
                   onDateFilterFieldChange={setDateFilterField}
                   showDateFilterToggle={metricasSubTab !== 'asignaciones'}
+                  puedeVerTodos={puedeVerTodos}
+                  monthConfigs={monthConfigs}
+                  onSaveMonthConfig={handleSaveMonthConfig}
                 />
 
                 {/* Sub-tabs de Métricas */}
@@ -1377,6 +1422,7 @@ export default function Dashboard() {
                     selectedDia={selectedDia}
                     selectedTag={selectedTag}
                     puedeVerTodos={puedeVerTodos}
+                    monthConfigs={monthConfigs}
                   />
                 )}
 
@@ -1390,6 +1436,7 @@ export default function Dashboard() {
                     puedeVerTodos={puedeVerTodos}
                     comerciales={comerciales}
                     dateFilterField={dateFilterField}
+                    monthConfigs={monthConfigs}
                   />
                 )}
               </>

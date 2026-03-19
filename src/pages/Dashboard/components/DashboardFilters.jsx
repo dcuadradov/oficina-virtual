@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus, Smartphone } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -157,10 +157,18 @@ const DashboardFilters = ({
   onRefreshComerciales,
   dateFilterField = 'created_at',
   onDateFilterFieldChange,
-  showDateFilterToggle = true
+  showDateFilterToggle = true,
+  puedeVerTodos = false,
+  monthConfigs = {},
+  onSaveMonthConfig
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
+  const [configMonth, setConfigMonth] = useState(null);
+  const [configCalMonth, setConfigCalMonth] = useState(null);
+  const [configRange, setConfigRange] = useState({ start: null, end: null });
+  const [configStep, setConfigStep] = useState('start');
+  const [savingConfig, setSavingConfig] = useState(false);
   const [periodoOpen, setPeriodoOpen] = useState(false);
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
@@ -276,7 +284,7 @@ const DashboardFilters = ({
   // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('.filter-dropdown')) {
+      if (!e.target.closest('.filter-dropdown') && !e.target.closest('.month-config-modal')) {
         setComercialOpen(false);
         setMesOpen(false);
         setPeriodoOpen(false);
@@ -388,6 +396,216 @@ const DashboardFilters = ({
   // Formatear fecha para el value
   const formatDateValue = (date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  // Config month calendar helpers
+  const openMonthConfig = (monthValue) => {
+    const existing = monthConfigs[monthValue];
+    const [y, m] = monthValue.split('-').map(Number);
+    if (existing) {
+      setConfigRange({
+        start: existing.fecha_inicio,
+        end: existing.fecha_fin || null
+      });
+      setConfigStep(existing.fecha_fin ? 'done' : 'end');
+    } else {
+      const lastDay = new Date(y, m, 0).getDate();
+      setConfigRange({
+        start: `${monthValue}-01`,
+        end: `${monthValue}-${String(lastDay).padStart(2, '0')}`
+      });
+      setConfigStep('done');
+    }
+    setConfigMonth(monthValue);
+    setConfigCalMonth(new Date(y, m - 1, 1));
+    setMesOpen(false);
+  };
+
+  const configMonthLabel = useMemo(() => {
+    if (!configMonth) return '';
+    const [y, m] = configMonth.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    const name = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }, [configMonth]);
+
+  const configCalendarDays = useMemo(() => {
+    if (!configCalMonth) return [];
+    const y = configCalMonth.getFullYear();
+    const month = configCalMonth.getMonth();
+    const firstDay = new Date(y, month, 1);
+    let startDayOfWeek = firstDay.getDay();
+    if (startDayOfWeek === 0) startDayOfWeek = 7;
+    startDayOfWeek -= 1;
+    const daysInMonth = new Date(y, month + 1, 0).getDate();
+    const prevMonthDays = new Date(y, month, 0).getDate();
+    const days = [];
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      days.push({ date: new Date(y, month - 1, prevMonthDays - i), isCurrentMonth: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ date: new Date(y, month, d), isCurrentMonth: true });
+    }
+    const remaining = 42 - days.length;
+    for (let d = 1; d <= remaining; d++) {
+      days.push({ date: new Date(y, month + 1, d), isCurrentMonth: false });
+    }
+    return days;
+  }, [configCalMonth]);
+
+  const configCalMonthLabel = useMemo(() => {
+    if (!configCalMonth) return '';
+    const name = configCalMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }, [configCalMonth]);
+
+  const isInConfigRange = (date) => {
+    if (!configRange.start) return false;
+    const s = new Date(configRange.start + 'T00:00:00');
+    if (!configRange.end) return formatDateValue(date) === configRange.start;
+    const e = new Date(configRange.end + 'T00:00:00');
+    return date >= s && date <= e;
+  };
+
+  const isConfigStart = (date) => configRange.start && formatDateValue(date) === configRange.start;
+  const isConfigEnd = (date) => configRange.end && formatDateValue(date) === configRange.end;
+
+  const handleConfigDayClick = (date, isCurrentMonth) => {
+    if (!isCurrentMonth) {
+      setConfigCalMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+    const val = formatDateValue(date);
+    if (configStep === 'start' || configStep === 'done') {
+      setConfigRange({ start: val, end: null });
+      setConfigStep('end');
+    } else if (configStep === 'end') {
+      if (val < configRange.start) {
+        setConfigRange({ start: val, end: configRange.start });
+      } else {
+        setConfigRange(prev => ({ ...prev, end: val }));
+      }
+      setConfigStep('done');
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!configMonth || !configRange.start || !onSaveMonthConfig) return;
+    setSavingConfig(true);
+    await onSaveMonthConfig(configMonth, configRange.start, configRange.end);
+    setSavingConfig(false);
+    setConfigMonth(null);
+  };
+
+  const isCurrentMonthConfig = useMemo(() => {
+    if (!configMonth) return false;
+    const today = new Date();
+    const cur = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    return configMonth === cur;
+  }, [configMonth]);
+
+  const renderMonthConfigModal = () => {
+    if (!configMonth) return null;
+    const hasExisting = !!monthConfigs[configMonth];
+    return (
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={() => setConfigMonth(null)}>
+        <div className="month-config-modal bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 w-[340px]" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-800">Configurar {configMonthLabel}</h3>
+            <button onClick={() => setConfigMonth(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+              <X size={16} />
+            </button>
+          </div>
+
+          {configRange.start && (
+            <div className="flex items-center gap-2 mb-3 text-xs">
+              <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <span className="text-slate-400 block">Inicio</span>
+                <span className="font-semibold text-slate-700">{configRange.start}</span>
+              </div>
+              <span className="text-slate-300">→</span>
+              <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <span className="text-slate-400 block">Fin</span>
+                <span className="font-semibold text-slate-700">{configRange.end || (isCurrentMonthConfig ? 'Abierto' : '—')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="text-[11px] text-slate-400 text-center mb-2">
+            {configStep === 'start' || configStep === 'done' ? 'Selecciona fecha de inicio' : 'Selecciona fecha de fin'}
+          </div>
+
+          {/* Calendar with navigation */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setConfigCalMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs font-semibold text-slate-700">{configCalMonthLabel}</span>
+            <button
+              onClick={() => setConfigCalMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map(day => (
+              <div key={day} className="text-center text-[10px] font-medium text-slate-400 py-1">{day}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {configCalendarDays.map((dayInfo, index) => {
+              const inRange = isInConfigRange(dayInfo.date);
+              const isStart = isConfigStart(dayInfo.date);
+              const isEnd = isConfigEnd(dayInfo.date);
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleConfigDayClick(dayInfo.date, dayInfo.isCurrentMonth)}
+                  className={`
+                    w-9 h-8 text-xs font-medium transition-all duration-150 relative cursor-pointer
+                    ${!dayInfo.isCurrentMonth ? 'text-slate-300' : ''}
+                    ${inRange && !isStart && !isEnd ? 'bg-[#1717AF]/10 text-[#1717AF]' : ''}
+                    ${isStart ? 'bg-[#1717AF] text-white rounded-l-lg' : ''}
+                    ${isEnd ? 'bg-[#1717AF] text-white rounded-r-lg' : ''}
+                    ${isStart && isEnd ? 'rounded-lg' : ''}
+                    ${!inRange && dayInfo.isCurrentMonth ? 'text-slate-600 hover:bg-slate-100 rounded-lg' : ''}
+                    ${!inRange && !dayInfo.isCurrentMonth ? 'hover:bg-slate-50 rounded-lg' : ''}
+                  `}
+                >
+                  {dayInfo.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 mt-4">
+            {isCurrentMonthConfig && configStep === 'done' && configRange.end && (
+              <button
+                onClick={() => setConfigRange(prev => ({ ...prev, end: null }))}
+                className="flex-1 px-3 py-2 text-xs font-medium text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Dejar fin abierto
+              </button>
+            )}
+            <button
+              onClick={handleSaveConfig}
+              disabled={!configRange.start || savingConfig || (configStep === 'end')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                !configRange.start || savingConfig || configStep === 'end'
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-[#1717AF] text-white hover:bg-[#1717AF]/90 shadow-md'
+              }`}
+            >
+              {savingConfig ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {hasExisting ? 'Actualizar' : 'Configurar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (showOnlyComercial) {
@@ -547,26 +765,46 @@ const DashboardFilters = ({
               <div className="h-px bg-slate-100 my-1" />
               {monthOptions.map((month) => {
                 const isCurrentMonth = month.value === currentMonth;
+                const hasConfig = !!monthConfigs[month.value];
                 return (
-                  <button
+                  <div
                     key={month.value}
-                    onClick={() => {
-                      onMesChange(month.value);
-                      setMesOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                    className={`flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
                       selectedMes === month.value
                         ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <span>{month.label}</span>
-                    {isCurrentMonth && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                        Actual
-                      </span>
+                    <button
+                      onClick={() => {
+                        onMesChange(month.value);
+                        setMesOpen(false);
+                      }}
+                      className="flex-1 text-left flex items-center gap-2"
+                    >
+                      <span>{month.label}</span>
+                      {isCurrentMonth && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                          Actual
+                        </span>
+                      )}
+                      {hasConfig && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#1717AF]" title="Rango personalizado" />
+                      )}
+                    </button>
+                    {puedeVerTodos && onSaveMonthConfig && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMonthConfig(month.value);
+                        }}
+                        className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-600 transition-colors ml-1"
+                        title="Configurar rango del mes"
+                      >
+                        <Settings size={13} />
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1438,6 +1676,9 @@ const DashboardFilters = ({
           </div>
         </div>
       )}
+
+      {/* Modal de configuración de mes */}
+      {renderMonthConfigModal()}
     </div>
   );
 };
