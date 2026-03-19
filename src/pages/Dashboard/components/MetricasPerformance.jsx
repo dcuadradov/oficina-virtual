@@ -63,6 +63,7 @@ export default function MetricasPerformance({
   dateFilterField = 'created_at',
   monthConfigs = {}
 }) {
+  const userEmail = localStorage.getItem('user_email');
   const [leadCounts, setLeadCounts] = useState({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -590,6 +591,12 @@ export default function MetricasPerformance({
           label: comercialNames[selectedComercial] || selectedComercial?.split('@')[0],
           data: processedComercials[selectedComercial],
         });
+      } else if (!puedeVerTodos && userEmail && processedComercials[userEmail]) {
+        columns.push({
+          type: 'selected',
+          label: comercialNames[userEmail] || userEmail?.split('@')[0],
+          data: processedComercials[userEmail],
+        });
       } else if (processedComercials['__team__']) {
         columns.push({
           type: 'team',
@@ -650,7 +657,7 @@ export default function MetricasPerformance({
     } finally {
       setLoadingDetail(false);
     }
-  }, [parseDateFilters, selectedTag, selectedFuente, comercialNames, selectedComercial, comerciales, leadCounts, dateFilterField]);
+  }, [parseDateFilters, selectedTag, selectedFuente, comercialNames, selectedComercial, comerciales, leadCounts, dateFilterField, puedeVerTodos]);
 
   const handleOpenDetail = useCallback((stageName) => {
     setSelectedStage(stageName);
@@ -764,6 +771,7 @@ export default function MetricasPerformance({
                   hasDateFilter={detailData.hasDateFilter}
                   formatDuration={formatDuration}
                   totalInStageNoFilter={detailData.totalInStageNoFilter}
+                  puedeVerTodos={puedeVerTodos}
                 />
               </div>
             ) : (
@@ -1017,7 +1025,7 @@ function HeaderKpi({ label, value, subtitle, color, icon, tooltip }) {
   );
 }
 
-function DetailTable({ columns, hasDateFilter, formatDuration, totalInStageNoFilter }) {
+function DetailTable({ columns, hasDateFilter, formatDuration, totalInStageNoFilter, puedeVerTodos }) {
   const subCols = hasDateFilter ? 3 : 1;
   const totalDataCols = columns.length * subCols;
   const gridTemplate = `180px repeat(${totalDataCols}, minmax(90px, 1fr))`;
@@ -1082,7 +1090,7 @@ function DetailTable({ columns, hasDateFilter, formatDuration, totalInStageNoFil
             col.type === 'team' ? 'text-blue-400' :
             col.type === 'top' ? 'text-emerald-500' : 'text-rose-400'
           }`}>
-            {col.type === 'selected' ? 'Seleccionado' : col.type === 'team' ? 'Todo el equipo' : col.type === 'top' ? 'Top Performance' : 'Low Performance'}
+            {col.type === 'selected' ? (puedeVerTodos ? 'Seleccionado' : 'Tu rendimiento') : col.type === 'team' ? 'Todo el equipo' : col.type === 'top' ? 'Top Performance' : 'Low Performance'}
           </span>
         </div>
       ))}
