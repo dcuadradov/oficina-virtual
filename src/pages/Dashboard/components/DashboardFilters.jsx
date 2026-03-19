@@ -160,7 +160,11 @@ const DashboardFilters = ({
   showDateFilterToggle = true,
   puedeVerTodos = false,
   monthConfigs = {},
-  onSaveMonthConfig
+  onSaveMonthConfig,
+  showTagFilter = true,
+  showFuenteFilter = true,
+  showReferidoFilter = true,
+  showGestionWAFilter = true
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -1343,8 +1347,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro por Tag */}
-      {tags.length > 0 && (
+      {/* Filtro por Tag (multi-select) */}
+      {showTagFilter && tags.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1359,21 +1363,21 @@ const DashboardFilters = ({
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedTag
+              selectedTag.length > 0
                 ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-violet-400 hover:text-violet-600'
             }`}
           >
             <Tag size={16} />
             <span className="max-w-[150px] truncate">
-              {selectedTag || 'Tags'}
+              {selectedTag.length > 0 ? `Tags (${selectedTag.length})` : 'Tags'}
             </span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${tagOpen ? 'rotate-180' : ''}`} />
-            {selectedTag && (
+            {selectedTag.length > 0 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTagChange(null);
+                  onTagChange([]);
                 }}
                 className="ml-1 p-0.5 rounded-full hover:bg-white/20"
               >
@@ -1385,12 +1389,9 @@ const DashboardFilters = ({
           {tagOpen && (
             <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
               <button
-                onClick={() => {
-                  onTagChange(null);
-                  setTagOpen(false);
-                }}
+                onClick={() => onTagChange([])}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedTag 
+                  selectedTag.length === 0
                     ? 'bg-violet-100 text-violet-700 font-medium' 
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -1398,30 +1399,41 @@ const DashboardFilters = ({
                 Todos los tags
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {tags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => {
-                    onTagChange(tag);
-                    setTagOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                    selectedTag === tag
-                      ? 'bg-violet-100 text-violet-700 font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Tag size={12} />
-                  {tag}
-                </button>
-              ))}
+              {tags.map((tag) => {
+                const isChecked = selectedTag.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      if (isChecked) {
+                        onTagChange(selectedTag.filter(t => t !== tag));
+                      } else {
+                        onTagChange([...selectedTag, tag]);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                      isChecked
+                        ? 'bg-violet-50 text-violet-700 font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      isChecked ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
+                    }`}>
+                      {isChecked && <Check size={10} className="text-white" />}
+                    </div>
+                    <Tag size={12} />
+                    {tag}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Filtro por Fuente */}
-      {fuentes.length > 0 && (
+      {/* Filtro por Fuente (multi-select) */}
+      {showFuenteFilter && fuentes.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1436,21 +1448,21 @@ const DashboardFilters = ({
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedFuente
+              selectedFuente.length > 0
                 ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
             }`}
           >
             <Globe size={16} />
             <span className="max-w-[150px] truncate">
-              {selectedFuente || 'Fuente'}
+              {selectedFuente.length > 0 ? `Fuente (${selectedFuente.length})` : 'Fuente'}
             </span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${fuenteOpen ? 'rotate-180' : ''}`} />
-            {selectedFuente && (
+            {selectedFuente.length > 0 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onFuenteChange(null);
+                  onFuenteChange([]);
                 }}
                 className="ml-1 p-0.5 rounded-full hover:bg-white/20"
               >
@@ -1462,12 +1474,9 @@ const DashboardFilters = ({
           {fuenteOpen && (
             <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
               <button
-                onClick={() => {
-                  onFuenteChange(null);
-                  setFuenteOpen(false);
-                }}
+                onClick={() => onFuenteChange([])}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedFuente 
+                  selectedFuente.length === 0
                     ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -1475,30 +1484,41 @@ const DashboardFilters = ({
                 Todas las fuentes
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {fuentes.map((fuente) => (
-                <button
-                  key={fuente}
-                  onClick={() => {
-                    onFuenteChange(fuente);
-                    setFuenteOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                    selectedFuente === fuente
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Globe size={12} />
-                  {fuente}
-                </button>
-              ))}
+              {fuentes.map((fuente) => {
+                const isChecked = selectedFuente.includes(fuente);
+                return (
+                  <button
+                    key={fuente}
+                    onClick={() => {
+                      if (isChecked) {
+                        onFuenteChange(selectedFuente.filter(f => f !== fuente));
+                      } else {
+                        onFuenteChange([...selectedFuente, fuente]);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                      isChecked
+                        ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      isChecked ? 'bg-[#1717AF] border-[#1717AF]' : 'border-slate-300'
+                    }`}>
+                      {isChecked && <Check size={10} className="text-white" />}
+                    </div>
+                    <Globe size={12} />
+                    {fuente}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {/* Filtro por Referido */}
-      {referidos.length > 0 && (
+      {showReferidoFilter && referidos.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1576,7 +1596,7 @@ const DashboardFilters = ({
       )}
       
       {/* Filtro por Gestión WhatsApp */}
-      {(
+      {showGestionWAFilter && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {

@@ -57,6 +57,7 @@ export default function MetricasPerformance({
   selectedPeriodo,
   selectedDia,
   selectedTag,
+  selectedFuente = [],
   puedeVerTodos,
   comerciales = [],
   dateFilterField = 'created_at',
@@ -150,8 +151,12 @@ export default function MetricasPerformance({
           query = query.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
         }
 
-        if (selectedTag) {
-          query = query.eq('label', selectedTag);
+        if (selectedTag && selectedTag.length > 0) {
+          query = query.in('label', selectedTag);
+        }
+
+        if (selectedFuente && selectedFuente.length > 0) {
+          query = query.in('fuente_dato', selectedFuente);
         }
 
         const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
@@ -179,7 +184,7 @@ export default function MetricasPerformance({
     } finally {
       setLoading(false);
     }
-  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos, dateFilterField]);
+  }, [parseDateFilters, selectedComercial, selectedTag, selectedFuente, puedeVerTodos, dateFilterField]);
 
   const fetchHeaderKpis = useCallback(async () => {
     try {
@@ -198,9 +203,13 @@ export default function MetricasPerformance({
         matQuery = matQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
         pitchQuery = pitchQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
       }
-      if (selectedTag) {
-        matQuery = matQuery.eq('label', selectedTag);
-        pitchQuery = pitchQuery.eq('label', selectedTag);
+      if (selectedTag && selectedTag.length > 0) {
+        matQuery = matQuery.in('label', selectedTag);
+        pitchQuery = pitchQuery.in('label', selectedTag);
+      }
+      if (selectedFuente && selectedFuente.length > 0) {
+        matQuery = matQuery.in('fuente_dato', selectedFuente);
+        pitchQuery = pitchQuery.in('fuente_dato', selectedFuente);
       }
 
       const [matResult, pitchResult] = await Promise.all([matQuery, pitchQuery]);
@@ -281,7 +290,7 @@ export default function MetricasPerformance({
     } catch (error) {
       console.error('Error fetching header KPIs:', error);
     }
-  }, [parseDateFilters, selectedComercial, selectedTag, puedeVerTodos, comercialNames, comerciales, dateFilterField]);
+  }, [parseDateFilters, selectedComercial, selectedTag, selectedFuente, puedeVerTodos, comercialNames, comerciales, dateFilterField]);
 
   useEffect(() => {
     fetchLeadCounts();
@@ -318,8 +327,11 @@ export default function MetricasPerformance({
         .select('card_id, etapa_funnel, comercial_email, created_at, updated_at')
         .neq('etapa_funnel', 'No mostrar');
 
-      if (selectedTag) {
-        leadsQuery = leadsQuery.eq('label', selectedTag);
+      if (selectedTag && selectedTag.length > 0) {
+        leadsQuery = leadsQuery.in('label', selectedTag);
+      }
+      if (selectedFuente && selectedFuente.length > 0) {
+        leadsQuery = leadsQuery.in('fuente_dato', selectedFuente);
       }
 
       const { data: leadsData, error: leadsError } = await leadsQuery;
@@ -638,7 +650,7 @@ export default function MetricasPerformance({
     } finally {
       setLoadingDetail(false);
     }
-  }, [parseDateFilters, selectedTag, comercialNames, selectedComercial, comerciales, leadCounts, dateFilterField]);
+  }, [parseDateFilters, selectedTag, selectedFuente, comercialNames, selectedComercial, comerciales, leadCounts, dateFilterField]);
 
   const handleOpenDetail = useCallback((stageName) => {
     setSelectedStage(stageName);

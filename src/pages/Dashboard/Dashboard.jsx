@@ -51,9 +51,9 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
-  const [selectedTag, setSelectedTag] = useState(null);
+  const [selectedTag, setSelectedTag] = useState([]);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
-  const [selectedFuente, setSelectedFuente] = useState(null);
+  const [selectedFuente, setSelectedFuente] = useState([]);
   const [fuentesDisponibles, setFuentesDisponibles] = useState([]);
   const [selectedReferido, setSelectedReferido] = useState(null);
   const [referidosDisponibles, setReferidosDisponibles] = useState([]);
@@ -635,12 +635,12 @@ export default function Dashboard() {
           statsQuery = statsQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
         }
 
-        if (selectedTag) {
-          statsQuery = statsQuery.eq('label', selectedTag);
+        if (selectedTag.length > 0) {
+          statsQuery = statsQuery.in('label', selectedTag);
         }
 
-        if (selectedFuente) {
-          statsQuery = statsQuery.eq('fuente_dato', selectedFuente);
+        if (selectedFuente.length > 0) {
+          statsQuery = statsQuery.in('fuente_dato', selectedFuente);
         }
 
         if (selectedReferido) {
@@ -803,13 +803,13 @@ export default function Dashboard() {
       }
 
       // Aplicar filtro por tag
-      if (selectedTag) {
-        query = query.eq('label', selectedTag);
+      if (selectedTag.length > 0) {
+        query = query.in('label', selectedTag);
       }
 
       // Aplicar filtro por fuente
-      if (selectedFuente) {
-        query = query.eq('fuente_dato', selectedFuente);
+      if (selectedFuente.length > 0) {
+        query = query.in('fuente_dato', selectedFuente);
       }
 
       // Aplicar filtro por referido
@@ -1245,7 +1245,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag || selectedFuente || selectedReferido || filtroGestionWA) && (
+                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedReferido || filtroGestionWA) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -1257,8 +1257,8 @@ export default function Dashboard() {
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
                       {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
-                      {selectedTag && <span className="text-slate-400"> • Tag: {selectedTag}</span>}
-                      {selectedFuente && <span className="text-slate-400"> • Fuente: {selectedFuente}</span>}
+                      {selectedTag.length > 0 && <span className="text-slate-400"> • Tags: {selectedTag.join(', ')}</span>}
+                      {selectedFuente.length > 0 && <span className="text-slate-400"> • Fuentes: {selectedFuente.join(', ')}</span>}
                       {selectedReferido && <span className="text-slate-400"> • Referido por: {selectedReferido}</span>}
                       {filtroGestionWA && <span className="text-slate-400"> • Gestión WA: {filtroGestionWA === 'respond' ? 'Respond' : 'WA Business del Comercial'}</span>}
                 </span>
@@ -1385,6 +1385,10 @@ export default function Dashboard() {
                   puedeVerTodos={puedeVerTodos}
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}
+                  showTagFilter={metricasSubTab !== 'asignaciones'}
+                  showFuenteFilter={metricasSubTab !== 'asignaciones'}
+                  showReferidoFilter={false}
+                  showGestionWAFilter={false}
                 />
 
                 {/* Sub-tabs de Métricas */}
@@ -1433,6 +1437,7 @@ export default function Dashboard() {
                     selectedPeriodo={selectedPeriodo}
                     selectedDia={selectedDia}
                     selectedTag={selectedTag}
+                    selectedFuente={selectedFuente}
                     puedeVerTodos={puedeVerTodos}
                     comerciales={comerciales}
                     dateFilterField={dateFilterField}
