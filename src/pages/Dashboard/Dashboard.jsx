@@ -1272,8 +1272,8 @@ export default function Dashboard() {
                         setSelectedDia(null);
                         setSearchQuery('');
                         setSelectedCategoria(null);
-                        setSelectedTag(null);
-                        setSelectedFuente(null);
+                        setSelectedTag([]);
+                        setSelectedFuente([]);
                         setSelectedReferido(null);
                         setFiltroGestionWA(null);
                       }}
