@@ -323,27 +323,33 @@ export default function MetricasPerformance({
       });
 
       // 2. Fetch ALL leads (no date filter — leads may have been created before the period but passed through the stage during it)
-      let leadsQuery = supabase
-        .from('leads')
-        .select('card_id, etapa_funnel, comercial_email, created_at, updated_at')
-        .neq('etapa_funnel', 'No mostrar');
-
-      if (selectedTag && selectedTag.length > 0) {
-        leadsQuery = leadsQuery.in('label', selectedTag);
+      let leadsData;
+      if (!puedeVerTodos) {
+        const { data, error } = await supabase.rpc('get_leads_performance', {
+          p_tags: selectedTag?.length > 0 ? selectedTag : null,
+          p_fuentes: selectedFuente?.length > 0 ? selectedFuente : null,
+        });
+        if (error) throw error;
+        leadsData = data;
+      } else {
+        let leadsQuery = supabase
+          .from('leads')
+          .select('card_id, etapa_funnel, comercial_email, created_at, updated_at')
+          .neq('etapa_funnel', 'No mostrar');
+        if (selectedTag && selectedTag.length > 0) {
+          leadsQuery = leadsQuery.in('label', selectedTag);
+        }
+        if (selectedFuente && selectedFuente.length > 0) {
+          leadsQuery = leadsQuery.in('fuente_dato', selectedFuente);
+        }
+        const { data, error } = await leadsQuery;
+        if (error) throw error;
+        leadsData = data;
       }
-      if (selectedFuente && selectedFuente.length > 0) {
-        leadsQuery = leadsQuery.in('fuente_dato', selectedFuente);
-      }
-
-      const { data: leadsData, error: leadsError } = await leadsQuery;
-      if (leadsError) throw leadsError;
 
       const leadMap = {};
       (leadsData || []).forEach(l => { leadMap[l.card_id] = l; });
       const allLeadIds = Object.keys(leadMap);
-
-      const uniqueComercials = [...new Set((leadsData || []).map(l => l.comercial_email).filter(Boolean))];
-      console.log('[DETAIL DEBUG] Total leads:', (leadsData || []).length, '| Unique comercials:', uniqueComercials.length, '| Emails:', uniqueComercials, '| puedeVerTodos:', puedeVerTodos);
 
       if (allLeadIds.length === 0) {
         setDetailData({ stageName, stageIndex, columns: [], kpis: { total: 0, avanzaron: 0, tasaAvance: 0, conSeguimiento: 0, sinSeguimiento: 0 } });
