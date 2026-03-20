@@ -342,6 +342,9 @@ export default function MetricasPerformance({
       (leadsData || []).forEach(l => { leadMap[l.card_id] = l; });
       const allLeadIds = Object.keys(leadMap);
 
+      const uniqueComercials = [...new Set((leadsData || []).map(l => l.comercial_email).filter(Boolean))];
+      console.log('[DETAIL DEBUG] Total leads:', (leadsData || []).length, '| Unique comercials:', uniqueComercials.length, '| Emails:', uniqueComercials, '| puedeVerTodos:', puedeVerTodos);
+
       if (allLeadIds.length === 0) {
         setDetailData({ stageName, stageIndex, columns: [], kpis: { total: 0, avanzaron: 0, tasaAvance: 0, conSeguimiento: 0, sinSeguimiento: 0 } });
         return;
