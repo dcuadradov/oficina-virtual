@@ -573,13 +573,20 @@ export default function MetricasPerformance({
 
       // 9. Find top and low (by tasa de avance, min 1 lead, only disponibilidad = 'Activo')
       const disponibleEmails = new Set(comerciales.filter(c => c.disponibilidad === 'Activo').map(c => c.email));
+
+      const selectedEmail = selectedComercial || (!puedeVerTodos ? userEmail : null);
+
       const sortedComercials = Object.entries(processedComercials)
         .filter(([email, m]) => email !== '__team__' && m.total >= 1 && (puedeVerTodos ? disponibleEmails.has(email) : true))
         .sort((a, b) => b[1].tasaAvance - a[1].tasaAvance);
 
-      const topEntry = sortedComercials[0] || null;
-      const lowEntry = sortedComercials.length > 1
-        ? sortedComercials[sortedComercials.length - 1]
+      const sortedForTopLow = selectedEmail
+        ? sortedComercials.filter(([email]) => email !== selectedEmail)
+        : sortedComercials;
+
+      const topEntry = sortedForTopLow[0] || null;
+      const lowEntry = sortedForTopLow.length > 1
+        ? sortedForTopLow[sortedForTopLow.length - 1]
         : null;
 
       // 10. Build columns
