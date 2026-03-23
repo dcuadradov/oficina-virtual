@@ -142,7 +142,7 @@ export default function MetricasPerformance({
         let query = supabase
           .from('leads')
           .select('etapa_funnel')
-          .neq('etapa_funnel', 'No mostrar');
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
 
         if (puedeVerTodos && selectedComercial) {
           query = query.eq('comercial_email', selectedComercial);
@@ -335,7 +335,7 @@ export default function MetricasPerformance({
         let leadsQuery = supabase
           .from('leads')
           .select('card_id, etapa_funnel, comercial_email, created_at, updated_at')
-          .neq('etapa_funnel', 'No mostrar');
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
         if (selectedTag && selectedTag.length > 0) {
           leadsQuery = leadsQuery.in('label', selectedTag);
         }

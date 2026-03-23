@@ -542,7 +542,7 @@ export default function Dashboard() {
       let query = supabase
         .from('leads')
         .select('card_id', { count: 'exact', head: true })
-        .neq('etapa_funnel', 'No mostrar')
+        .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
         .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
         .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
 
@@ -623,7 +623,7 @@ export default function Dashboard() {
         let statsQuery = supabase
           .from('leads')
           .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
-          .neq('etapa_funnel', 'No mostrar');
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
 
         if (puedeVerTodos && selectedComercial) {
           statsQuery = statsQuery.eq('comercial_email', selectedComercial);
@@ -746,7 +746,7 @@ export default function Dashboard() {
       let query = supabase
         .from('leads')
         .select('*', { count: 'exact' })
-        .neq('etapa_funnel', 'No mostrar');
+        .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
 
       // Aplicar filtro de comercial
       if (puedeVerTodos && selectedComercial) {
