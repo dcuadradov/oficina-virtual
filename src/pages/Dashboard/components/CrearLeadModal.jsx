@@ -412,7 +412,12 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       };
 
       if (modoCreacion === 'individual') {
-        payload.data = formData;
+        const textFieldNames = new Set(fields.filter(f => f.tipo === 'texto').map(f => f.nombre));
+        const trimmedData = {};
+        for (const [key, value] of Object.entries(formData)) {
+          trimmedData[key] = textFieldNames.has(key) && typeof value === 'string' ? value.trim() : value;
+        }
+        payload.data = trimmedData;
       } else {
         const base64 = await fileToBase64(archivo);
         payload.archivo = base64;
