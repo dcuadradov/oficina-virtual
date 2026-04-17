@@ -764,8 +764,8 @@ export default function Dashboard() {
         setLoading(false); setIsRefreshing(false); return;
       }
 
-      const buildQuery = () => {
-        let q = supabase.from('leads').select('*', { count: 'exact' })
+      const buildQuery = (selectCols = '*') => {
+        let q = supabase.from('leads').select(selectCols, { count: 'exact' })
           .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
         if (puedeVerTodos && selectedComercial) {
           q = q.eq('comercial_email', selectedComercial);
@@ -816,60 +816,46 @@ export default function Dashboard() {
       let data, totalCount;
 
       if (filtroSinSeguimiento) {
+        // IDs de leads que tienen al menos un comentario (cualquier origen)
         const { data: conSeg } = await supabase
           .from('comentarios')
-          .select('lead_id')
-          .eq('origen', 'Seguimiento');
-        const idsConSeg = [...new Set((conSeg || []).map(c => c.lead_id))];
+          .select('lead_id');
+        const idsConSeg = new Set((conSeg || []).map(c => c.lead_id));
 
-        // Contar leads SIN seguimiento
-        let qCountSin = buildQuery();
-        if (idsConSeg.length > 0) {
-          qCountSin = qCountSin.not('card_id', 'in', `(${idsConSeg.join(',')})`);
-        }
-        const { count: countSin } = await qCountSin.order('updated_at', { ascending: true }).range(0, 0);
-        const totalSin = countSin || 0;
-
-        // Contar leads CON seguimiento
-        let totalCon = 0;
-        if (idsConSeg.length > 0) {
-          let qCountCon = buildQuery();
-          qCountCon = qCountCon.in('card_id', idsConSeg);
-          const { count: countCon } = await qCountCon.order('updated_at', { ascending: true }).range(0, 0);
-          totalCon = countCon || 0;
+        // Fetch ligero: solo card_id + updated_at de todos los leads filtrados
+        let allRefs = [];
+        let batchOffset = 0;
+        const BATCH = 1000;
+        while (true) {
+          const qBatch = buildQuery('card_id, updated_at');
+          const { data: batch } = await qBatch
+            .order('updated_at', { ascending: true })
+            .range(batchOffset, batchOffset + BATCH - 1);
+          if (!batch || batch.length === 0) break;
+          allRefs = allRefs.concat(batch);
+          if (batch.length < BATCH) break;
+          batchOffset += BATCH;
         }
 
-        totalCount = totalSin + totalCon;
+        // Separar en sin/con seguimiento (ambos ya ordenados por updated_at ASC)
+        const sinSeg = allRefs.filter(l => !idsConSeg.has(l.card_id));
+        const conSegLeads = allRefs.filter(l => idsConSeg.has(l.card_id));
+        const combined = [...sinSeg, ...conSegLeads];
+
+        totalCount = combined.length;
         const from = page * LEADS_PER_PAGE;
-        let results = [];
+        const pageIds = combined.slice(from, from + LEADS_PER_PAGE).map(l => l.card_id);
 
-        if (from < totalSin) {
-          // La página empieza en el grupo "sin seguimiento"
-          let q1 = buildQuery();
-          if (idsConSeg.length > 0) q1 = q1.not('card_id', 'in', `(${idsConSeg.join(',')})`);
-          const endInSin = Math.min(from + LEADS_PER_PAGE - 1, totalSin - 1);
-          const { data: d1 } = await q1.order('updated_at', { ascending: true }).range(from, endInSin);
-          results = d1 || [];
-
-          // Si la página cruza al grupo "con seguimiento"
-          if (results.length < LEADS_PER_PAGE && totalCon > 0) {
-            const remaining = LEADS_PER_PAGE - results.length;
-            let q2 = buildQuery();
-            q2 = q2.in('card_id', idsConSeg);
-            const { data: d2 } = await q2.order('updated_at', { ascending: true }).range(0, remaining - 1);
-            results = [...results, ...(d2 || [])];
-          }
-        } else if (totalCon > 0) {
-          // La página está completamente en el grupo "con seguimiento"
-          const offsetCon = from - totalSin;
-          let q2 = buildQuery();
-          q2 = q2.in('card_id', idsConSeg);
-          const { data: d2 } = await q2.order('updated_at', { ascending: true })
-            .range(offsetCon, offsetCon + LEADS_PER_PAGE - 1);
-          results = d2 || [];
+        if (pageIds.length > 0) {
+          const { data: fullData } = await supabase
+            .from('leads')
+            .select('*')
+            .in('card_id', pageIds);
+          const dataMap = new Map((fullData || []).map(l => [l.card_id, l]));
+          data = pageIds.map(id => dataMap.get(id)).filter(Boolean);
+        } else {
+          data = [];
         }
-
-        data = results;
       } else {
         let query = buildQuery();
         const from = page * LEADS_PER_PAGE;
