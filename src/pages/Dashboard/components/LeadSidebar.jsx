@@ -2697,8 +2697,22 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                         {displayValue}
                                       </p>
                                     </div>
-                                    <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <ChevronDown size={10} />
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {value && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleCopy(value, field.nombre); }}
+                                          className={`p-1 rounded-md transition-all duration-150 ${
+                                            copiedField === field.nombre
+                                              ? 'bg-emerald-100 text-emerald-600'
+                                              : 'text-slate-400 hover:bg-white hover:text-slate-600'
+                                          }`}
+                                        >
+                                          {copiedField === field.nombre ? <Check size={12} /> : <Copy size={12} />}
+                                        </button>
+                                      )}
+                                      <div className="p-1 text-slate-300">
+                                        <ChevronDown size={10} />
+                                      </div>
                                     </div>
                                   </div>
                                   {isSaving && (
@@ -2758,8 +2772,22 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       {displayValue}
                                     </p>
                                   </div>
-                                  <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Edit2 size={10} />
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {value && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleCopy(value, field.nombre); }}
+                                        className={`p-1 rounded-md transition-all duration-150 ${
+                                          copiedField === field.nombre
+                                            ? 'bg-emerald-100 text-emerald-600'
+                                            : 'text-slate-400 hover:bg-white hover:text-slate-600'
+                                        }`}
+                                      >
+                                        {copiedField === field.nombre ? <Check size={12} /> : <Copy size={12} />}
+                                      </button>
+                                    )}
+                                    <div className="p-1 text-slate-300">
+                                      <Edit2 size={10} />
+                                    </div>
                                   </div>
                                 </div>
                                 {isSaving && (
