@@ -743,158 +743,150 @@ export default function Dashboard() {
 
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      // Construir query base
-      let query = supabase
-        .from('leads')
-        .select('*', { count: 'exact' })
-        .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
-
-      // Aplicar filtro de comercial
-      if (puedeVerTodos && selectedComercial) {
-        query = query.eq('comercial_email', selectedComercial);
-      } else if (!puedeVerTodos) {
-        query = query.eq('comercial_email', userEmail);
-      }
-      // Si puede ver todos y no hay comercial seleccionado, traer todos los leads
-
-      if (fechaInicio && fechaFin) {
-        query = query.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
-      }
-
-      // Aplicar filtro por estado si está activo
-      if (activeFilter !== 'todos') {
-        query = query.eq('estado_gestion', activeFilter);
-      }
-
-      // Aplicar filtro por etapa si está activo
-      if (activeEtapa) {
-        query = query.eq('etapa_funnel', activeEtapa);
-      }
-
-      // Aplicar búsqueda de texto (búsqueda en múltiples campos)
-      if (searchQuery && searchQuery.trim()) {
-        const searchTerm = `%${searchQuery.trim()}%`;
-        query = query.or(
-          `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
-        );
-      }
-
-      // Aplicar filtro por categoría de seguimiento
+      // Pre-fetch: IDs de leads con categoría seleccionada
+      let cardIdsConCategoria = null;
       if (selectedCategoria) {
-        // Obtener los card_ids de leads que tienen comentarios con esta categoría
         const { data: comentariosConCategoria, error: errorCat } = await supabase
           .from('comentarios')
           .select('lead_id')
           .eq('categoria', selectedCategoria);
-        
         if (!errorCat && comentariosConCategoria) {
-          const cardIdsConCategoria = [...new Set(comentariosConCategoria.map(c => c.lead_id))];
-          if (cardIdsConCategoria.length > 0) {
-            query = query.in('card_id', cardIdsConCategoria);
-          } else {
-            // No hay leads con esta categoría, retornar vacío
-            setLeads([]);
-            setTotalLeads(0);
-            setCurrentPage(page);
-            setLoading(false);
-            setIsRefreshing(false);
-            return;
+          cardIdsConCategoria = [...new Set(comentariosConCategoria.map(c => c.lead_id))];
+          if (cardIdsConCategoria.length === 0) {
+            setLeads([]); setTotalLeads(0); setCurrentPage(page);
+            setLoading(false); setIsRefreshing(false); return;
           }
         }
       }
 
-      // Aplicar filtro por tag
-      if (selectedTag.length > 0) {
-        query = query.in('label', selectedTag);
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
+        setLeads([]); setTotalLeads(0); setCurrentPage(page);
+        setLoading(false); setIsRefreshing(false); return;
       }
 
-      // Aplicar filtro por fuente
-      if (selectedFuente.length > 0) {
-        query = query.in('fuente_dato', selectedFuente);
-      }
+      const buildQuery = () => {
+        let q = supabase.from('leads').select('*', { count: 'exact' })
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
+        if (puedeVerTodos && selectedComercial) {
+          q = q.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          q = q.eq('comercial_email', userEmail);
+        }
+        if (fechaInicio && fechaFin) {
+          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+        if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
+        if (activeEtapa) q = q.eq('etapa_funnel', activeEtapa);
+        if (searchQuery && searchQuery.trim()) {
+          const searchTerm = `%${searchQuery.trim()}%`;
+          q = q.or(
+            `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+          );
+        }
+        if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
+        if (selectedTag.length > 0) q = q.in('label', selectedTag);
+        if (selectedFuente.length > 0) q = q.in('fuente_dato', selectedFuente);
+        if (selectedReferido) q = q.eq('referido_por', selectedReferido);
+        if (filtroWhatsApp === 'abierta') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          q = q.in('card_id', nuevosLeadsCardIds);
+        }
+        if (filtroHot) q = q.eq('is_hot', true);
+        const fasesEmdi = ['340832804', '339756097', '341769991'];
+        if (filtroEmdi === 'activo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+        } else if (filtroEmdi === 'inactivo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+        }
+        if (filtroGestionWA === 'respond') {
+          q = q.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          q = q.eq('gestion_whatsapp_personal', true);
+        }
+        return q;
+      };
 
-      // Aplicar filtro por referido
-      if (selectedReferido) {
-        query = query.eq('referido_por', selectedReferido);
-      }
+      let data, totalCount;
 
-      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
-      if (filtroWhatsApp === 'abierta') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        query = query
-          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
-          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
-      } else if (filtroWhatsApp === 'cerrada') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        query = query.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
-      }
-
-      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
-      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
-        query = query.in('card_id', nuevosLeadsCardIds);
-      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
-        // No hay nuevos leads, retornar vacío
-        setLeads([]);
-        setTotalLeads(0);
-        setCurrentPage(page);
-        setLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-
-      // Aplicar filtro de leads HOT
-      if (filtroHot) {
-        query = query.eq('is_hot', true);
-      }
-
-      // Aplicar filtro de recordatorios automáticos (Emdi)
-      const fasesEmdi = ['340832804', '339756097', '341769991'];
-      if (filtroEmdi === 'activo') {
-        query = query.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
-      } else if (filtroEmdi === 'inactivo') {
-        query = query.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
-      }
-
-      // Aplicar filtro de gestión WhatsApp
-      if (filtroGestionWA === 'respond') {
-        query = query.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
-      } else if (filtroGestionWA === 'personal') {
-        query = query.eq('gestion_whatsapp_personal', true);
-      }
-
-      // Filtrar leads sin seguimiento
       if (filtroSinSeguimiento) {
         const { data: conSeg } = await supabase
           .from('comentarios')
           .select('lead_id')
           .eq('origen', 'Seguimiento');
         const idsConSeg = [...new Set((conSeg || []).map(c => c.lead_id))];
+
+        // Contar leads SIN seguimiento
+        let qCountSin = buildQuery();
         if (idsConSeg.length > 0) {
-          query = query.not('card_id', 'in', `(${idsConSeg.join(',')})`);
+          qCountSin = qCountSin.not('card_id', 'in', `(${idsConSeg.join(',')})`);
         }
+        const { count: countSin } = await qCountSin.order('updated_at', { ascending: true }).range(0, 0);
+        const totalSin = countSin || 0;
+
+        // Contar leads CON seguimiento
+        let totalCon = 0;
+        if (idsConSeg.length > 0) {
+          let qCountCon = buildQuery();
+          qCountCon = qCountCon.in('card_id', idsConSeg);
+          const { count: countCon } = await qCountCon.order('updated_at', { ascending: true }).range(0, 0);
+          totalCon = countCon || 0;
+        }
+
+        totalCount = totalSin + totalCon;
+        const from = page * LEADS_PER_PAGE;
+        let results = [];
+
+        if (from < totalSin) {
+          // La página empieza en el grupo "sin seguimiento"
+          let q1 = buildQuery();
+          if (idsConSeg.length > 0) q1 = q1.not('card_id', 'in', `(${idsConSeg.join(',')})`);
+          const endInSin = Math.min(from + LEADS_PER_PAGE - 1, totalSin - 1);
+          const { data: d1 } = await q1.order('updated_at', { ascending: true }).range(from, endInSin);
+          results = d1 || [];
+
+          // Si la página cruza al grupo "con seguimiento"
+          if (results.length < LEADS_PER_PAGE && totalCon > 0) {
+            const remaining = LEADS_PER_PAGE - results.length;
+            let q2 = buildQuery();
+            q2 = q2.in('card_id', idsConSeg);
+            const { data: d2 } = await q2.order('updated_at', { ascending: true }).range(0, remaining - 1);
+            results = [...results, ...(d2 || [])];
+          }
+        } else if (totalCon > 0) {
+          // La página está completamente en el grupo "con seguimiento"
+          const offsetCon = from - totalSin;
+          let q2 = buildQuery();
+          q2 = q2.in('card_id', idsConSeg);
+          const { data: d2 } = await q2.order('updated_at', { ascending: true })
+            .range(offsetCon, offsetCon + LEADS_PER_PAGE - 1);
+          results = d2 || [];
+        }
+
+        data = results;
+      } else {
+        let query = buildQuery();
+        const from = page * LEADS_PER_PAGE;
+        const to = from + LEADS_PER_PAGE - 1;
+        query = query
+          .order(sortConfig.field, { ascending: sortConfig.ascending, nullsFirst: true })
+          .range(from, to);
+        const result = await query;
+        if (result.error) throw result.error;
+        data = result.data || [];
+        totalCount = result.count || 0;
       }
 
-      // Ordenar y paginar
-      const from = page * LEADS_PER_PAGE;
-      const to = from + LEADS_PER_PAGE - 1;
-
-      const effectiveSort = filtroSinSeguimiento
-        ? { field: 'updated_at', ascending: true }
-        : sortConfig;
-
-      query = query
-        .order(effectiveSort.field, { ascending: effectiveSort.ascending, nullsFirst: true })
-        .range(from, to);
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
       setLeads(data || []);
-      setTotalLeads(count || 0);
+      setTotalLeads(totalCount || 0);
       setCurrentPage(page);
-      
-      // Cargar últimos seguimientos para los leads cargados
+
       if (data && data.length > 0) {
         const cardIds = data.map(lead => lead.card_id);
         const { data: comentarios, error: errorComentarios } = await supabase
@@ -902,9 +894,8 @@ export default function Dashboard() {
           .select('lead_id, texto, created_at, categoria')
           .in('lead_id', cardIds)
           .order('created_at', { ascending: false });
-        
+
         if (!errorComentarios && comentarios) {
-          // Agrupar por lead_id y tomar solo el último
           const ultimosMap = {};
           comentarios.forEach(c => {
             if (!ultimosMap[c.lead_id]) {
