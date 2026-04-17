@@ -89,7 +89,8 @@ export default function Dashboard() {
   // Estado para filtro de recordatorios automáticos (Emdi)
   const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
   const [filtroGestionWA, setFiltroGestionWA] = useState(null); // null = todos, 'respond' = false, 'personal' = true
-  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false }); // Ordenamiento de la tabla
+  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false });
+  const [filtroSinSeguimiento, setFiltroSinSeguimiento] = useState(false);
   const [monthConfigs, setMonthConfigs] = useState({});
 
   const userName = localStorage.getItem('user_name') || 'Comercial';
@@ -861,12 +862,28 @@ export default function Dashboard() {
         query = query.eq('gestion_whatsapp_personal', true);
       }
 
+      // Filtrar leads sin seguimiento
+      if (filtroSinSeguimiento) {
+        const { data: conSeg } = await supabase
+          .from('comentarios')
+          .select('lead_id')
+          .eq('origen', 'Seguimiento');
+        const idsConSeg = [...new Set((conSeg || []).map(c => c.lead_id))];
+        if (idsConSeg.length > 0) {
+          query = query.not('card_id', 'in', `(${idsConSeg.join(',')})`);
+        }
+      }
+
       // Ordenar y paginar
       const from = page * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
-      
+
+      const effectiveSort = filtroSinSeguimiento
+        ? { field: 'updated_at', ascending: true }
+        : sortConfig;
+
       query = query
-        .order(sortConfig.field, { ascending: sortConfig.ascending, nullsFirst: true })
+        .order(effectiveSort.field, { ascending: effectiveSort.ascending, nullsFirst: true })
         .range(from, to);
 
       const { data, error, count } = await query;
@@ -904,7 +921,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -965,7 +982,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField]);
+  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1276,6 +1293,7 @@ export default function Dashboard() {
                         setSelectedFuente([]);
                         setSelectedReferido(null);
                         setFiltroGestionWA(null);
+                        setFiltroSinSeguimiento(false);
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
@@ -1319,6 +1337,8 @@ export default function Dashboard() {
                   onFiltroGestionWAChange={setFiltroGestionWA}
                   sortConfig={sortConfig}
                   onSortChange={setSortConfig}
+                  filtroSinSeguimiento={filtroSinSeguimiento}
+                  onFiltroSinSeguimientoChange={setFiltroSinSeguimiento}
                   configTags={configTags}
                   coloresFases={coloresFases}
                   onRefreshData={() => {

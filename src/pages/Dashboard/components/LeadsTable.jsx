@@ -349,6 +349,8 @@ const LeadsTable = ({
   // Props de ordenamiento
   sortConfig = { field: 'updated_at', ascending: false },
   onSortChange,
+  filtroSinSeguimiento = false,
+  onFiltroSinSeguimientoChange,
   // Configuración de colores de tags
   configTags = {},
   // Colores de las fases para indicador visual
@@ -595,7 +597,20 @@ const LeadsTable = ({
                 </button>
               </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">
+                <button
+                  onClick={() => onFiltroSinSeguimientoChange?.(!filtroSinSeguimiento)}
+                  className="flex items-center gap-1 hover:text-slate-600 transition-colors group"
+                  title={filtroSinSeguimiento ? 'Mostrando leads sin seguimiento (más antiguos primero). Clic para desactivar.' : 'Mostrar leads sin seguimiento primero'}
+                >
+                  Seguimiento
+                  {filtroSinSeguimiento ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-[#1717AF]" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                  )}
+                </button>
+              </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
                 <div className="flex items-center justify-end gap-2">
