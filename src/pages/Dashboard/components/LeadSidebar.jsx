@@ -905,14 +905,35 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     }
   }, [isOpen, activeTab, subActiveTab, lead?.card_id, fetchPitchResultados]);
 
-  // Reset del formulario y edición cuando cambia el lead
+  // Reset del formulario, edición y sub-tab cuando cambia el lead.
+  // Importante: el sub-tab vuelve a 'informacion' para que al abrir otro lead
+  // siempre arranque ahí, no donde el usuario lo dejó en el lead anterior.
   useEffect(() => {
+    setSubActiveTab('informacion');
     setPitchFormValues({});
     setPitchSelectOpenId(null);
     setEditingPitchId(null);
     setEditingPitchValues({});
     setEditingPitchSelectOpenId(null);
   }, [lead?.card_id]);
+
+  // Log de diagnóstico: imprime la configuración de los campos del Pitch
+  // cuando entran al sub-tab, para verificar que `depende_de` y `nombre`
+  // coinciden con lo configurado en la BD.
+  useEffect(() => {
+    if (activeTab === 'info' && subActiveTab === 'pitch' && pitchFields.length > 0) {
+      console.log('[Pitch] Configuración de campos (orden | nombre | depende_de):');
+      pitchFields.forEach((f, i) => {
+        console.log(`  ${i + 1}.`, JSON.stringify({
+          nombre: f.nombre,
+          orden: f.orden,
+          depende_de: f.depende_de,
+          dinamico: f.dinamico,
+          tipo: f.tipo,
+        }));
+      });
+    }
+  }, [activeTab, subActiveTab, pitchFields]);
 
   // Determina si un campo del Pitch debe mostrarse según su dependencia
   // (depende_de). Usa los valores LOCALES (form nuevo o edición), no los de leads.
