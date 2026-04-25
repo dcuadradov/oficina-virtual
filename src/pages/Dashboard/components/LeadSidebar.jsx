@@ -914,24 +914,98 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     setEditingPitchSelectOpenId(null);
   }, [lead?.card_id]);
 
-  // Construye el payload card_id + columnas a partir de los valores y los fields
+  // Determina si un campo del Pitch debe mostrarse según su dependencia
+  // (depende_de). Usa los valores LOCALES (form nuevo o edición), no los de leads.
+  const shouldShowPitchField = (field, values) => {
+    if (!field?.depende_de) return true;
+    const dep = parseDependeDeField(field.depende_de);
+    if (!dep) return true;
+
+    const parentField = pitchFields.find(f => f.nombre === dep.fieldName);
+    if (!parentField) return true;
+
+    const parentValue = values?.[parentField.id];
+
+    // Si la condición es solo "fieldName" (sin valor), el hijo se muestra
+    // cuando el padre tenga cualquier valor (no vacío).
+    if (dep.valor === null) {
+      return parentValue !== undefined && parentValue !== null && parentValue !== '';
+    }
+
+    return parentValue === dep.valor;
+  };
+
+  // Convierte una fila guardada (con columnas attended, pitch_stage, ...) al
+  // formato { [field.id]: value } que esperan helpers de render/dependencia
+  const resultadoToValues = (resultado) => {
+    const values = {};
+    pitchFields.forEach(field => {
+      const col = getPitchColumnForField(field);
+      if (col) values[field.id] = resultado?.[col] ?? '';
+    });
+    return values;
+  };
+
+  // Construye el payload card_id + columnas a partir de los valores y los fields.
+  // Sólo guarda valores de campos que pasen la condición de dependencia; los
+  // campos ocultos quedan como null para evitar guardar datos huérfanos.
   const buildPitchPayload = (values) => {
     const payload = {};
     pitchFields.forEach(field => {
       const col = getPitchColumnForField(field);
       if (!col) return;
+      const visible = shouldShowPitchField(field, values);
       const v = values[field.id];
-      payload[col] = (v === undefined || v === '') ? null : v;
+      payload[col] = (!visible || v === undefined || v === '') ? null : v;
     });
     return payload;
   };
 
-  // Validación: requiere al menos un valor en alguno de los 4 campos para no
-  // crear filas completamente vacías
+  // Validación: requiere al menos un valor en alguno de los campos visibles
+  // (respetando dependencias) para no crear filas completamente vacías.
   const isPitchFormValid = () => {
     return pitchFields.some(field => {
+      if (!shouldShowPitchField(field, pitchFormValues)) return false;
       const v = pitchFormValues[field.id];
       return v !== undefined && v !== null && v !== '';
+    });
+  };
+
+  // Setter del form nuevo que limpia los hijos cuando cambia el padre,
+  // para que no queden valores huérfanos de campos que ya no se ven.
+  const setPitchFormValue = (fieldId, val) => {
+    setPitchFormValues(prev => {
+      const next = { ...prev, [fieldId]: val };
+      // Si este field tiene hijos que dependían de un valor específico, limpiarlos
+      const changedField = pitchFields.find(f => f.id === fieldId);
+      if (changedField) {
+        pitchFields.forEach(f => {
+          const dep = parseDependeDeField(f.depende_de);
+          if (!dep) return;
+          if (dep.fieldName === changedField.nombre && !shouldShowPitchField(f, next)) {
+            next[f.id] = '';
+          }
+        });
+      }
+      return next;
+    });
+  };
+
+  // Mismo setter pero para el modo edición de una tarjeta
+  const setEditingPitchValue = (fieldId, val) => {
+    setEditingPitchValues(prev => {
+      const next = { ...prev, [fieldId]: val };
+      const changedField = pitchFields.find(f => f.id === fieldId);
+      if (changedField) {
+        pitchFields.forEach(f => {
+          const dep = parseDependeDeField(f.depende_de);
+          if (!dep) return;
+          if (dep.fieldName === changedField.nombre && !shouldShowPitchField(f, next)) {
+            next[f.id] = '';
+          }
+        });
+      }
+      return next;
     });
   };
 
@@ -3497,14 +3571,16 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                           ) : (
                             <>
                               <div className="space-y-3">
-                                {pitchFields.map(field => renderPitchInput({
-                                  field,
-                                  values: pitchFormValues,
-                                  setValue: (id, val) => setPitchFormValues(prev => ({ ...prev, [id]: val })),
-                                  openSelectId: pitchSelectOpenId,
-                                  setOpenSelectId: setPitchSelectOpenId,
-                                  keyPrefix: 'new',
-                                }))}
+                                {pitchFields
+                                  .filter(field => shouldShowPitchField(field, pitchFormValues))
+                                  .map(field => renderPitchInput({
+                                    field,
+                                    values: pitchFormValues,
+                                    setValue: setPitchFormValue,
+                                    openSelectId: pitchSelectOpenId,
+                                    setOpenSelectId: setPitchSelectOpenId,
+                                    keyPrefix: 'new',
+                                  }))}
                               </div>
 
                               <div className="flex justify-end mt-4">
@@ -3637,32 +3713,40 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
 
                                     {isEditing ? (
                                       <div className="space-y-3">
-                                        {pitchFields.map(field => renderPitchInput({
-                                          field,
-                                          values: editingPitchValues,
-                                          setValue: (id, val) => setEditingPitchValues(prev => ({ ...prev, [id]: val })),
-                                          openSelectId: editingPitchSelectOpenId,
-                                          setOpenSelectId: setEditingPitchSelectOpenId,
-                                          keyPrefix: `edit-${resultado.id}`,
-                                        }))}
+                                        {pitchFields
+                                          .filter(field => shouldShowPitchField(field, editingPitchValues))
+                                          .map(field => renderPitchInput({
+                                            field,
+                                            values: editingPitchValues,
+                                            setValue: setEditingPitchValue,
+                                            openSelectId: editingPitchSelectOpenId,
+                                            setOpenSelectId: setEditingPitchSelectOpenId,
+                                            keyPrefix: `edit-${resultado.id}`,
+                                          }))}
                                       </div>
                                     ) : (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {pitchFields.map(field => {
-                                          const col = getPitchColumnForField(field);
-                                          const v = col ? resultado[col] : null;
-                                          return (
-                                            <div key={field.id} className="p-2.5 bg-slate-50 rounded-xl">
-                                              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">
-                                                {field.nombre}
-                                              </p>
-                                              <p className={`text-sm leading-snug ${v ? 'text-slate-700' : 'text-slate-400 italic'}`}>
-                                                {v || 'Sin dato'}
-                                              </p>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
+                                      (() => {
+                                        const cardValues = resultadoToValues(resultado);
+                                        const visibles = pitchFields.filter(field => shouldShowPitchField(field, cardValues));
+                                        return (
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {visibles.map(field => {
+                                              const col = getPitchColumnForField(field);
+                                              const v = col ? resultado[col] : null;
+                                              return (
+                                                <div key={field.id} className="p-2.5 bg-slate-50 rounded-xl">
+                                                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">
+                                                    {field.nombre}
+                                                  </p>
+                                                  <p className={`text-sm leading-snug ${v ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                                    {v || 'Sin dato'}
+                                                  </p>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        );
+                                      })()
                                     )}
                                   </div>
                                 );
