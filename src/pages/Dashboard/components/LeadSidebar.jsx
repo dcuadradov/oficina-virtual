@@ -37,7 +37,9 @@ import {
   AlertCircle,
   RefreshCcw,
   History,
-  Tag
+  Tag,
+  Plus,
+  Trophy
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
@@ -434,9 +436,36 @@ const parseDependeDeField = (dependeDeStr) => {
   return null;
 };
 
+// =============================================================================
+// PITCH (sub-tab)
+// =============================================================================
+// Id del formulario "Pitch" en formularios_creacion_leads
+const PITCH_FORMULARIO_ID = '88c92ad1-899e-4c7d-8e2e-42d523fe55c7';
+
+// Normaliza nombres de campo para hacer matching robusto sin acentos ni signos
+const normalizePitchFieldName = (name) =>
+  (name || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[¿?¡!]/g, '')
+    .trim();
+
+// Mapeo nombre del campo (normalizado) → columna en pitches_resultados
+const PITCH_FIELD_NAME_TO_COLUMN = {
+  'reprogramo': 'rescheduled',
+  'en que etapa se quedo': 'pitch_stage',
+  'resultado del pitch': 'pitch_result',
+  'asistio al pitch': 'attended',
+};
+
+const getPitchColumnForField = (field) =>
+  PITCH_FIELD_NAME_TO_COLUMN[normalizePitchFieldName(field?.nombre)] || null;
+
 const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'resumen-ia'
+  const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'pitch' | 'resumen-ia'
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   
@@ -581,6 +610,20 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const [infoGeneralFields, setInfoGeneralFields] = useState([]);
   const [infoGeneralSecciones, setInfoGeneralSecciones] = useState([]);
   const [loadingInfoGeneral, setLoadingInfoGeneral] = useState(false);
+
+  // Estados para sub-tab Pitch (formulario nuevo + lista de resultados)
+  const [pitchFormulario, setPitchFormulario] = useState(null);
+  const [pitchFields, setPitchFields] = useState([]);
+  const [loadingPitchForm, setLoadingPitchForm] = useState(false);
+  const [pitchFormValues, setPitchFormValues] = useState({}); // { fieldId: value } para nueva entrada
+  const [pitchSelectOpenId, setPitchSelectOpenId] = useState(null); // dropdown abierto en form nuevo
+  const [pitchResultados, setPitchResultados] = useState([]);
+  const [loadingPitchResultados, setLoadingPitchResultados] = useState(false);
+  const [savingPitch, setSavingPitch] = useState(false);
+  const [editingPitchId, setEditingPitchId] = useState(null);
+  const [editingPitchValues, setEditingPitchValues] = useState({}); // { fieldId: value }
+  const [editingPitchSelectOpenId, setEditingPitchSelectOpenId] = useState(null);
+  const [savingEditPitchId, setSavingEditPitchId] = useState(null);
   
   // Estados para TICI (Recordatorios automáticos)
   const [subTabTici, setSubTabTici] = useState('programado'); // 'programado' | 'historial'
@@ -762,6 +805,195 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     
     fetchInfoGeneralFormulario();
   }, [isOpen, lead?.card_id]);
+
+  // ===========================================================================
+  // PITCH - sub-tab
+  // ===========================================================================
+
+  // Cargar el formulario "Pitch" y sus campos (una sola vez al abrir el sidebar)
+  useEffect(() => {
+    const fetchPitchFormulario = async () => {
+      if (!isOpen) return;
+
+      setLoadingPitchForm(true);
+      try {
+        const { data: formData, error: formError } = await supabase
+          .from('formularios_creacion_leads')
+          .select('*')
+          .eq('id', PITCH_FORMULARIO_ID)
+          .single();
+
+        if (formError || !formData) {
+          console.warn('[Pitch] No se encontró formulario Pitch:', formError);
+          setPitchFormulario(null);
+          setPitchFields([]);
+          return;
+        }
+
+        setPitchFormulario(formData);
+
+        const { data: fieldsData, error: fieldsError } = await supabase
+          .from('fields_formularios_relacion')
+          .select(`
+            orden,
+            field:fields_formulario_creacion_leads (
+              id,
+              nombre,
+              tipo,
+              opciones,
+              obligatorio,
+              tooltip,
+              dinamico,
+              depende_de,
+              estado,
+              campo_origen
+            )
+          `)
+          .eq('formulario_id', formData.id);
+
+        if (fieldsError) throw fieldsError;
+
+        const fields = (fieldsData || [])
+          .filter(item => item.field && item.field.estado === 'activo')
+          .map(item => {
+            const ordenInfo = parseOrdenField(item.orden);
+            return {
+              ...item.field,
+              ordenRaw: item.orden,
+              seccion: ordenInfo.seccion,
+              orden: ordenInfo.orden,
+            };
+          })
+          .sort((a, b) => a.orden - b.orden);
+
+        setPitchFields(fields);
+      } catch (e) {
+        console.error('[Pitch] Error cargando formulario Pitch:', e);
+        setPitchFormulario(null);
+        setPitchFields([]);
+      } finally {
+        setLoadingPitchForm(false);
+      }
+    };
+
+    fetchPitchFormulario();
+  }, [isOpen]);
+
+  // Cargar resultados de pitches del lead actual
+  const fetchPitchResultados = useCallback(async () => {
+    if (!lead?.card_id) return;
+    setLoadingPitchResultados(true);
+    try {
+      const { data, error } = await supabase
+        .from('pitches_resultados')
+        .select('*')
+        .eq('card_id', lead.card_id)
+        .order('created_at', { ascending: true }); // ascendente para numerar Pitch 1, 2, 3...
+      if (error) throw error;
+      setPitchResultados(data || []);
+    } catch (e) {
+      console.error('[Pitch] Error cargando resultados:', e);
+      setPitchResultados([]);
+    } finally {
+      setLoadingPitchResultados(false);
+    }
+  }, [lead?.card_id]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'info' && subActiveTab === 'pitch' && lead?.card_id) {
+      fetchPitchResultados();
+    }
+  }, [isOpen, activeTab, subActiveTab, lead?.card_id, fetchPitchResultados]);
+
+  // Reset del formulario y edición cuando cambia el lead
+  useEffect(() => {
+    setPitchFormValues({});
+    setPitchSelectOpenId(null);
+    setEditingPitchId(null);
+    setEditingPitchValues({});
+    setEditingPitchSelectOpenId(null);
+  }, [lead?.card_id]);
+
+  // Construye el payload card_id + columnas a partir de los valores y los fields
+  const buildPitchPayload = (values) => {
+    const payload = {};
+    pitchFields.forEach(field => {
+      const col = getPitchColumnForField(field);
+      if (!col) return;
+      const v = values[field.id];
+      payload[col] = (v === undefined || v === '') ? null : v;
+    });
+    return payload;
+  };
+
+  // Validación: requiere al menos un valor en alguno de los 4 campos para no
+  // crear filas completamente vacías
+  const isPitchFormValid = () => {
+    return pitchFields.some(field => {
+      const v = pitchFormValues[field.id];
+      return v !== undefined && v !== null && v !== '';
+    });
+  };
+
+  // Crear nuevo resultado de pitch
+  const handleCrearResultadoPitch = async () => {
+    if (!lead?.card_id || savingPitch || !isPitchFormValid()) return;
+    setSavingPitch(true);
+    try {
+      const payload = { card_id: lead.card_id, ...buildPitchPayload(pitchFormValues) };
+      const { error } = await supabase.from('pitches_resultados').insert(payload);
+      if (error) throw error;
+
+      setPitchFormValues({});
+      setPitchSelectOpenId(null);
+      await fetchPitchResultados();
+    } catch (e) {
+      console.error('[Pitch] Error creando resultado:', e);
+      alert('No se pudo crear el resultado. Intenta de nuevo.');
+    } finally {
+      setSavingPitch(false);
+    }
+  };
+
+  // Iniciar edición de una tarjeta
+  const handleStartEditPitch = (resultado) => {
+    const initialValues = {};
+    pitchFields.forEach(field => {
+      const col = getPitchColumnForField(field);
+      initialValues[field.id] = col ? (resultado[col] || '') : '';
+    });
+    setEditingPitchValues(initialValues);
+    setEditingPitchId(resultado.id);
+    setEditingPitchSelectOpenId(null);
+  };
+
+  const handleCancelEditPitch = () => {
+    setEditingPitchId(null);
+    setEditingPitchValues({});
+    setEditingPitchSelectOpenId(null);
+  };
+
+  const handleSaveEditPitch = async () => {
+    if (!editingPitchId || savingEditPitchId) return;
+    setSavingEditPitchId(editingPitchId);
+    try {
+      const payload = buildPitchPayload(editingPitchValues);
+      const { error } = await supabase
+        .from('pitches_resultados')
+        .update(payload)
+        .eq('id', editingPitchId);
+      if (error) throw error;
+      handleCancelEditPitch();
+      await fetchPitchResultados();
+    } catch (e) {
+      console.error('[Pitch] Error editando resultado:', e);
+      alert('No se pudo guardar el cambio. Intenta de nuevo.');
+    } finally {
+      setSavingEditPitchId(null);
+    }
+  };
+
+  // ===========================================================================
 
   // Cargar configuración del stepper dinámico
   useEffect(() => {
@@ -2560,6 +2792,16 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     Información
                   </button>
                   <button
+                    onClick={() => setSubActiveTab('pitch')}
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                      subActiveTab === 'pitch'
+                        ? 'bg-white text-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Pitch
+                  </button>
+                  <button
                     onClick={() => setSubActiveTab('resumen-ia')}
                     className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
                       subActiveTab === 'resumen-ia'
@@ -3139,6 +3381,298 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       )}
                     </div>
                   )}
+
+                  {subActiveTab === 'pitch' && (() => {
+                    // Render de un campo del formulario Pitch (modo input controlado)
+                    const renderPitchInput = ({
+                      field,
+                      values,
+                      setValue,
+                      openSelectId,
+                      setOpenSelectId,
+                      keyPrefix = 'new',
+                    }) => {
+                      const value = values[field.id] ?? '';
+
+                      // Campo SELECT
+                      if (field.tipo === 'select' && field.opciones) {
+                        const parsed = parseOpcionesField(field.opciones);
+                        const opciones = parsed.map(o => o.value);
+                        const isOpen = openSelectId === `${keyPrefix}-${field.id}`;
+
+                        return (
+                          <div key={field.id} className="relative">
+                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                              {field.nombre}
+                              {field.obligatorio && <span className="text-rose-500 ml-1">*</span>}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setOpenSelectId(isOpen ? null : `${keyPrefix}-${field.id}`)}
+                              className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-white border rounded-xl text-left transition-colors ${
+                                isOpen ? 'border-[#1717AF]/40 ring-1 ring-[#1717AF]/20' : 'border-slate-200 hover:border-slate-300'
+                              } ${value ? 'text-slate-700' : 'text-slate-400'}`}
+                            >
+                              <span className="truncate">{value || 'Seleccionar...'}</span>
+                              <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isOpen && (
+                              <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                                <div className="max-h-48 overflow-y-auto">
+                                  {opciones.length > 0 ? (
+                                    opciones.map(opt => (
+                                      <button
+                                        key={opt}
+                                        type="button"
+                                        onClick={() => {
+                                          setValue(field.id, opt);
+                                          setOpenSelectId(null);
+                                        }}
+                                        className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                                          opt === value
+                                            ? 'bg-[#1717AF] text-white font-medium'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        {opt}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin opciones</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // Campo TEXTO (default)
+                      return (
+                        <div key={field.id}>
+                          <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                            {field.nombre}
+                            {field.obligatorio && <span className="text-rose-500 ml-1">*</span>}
+                          </label>
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={(e) => setValue(field.id, e.target.value)}
+                            placeholder={field.tooltip || 'Escribe aquí...'}
+                            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]/40 transition-colors"
+                          />
+                        </div>
+                      );
+                    };
+
+                    // Tarjetas en orden descendente (más reciente primero), pero
+                    // numeradas según orden ascendente (Pitch 1 = más antiguo)
+                    const tarjetas = pitchResultados
+                      .map((r, idx) => ({ ...r, numero: idx + 1 }))
+                      .slice()
+                      .reverse();
+
+                    const formValid = isPitchFormValid();
+
+                    return (
+                      <div className="space-y-5">
+                        {/* Card del formulario nuevo */}
+                        <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Trophy size={18} className="text-amber-500" />
+                            <h4 className="font-semibold text-slate-700">Pitch</h4>
+                            <span className="text-[10px] font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                              Resultado
+                            </span>
+                          </div>
+
+                          {loadingPitchForm ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 size={20} className="animate-spin text-amber-500" />
+                            </div>
+                          ) : pitchFields.length === 0 ? (
+                            <div className="text-center py-6 text-sm text-slate-500">
+                              No se encontró el formulario Pitch.
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-3">
+                                {pitchFields.map(field => renderPitchInput({
+                                  field,
+                                  values: pitchFormValues,
+                                  setValue: (id, val) => setPitchFormValues(prev => ({ ...prev, [id]: val })),
+                                  openSelectId: pitchSelectOpenId,
+                                  setOpenSelectId: setPitchSelectOpenId,
+                                  keyPrefix: 'new',
+                                }))}
+                              </div>
+
+                              <div className="flex justify-end mt-4">
+                                <button
+                                  type="button"
+                                  onClick={handleCrearResultadoPitch}
+                                  disabled={!formValid || savingPitch}
+                                  className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-amber-200 flex items-center gap-2 ${
+                                    !formValid || savingPitch
+                                      ? 'bg-amber-300 cursor-not-allowed'
+                                      : 'bg-amber-500 hover:bg-amber-600'
+                                  }`}
+                                >
+                                  {savingPitch ? (
+                                    <>
+                                      <Loader2 size={14} className="animate-spin" />
+                                      Guardando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus size={14} />
+                                      Crear resultado
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Lista de tarjetas de resultados */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3 px-1">
+                            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                              <History size={12} className="text-[#1717AF]" />
+                              Historial de pitches
+                            </h3>
+                            {pitchResultados.length > 0 && (
+                              <span className="text-[11px] text-slate-400">
+                                {pitchResultados.length} registro{pitchResultados.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+
+                          {loadingPitchResultados ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 size={20} className="animate-spin text-[#1717AF]" />
+                            </div>
+                          ) : tarjetas.length === 0 ? (
+                            <div className="text-center py-8 text-sm text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                              Aún no hay pitches registrados para este lead.
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {tarjetas.map(resultado => {
+                                const isEditing = editingPitchId === resultado.id;
+                                const isSavingThis = savingEditPitchId === resultado.id;
+                                const fechaCreacion = resultado.created_at
+                                  ? new Date(resultado.created_at).toLocaleDateString('es-ES', {
+                                      day: 'numeric', month: 'short', year: 'numeric',
+                                      hour: 'numeric', minute: '2-digit', hour12: true,
+                                    })
+                                  : '';
+                                const fueEditado = resultado.updated_at &&
+                                  resultado.created_at &&
+                                  new Date(resultado.updated_at).getTime() - new Date(resultado.created_at).getTime() > 1000;
+
+                                return (
+                                  <div
+                                    key={resultado.id}
+                                    className={`p-4 bg-white rounded-2xl border transition-all ${
+                                      isEditing
+                                        ? 'border-[#1717AF]/40 shadow-sm shadow-[#1717AF]/10'
+                                        : 'border-slate-100 hover:border-slate-200 hover:shadow-sm'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                                          <Trophy size={14} className="text-amber-600" />
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-semibold text-slate-700">
+                                            Pitch {resultado.numero}
+                                          </p>
+                                          {fechaCreacion && (
+                                            <p className="text-[10px] text-slate-400">
+                                              {fechaCreacion}
+                                              {fueEditado && <span className="ml-1 italic">(editado)</span>}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {!isEditing ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartEditPitch(resultado)}
+                                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-[#1717AF] hover:bg-[#1717AF]/5 rounded-lg transition-colors"
+                                        >
+                                          <Edit2 size={12} />
+                                          Editar
+                                        </button>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={handleCancelEditPitch}
+                                            disabled={isSavingThis}
+                                            className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                                            title="Cancelar"
+                                          >
+                                            <X size={12} />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={handleSaveEditPitch}
+                                            disabled={isSavingThis}
+                                            className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 transition-colors disabled:opacity-50"
+                                            title="Guardar"
+                                          >
+                                            {isSavingThis ? (
+                                              <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                              <Check size={12} />
+                                            )}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {isEditing ? (
+                                      <div className="space-y-3">
+                                        {pitchFields.map(field => renderPitchInput({
+                                          field,
+                                          values: editingPitchValues,
+                                          setValue: (id, val) => setEditingPitchValues(prev => ({ ...prev, [id]: val })),
+                                          openSelectId: editingPitchSelectOpenId,
+                                          setOpenSelectId: setEditingPitchSelectOpenId,
+                                          keyPrefix: `edit-${resultado.id}`,
+                                        }))}
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {pitchFields.map(field => {
+                                          const col = getPitchColumnForField(field);
+                                          const v = col ? resultado[col] : null;
+                                          return (
+                                            <div key={field.id} className="p-2.5 bg-slate-50 rounded-xl">
+                                              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">
+                                                {field.nombre}
+                                              </p>
+                                              <p className={`text-sm leading-snug ${v ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+                                                {v || 'Sin dato'}
+                                              </p>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {subActiveTab === 'resumen-ia' && (
                     <div className="space-y-6">
