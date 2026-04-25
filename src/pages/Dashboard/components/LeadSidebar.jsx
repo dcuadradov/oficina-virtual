@@ -404,13 +404,16 @@ const parseOrdenField = (ordenStr) => {
 const parseOpcionesField = (opcionesStr) => {
   if (!opcionesStr) return [];
   
-  // Usar | como separador para evitar conflictos con comas en el texto
   return opcionesStr.split('|').map(opt => {
+    const matchGrupo = opt.trim().match(/^(.+?)\s*\((.+?)-(\d+)\)$/);
+    if (matchGrupo) {
+      return { value: matchGrupo[1].trim(), grupo: matchGrupo[2].trim(), orden: parseInt(matchGrupo[3]) };
+    }
     const match = opt.trim().match(/^(.+?)\s*\((\d+)\)$/);
     if (match) {
-      return { value: match[1].trim(), orden: parseInt(match[2]) };
+      return { value: match[1].trim(), grupo: null, orden: parseInt(match[2]) };
     }
-    return { value: opt.trim(), orden: 999 };
+    return { value: opt.trim(), grupo: null, orden: 999 };
   }).sort((a, b) => a.orden - b.orden);
 };
 
@@ -424,6 +427,9 @@ const parseDependeDeField = (dependeDeStr) => {
   const parts = dependeDeStr.split('|').map(s => s.trim());
   if (parts.length >= 2) {
     return { fieldName: parts[0], valor: parts[1] };
+  }
+  if (parts.length === 1 && parts[0]) {
+    return { fieldName: parts[0], valor: null };
   }
   return null;
 };
@@ -973,7 +979,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     'motivacion_detalle', 'nivel_ingles', 'ano_residencia', 'lugar_trabajo',
     'universidad', 'como_adquirio_ingles', 'como_adquirio_ingles_detalle',
     'cuando_empezar', 'especialidad', 'plan_pago', 'consulta_decision', 'referido_por',
-    'fuente_dato', 'rango_de_inversion', 'hizo_pitch'
+    'fuente_dato', 'rango_de_inversion', 'hizo_pitch', 'sexo', 'edad'
   ];
 
   const handleSaveField = async (fieldName, value) => {
@@ -1027,7 +1033,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                 referido_por: fieldName === 'referido_por' ? value : (getFieldValue('referido_por') || lead.referido_por),
                 fuente_dato: fieldName === 'fuente_dato' ? value : (getFieldValue('fuente_dato') || lead.fuente_dato),
                 rango_de_inversion: fieldName === 'rango_de_inversion' ? value : (getFieldValue('rango_de_inversion') || lead.rango_de_inversion),
-                hizo_pitch: fieldName === 'hizo_pitch' ? value : (getFieldValue('hizo_pitch') || lead.hizo_pitch)
+                hizo_pitch: fieldName === 'hizo_pitch' ? value : (getFieldValue('hizo_pitch') || lead.hizo_pitch),
+                sexo: fieldName === 'sexo' ? value : (getFieldValue('sexo') || lead.sexo),
+                edad: fieldName === 'edad' ? value : (getFieldValue('edad') || lead.edad)
               }
             })
           });
@@ -2590,8 +2598,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             if (!field.dinamico || !field.depende_de) return true;
                             const dep = parseDependeDeField(field.depende_de);
                             if (!dep) return true;
+                            if (dep.valor === null) return true;
                             
-                            // Buscar el campo del que depende
                             const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
                             if (!parentField) return true;
                             
@@ -2611,7 +2619,16 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             
                             // Campo tipo SELECT
                             if (field.tipo === 'select' && field.opciones) {
-                              const opciones = parseOpcionesField(field.opciones).map(o => o.value);
+                              let parsedOpciones = parseOpcionesField(field.opciones);
+                              const dep = parseDependeDeField(field.depende_de);
+                              if (dep && dep.valor === null) {
+                                const parentField = infoGeneralFields.find(f => f.nombre === dep.fieldName);
+                                const parentValue = parentField ? getFieldValueDynamic(parentField) : null;
+                                if (parentValue) {
+                                  parsedOpciones = parsedOpciones.filter(o => o.grupo === parentValue);
+                                }
+                              }
+                              const opciones = parsedOpciones.map(o => o.value);
                               const filteredOptions = opciones.filter(opt => 
                                 opt.toLowerCase().includes(infoGeneralSearchQuery.toLowerCase())
                               );
@@ -2680,8 +2697,22 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                         {displayValue}
                                       </p>
                                     </div>
-                                    <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <ChevronDown size={10} />
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {value && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleCopy(value, field.nombre); }}
+                                          className={`p-1 rounded-md transition-all duration-150 ${
+                                            copiedField === field.nombre
+                                              ? 'bg-emerald-100 text-emerald-600'
+                                              : 'text-slate-400 hover:bg-white hover:text-slate-600'
+                                          }`}
+                                        >
+                                          {copiedField === field.nombre ? <Check size={12} /> : <Copy size={12} />}
+                                        </button>
+                                      )}
+                                      <div className="p-1 text-slate-300">
+                                        <ChevronDown size={10} />
+                                      </div>
                                     </div>
                                   </div>
                                   {isSaving && (
@@ -2741,8 +2772,22 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       {displayValue}
                                     </p>
                                   </div>
-                                  <div className="p-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Edit2 size={10} />
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {value && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleCopy(value, field.nombre); }}
+                                        className={`p-1 rounded-md transition-all duration-150 ${
+                                          copiedField === field.nombre
+                                            ? 'bg-emerald-100 text-emerald-600'
+                                            : 'text-slate-400 hover:bg-white hover:text-slate-600'
+                                        }`}
+                                      >
+                                        {copiedField === field.nombre ? <Check size={12} /> : <Copy size={12} />}
+                                      </button>
+                                    )}
+                                    <div className="p-1 text-slate-300">
+                                      <Edit2 size={10} />
+                                    </div>
                                   </div>
                                 </div>
                                 {isSaving && (

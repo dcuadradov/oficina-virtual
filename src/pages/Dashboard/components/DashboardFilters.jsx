@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus, Smartphone } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -154,10 +154,25 @@ const DashboardFilters = ({
   showOnlyComercial = false,
   searchQuery = '',
   onSearchChange,
-  onRefreshComerciales
+  onRefreshComerciales,
+  dateFilterField = 'created_at',
+  onDateFilterFieldChange,
+  showDateFilterToggle = true,
+  puedeVerTodos = false,
+  monthConfigs = {},
+  onSaveMonthConfig,
+  showTagFilter = true,
+  showFuenteFilter = true,
+  showReferidoFilter = true,
+  showGestionWAFilter = true
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
+  const [configMonth, setConfigMonth] = useState(null);
+  const [configCalMonth, setConfigCalMonth] = useState(null);
+  const [configRange, setConfigRange] = useState({ start: null, end: null });
+  const [configStep, setConfigStep] = useState('start');
+  const [savingConfig, setSavingConfig] = useState(false);
   const [periodoOpen, setPeriodoOpen] = useState(false);
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
@@ -273,7 +288,7 @@ const DashboardFilters = ({
   // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('.filter-dropdown')) {
+      if (!e.target.closest('.filter-dropdown') && !e.target.closest('.month-config-modal')) {
         setComercialOpen(false);
         setMesOpen(false);
         setPeriodoOpen(false);
@@ -387,10 +402,294 @@ const DashboardFilters = ({
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  // Config month calendar helpers
+  const openMonthConfig = (monthValue) => {
+    const existing = monthConfigs[monthValue];
+    const [y, m] = monthValue.split('-').map(Number);
+    if (existing) {
+      setConfigRange({
+        start: existing.fecha_inicio,
+        end: existing.fecha_fin || null
+      });
+      setConfigStep(existing.fecha_fin ? 'done' : 'end');
+    } else {
+      const lastDay = new Date(y, m, 0).getDate();
+      setConfigRange({
+        start: `${monthValue}-01`,
+        end: `${monthValue}-${String(lastDay).padStart(2, '0')}`
+      });
+      setConfigStep('done');
+    }
+    setConfigMonth(monthValue);
+    setConfigCalMonth(new Date(y, m - 1, 1));
+    setMesOpen(false);
+  };
+
+  const configMonthLabel = useMemo(() => {
+    if (!configMonth) return '';
+    const [y, m] = configMonth.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    const name = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }, [configMonth]);
+
+  const configCalendarDays = useMemo(() => {
+    if (!configCalMonth) return [];
+    const y = configCalMonth.getFullYear();
+    const month = configCalMonth.getMonth();
+    const firstDay = new Date(y, month, 1);
+    let startDayOfWeek = firstDay.getDay();
+    if (startDayOfWeek === 0) startDayOfWeek = 7;
+    startDayOfWeek -= 1;
+    const daysInMonth = new Date(y, month + 1, 0).getDate();
+    const prevMonthDays = new Date(y, month, 0).getDate();
+    const days = [];
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      days.push({ date: new Date(y, month - 1, prevMonthDays - i), isCurrentMonth: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ date: new Date(y, month, d), isCurrentMonth: true });
+    }
+    const remaining = 42 - days.length;
+    for (let d = 1; d <= remaining; d++) {
+      days.push({ date: new Date(y, month + 1, d), isCurrentMonth: false });
+    }
+    return days;
+  }, [configCalMonth]);
+
+  const configCalMonthLabel = useMemo(() => {
+    if (!configCalMonth) return '';
+    const name = configCalMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }, [configCalMonth]);
+
+  const isInConfigRange = (date) => {
+    if (!configRange.start) return false;
+    const s = new Date(configRange.start + 'T00:00:00');
+    if (!configRange.end) return formatDateValue(date) === configRange.start;
+    const e = new Date(configRange.end + 'T00:00:00');
+    return date >= s && date <= e;
+  };
+
+  const isConfigStart = (date) => configRange.start && formatDateValue(date) === configRange.start;
+  const isConfigEnd = (date) => configRange.end && formatDateValue(date) === configRange.end;
+
+  const handleConfigDayClick = (date, isCurrentMonth) => {
+    if (!isCurrentMonth) {
+      setConfigCalMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+    const val = formatDateValue(date);
+    if (configStep === 'start' || configStep === 'done') {
+      setConfigRange({ start: val, end: null });
+      setConfigStep('end');
+    } else if (configStep === 'end') {
+      if (val < configRange.start) {
+        setConfigRange({ start: val, end: configRange.start });
+      } else {
+        setConfigRange(prev => ({ ...prev, end: val }));
+      }
+      setConfigStep('done');
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!configMonth || !configRange.start || !onSaveMonthConfig) return;
+    setSavingConfig(true);
+    await onSaveMonthConfig(configMonth, configRange.start, configRange.end);
+    setSavingConfig(false);
+    setConfigMonth(null);
+  };
+
+  const isCurrentMonthConfig = useMemo(() => {
+    if (!configMonth) return false;
+    const today = new Date();
+    const cur = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    return configMonth === cur;
+  }, [configMonth]);
+
+  const renderMonthConfigModal = () => {
+    if (!configMonth) return null;
+    const hasExisting = !!monthConfigs[configMonth];
+    return (
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={() => setConfigMonth(null)}>
+        <div className="month-config-modal bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 w-[340px]" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-800">Configurar {configMonthLabel}</h3>
+            <button onClick={() => setConfigMonth(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+              <X size={16} />
+            </button>
+          </div>
+
+          {configRange.start && (
+            <div className="flex items-center gap-2 mb-3 text-xs">
+              <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <span className="text-slate-400 block">Inicio</span>
+                <span className="font-semibold text-slate-700">{configRange.start}</span>
+              </div>
+              <span className="text-slate-300">→</span>
+              <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <span className="text-slate-400 block">Fin</span>
+                <span className="font-semibold text-slate-700">{configRange.end || (isCurrentMonthConfig ? 'Abierto' : '—')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="text-[11px] text-slate-400 text-center mb-2">
+            {configStep === 'start' || configStep === 'done' ? 'Selecciona fecha de inicio' : 'Selecciona fecha de fin'}
+          </div>
+
+          {/* Calendar with navigation */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setConfigCalMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs font-semibold text-slate-700">{configCalMonthLabel}</span>
+            <button
+              onClick={() => setConfigCalMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map(day => (
+              <div key={day} className="text-center text-[10px] font-medium text-slate-400 py-1">{day}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {configCalendarDays.map((dayInfo, index) => {
+              const inRange = isInConfigRange(dayInfo.date);
+              const isStart = isConfigStart(dayInfo.date);
+              const isEnd = isConfigEnd(dayInfo.date);
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleConfigDayClick(dayInfo.date, dayInfo.isCurrentMonth)}
+                  className={`
+                    w-9 h-8 text-xs font-medium transition-all duration-150 relative cursor-pointer
+                    ${!dayInfo.isCurrentMonth ? 'text-slate-300' : ''}
+                    ${inRange && !isStart && !isEnd ? 'bg-[#1717AF]/10 text-[#1717AF]' : ''}
+                    ${isStart ? 'bg-[#1717AF] text-white rounded-l-lg' : ''}
+                    ${isEnd ? 'bg-[#1717AF] text-white rounded-r-lg' : ''}
+                    ${isStart && isEnd ? 'rounded-lg' : ''}
+                    ${!inRange && dayInfo.isCurrentMonth ? 'text-slate-600 hover:bg-slate-100 rounded-lg' : ''}
+                    ${!inRange && !dayInfo.isCurrentMonth ? 'hover:bg-slate-50 rounded-lg' : ''}
+                  `}
+                >
+                  {dayInfo.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 mt-4">
+            {isCurrentMonthConfig && configStep === 'done' && configRange.end && (
+              <button
+                onClick={() => setConfigRange(prev => ({ ...prev, end: null }))}
+                className="flex-1 px-3 py-2 text-xs font-medium text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Dejar fin abierto
+              </button>
+            )}
+            <button
+              onClick={handleSaveConfig}
+              disabled={!configRange.start || savingConfig || (configStep === 'end')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                !configRange.start || savingConfig || configStep === 'end'
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-[#1717AF] text-white hover:bg-[#1717AF]/90 shadow-md'
+              }`}
+            >
+              {savingConfig ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {hasExisting ? 'Actualizar' : 'Configurar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (showOnlyComercial) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        {showComercialFilter && comerciales.length > 0 && (
+          <div className="relative filter-dropdown">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setComercialOpen(!comercialOpen);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                selectedComercial
+                  ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+              }`}
+            >
+              <Users size={16} />
+              <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
+              <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
+              {selectedComercial && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onComercialChange(null);
+                  }}
+                  className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </button>
+            
+            {comercialOpen && (
+              <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
+                <div className="px-4 pb-3 border-b border-slate-100">
+                  <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
+                </div>
+                <button
+                  onClick={() => { onComercialChange(null); setComercialOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${!selectedComercial ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-2"><Users size={14} /><span>Todos los comerciales</span></div>
+                </button>
+                <div className="h-px bg-slate-100 my-2" />
+                <div className="space-y-1">
+                  {comerciales.map((comercial) => {
+                    const online = isUserOnline(comercial.ultima_conexion);
+                    const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                    return (
+                      <button
+                        key={comercial.email}
+                        onClick={() => { onComercialChange(comercial.email); setComercialOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${selectedComercial === comercial.email ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <div>
+                          <span className="font-medium">{comercial.nombre}</span>
+                          <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>{connectionStatus}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* Campo de búsqueda - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+    <div className="flex flex-col gap-3">
+      {/* Fila 1: Búsqueda + Filtros de fecha + Pill */}
+      <div className="flex flex-wrap items-center gap-3">
+      {/* Campo de búsqueda */}
+      {(
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search size={16} className="text-slate-400" />
@@ -420,207 +719,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Comercial (solo si tiene permiso) */}
-      {showComercialFilter && comerciales.length > 0 && (
-        <div className="relative filter-dropdown">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setComercialOpen(!comercialOpen);
-              setMesOpen(false);
-              setPeriodoOpen(false);
-            }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedComercial
-                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
-            }`}
-          >
-            <Users size={16} />
-            <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
-            {selectedComercial && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onComercialChange(null);
-                }}
-                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </button>
-          
-          {comercialOpen && (
-            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
-              {/* Header con título */}
-              <div className="px-4 pb-3 border-b border-slate-100">
-                <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
-                <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
-              </div>
-              
-              {/* Opción "Todos los comerciales" */}
-              <button
-                onClick={() => {
-                  onComercialChange(null);
-                  setComercialOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${
-                  !selectedComercial 
-                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Users size={14} />
-                  <span>Todos los comerciales</span>
-                </div>
-              </button>
-              <div className="h-px bg-slate-100 my-2" />
-              
-              {/* Lista de comerciales con controles */}
-              <div className="space-y-1">
-                {comerciales.map((comercial, index) => {
-                  const online = isUserOnline(comercial.ultima_conexion);
-                  const connectionStatus = formatLastConnection(comercial.ultima_conexion);
-                  // Manejar disponibilidad como string ("Activo"/"Inactivo") o boolean, default: Activo
-                  const isDisponible = comercial.disponibilidad === 'Inactivo' ? false : 
-                                       comercial.disponibilidad === false ? false : true;
-                  const currentPerformance = comercial.performance || 'Top'; // Default Top
-                  const performanceOption = performanceOptions.find(p => p.value === currentPerformance) || performanceOptions[0];
-                  const isUpdatingDisp = updatingComercial === `${comercial.card_id}-disponibilidad`;
-                  const isUpdatingPerf = updatingComercial === `${comercial.card_id}-performance`;
-                  // Si es uno de los últimos 2 comerciales, abrir dropdown hacia arriba
-                  const isNearBottom = index >= comerciales.length - 2;
-                  
-                  return (
-                    <div
-                      key={comercial.email}
-                      className={`px-4 py-3 transition-colors ${
-                        selectedComercial === comercial.email
-                          ? 'bg-[#1717AF]/5'
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      {/* Fila principal: nombre y filtro */}
-                      <div className="flex items-center justify-between mb-2">
-                        <button
-                          onClick={() => {
-                            onComercialChange(comercial.email);
-                            setComercialOpen(false);
-                          }}
-                          className="flex items-center gap-2 flex-1 text-left"
-                        >
-                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          <div>
-                            <span className={`font-medium text-sm ${selectedComercial === comercial.email ? 'text-[#1717AF]' : 'text-slate-700'}`}>
-                              {comercial.nombre}
-                            </span>
-                            <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {connectionStatus}
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                      
-                      {/* Controles apilados verticalmente */}
-                      <div className="flex flex-col gap-2 ml-4 mt-1">
-                        {/* Toggle de disponibilidad */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-24">Disponibilidad:</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleComercialConfigUpdate(comercial, 'disponibilidad', !isDisponible);
-                            }}
-                            disabled={isUpdatingDisp}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                              isDisponible ? 'bg-emerald-500' : 'bg-slate-300'
-                            } ${isUpdatingDisp ? 'opacity-50' : ''}`}
-                          >
-                            {isUpdatingDisp ? (
-                              <span className="absolute inset-0 flex items-center justify-center">
-                                <Loader2 size={12} className="animate-spin text-white" />
-                              </span>
-                            ) : (
-                              <span
-                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                                  isDisponible ? 'translate-x-5' : 'translate-x-1'
-                                }`}
-                              />
-                            )}
-                          </button>
-                          <span className={`text-xs font-medium ${isDisponible ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {isDisponible ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </div>
-                        
-                        {/* Dropdown de Performance */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-24">Performance:</span>
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPerformanceDropdownOpen(performanceDropdownOpen === comercial.card_id ? null : comercial.card_id);
-                              }}
-                              disabled={isUpdatingPerf}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${performanceOption.bgLight} ${performanceOption.text} ${performanceOption.border} ${isUpdatingPerf ? 'opacity-50' : 'hover:shadow-sm'}`}
-                            >
-                              {isUpdatingPerf ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                <>
-                                  <span className={`w-2 h-2 rounded-full ${performanceOption.bg}`} />
-                                  <span>{performanceOption.label}</span>
-                                  <ChevronDown size={10} className={`transition-transform ${performanceDropdownOpen === comercial.card_id ? 'rotate-180' : ''}`} />
-                                </>
-                              )}
-                            </button>
-                            
-                            {/* Dropdown de opciones - abre hacia arriba si está cerca del final */}
-                            {performanceDropdownOpen === comercial.card_id && (
-                              <div className={`absolute left-0 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-[60] min-w-[140px] ${
-                                isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
-                              }`}>
-                                {performanceOptions.map((option) => (
-                                  <button
-                                    key={option.value}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (option.value !== currentPerformance) {
-                                        handleComercialConfigUpdate(comercial, 'performance', option.value);
-                                      } else {
-                                        setPerformanceDropdownOpen(null);
-                                      }
-                                    }}
-                                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2 ${
-                                      option.value === currentPerformance 
-                                        ? `${option.bgLight} ${option.text}` 
-                                        : 'text-slate-600 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    <span className={`w-2.5 h-2.5 rounded-full ${option.bg}`} />
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Filtro de Mes - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Mes */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -669,26 +769,46 @@ const DashboardFilters = ({
               <div className="h-px bg-slate-100 my-1" />
               {monthOptions.map((month) => {
                 const isCurrentMonth = month.value === currentMonth;
+                const hasConfig = !!monthConfigs[month.value];
                 return (
-                  <button
+                  <div
                     key={month.value}
-                    onClick={() => {
-                      onMesChange(month.value);
-                      setMesOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                    className={`flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
                       selectedMes === month.value
                         ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <span>{month.label}</span>
-                    {isCurrentMonth && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                        Actual
-                      </span>
+                    <button
+                      onClick={() => {
+                        onMesChange(month.value);
+                        setMesOpen(false);
+                      }}
+                      className="flex-1 text-left flex items-center gap-2"
+                    >
+                      <span>{month.label}</span>
+                      {isCurrentMonth && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                          Actual
+                        </span>
+                      )}
+                      {hasConfig && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#1717AF]" title="Rango personalizado" />
+                      )}
+                    </button>
+                    {puedeVerTodos && onSaveMonthConfig && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMonthConfig(month.value);
+                        }}
+                        className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-600 transition-colors ml-1"
+                        title="Configurar rango del mes"
+                      >
+                        <Settings size={13} />
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -696,8 +816,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Periodo (Martes a Martes) - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Periodo (Martes a Martes) */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -782,8 +902,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Día con Calendario - oculto si showOnlyComercial */}
-      {!showOnlyComercial && (
+      {/* Filtro de Día con Calendario */}
+      {(
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -928,8 +1048,234 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro de Categoría de Seguimiento - oculto si showOnlyComercial */}
-      {!showOnlyComercial && categorias.length > 0 && (
+      {/* Toggle Creación / Actualización */}
+      {showDateFilterToggle && onDateFilterFieldChange && (
+        <div className="relative group">
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+            <button
+              onClick={() => onDateFilterFieldChange('created_at')}
+              className={`px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                dateFilterField === 'created_at'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Creación
+            </button>
+            <button
+              onClick={() => onDateFilterFieldChange('updated_at')}
+              className={`px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                dateFilterField === 'updated_at'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Actualización
+            </button>
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+            <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
+              Filtrar fechas por {dateFilterField === 'created_at' ? 'creación' : 'última actualización'}
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+
+      {/* Fila 2: Comerciales + Tags + Fuente + Referido + Gestión WA */}
+      <div className="flex flex-wrap items-center gap-3">
+      {/* Filtro de Comercial (solo si tiene permiso) */}
+      {showComercialFilter && comerciales.length > 0 && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setComercialOpen(!comercialOpen);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedComercial
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <Users size={16} />
+            <span className="max-w-[150px] truncate">{selectedComercialLabel}</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${comercialOpen ? 'rotate-180' : ''}`} />
+            {selectedComercial && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onComercialChange(null);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+          
+          {comercialOpen && (
+            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 max-h-[480px] overflow-y-auto">
+              <div className="px-4 pb-3 border-b border-slate-100">
+                <h4 className="text-sm font-semibold text-slate-700">Configuración de Comerciales</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Gestiona disponibilidad y performance</p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  onComercialChange(null);
+                  setComercialOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors mt-2 ${
+                  !selectedComercial 
+                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Users size={14} />
+                  <span>Todos los comerciales</span>
+                </div>
+              </button>
+              <div className="h-px bg-slate-100 my-2" />
+              
+              <div className="space-y-1">
+                {comerciales.map((comercial, index) => {
+                  const online = isUserOnline(comercial.ultima_conexion);
+                  const connectionStatus = formatLastConnection(comercial.ultima_conexion);
+                  const isDisponible = comercial.disponibilidad === 'Inactivo' ? false : 
+                                       comercial.disponibilidad === false ? false : true;
+                  const currentPerformance = comercial.performance || 'Top';
+                  const performanceOption = performanceOptions.find(p => p.value === currentPerformance) || performanceOptions[0];
+                  const isUpdatingDisp = updatingComercial === `${comercial.card_id}-disponibilidad`;
+                  const isUpdatingPerf = updatingComercial === `${comercial.card_id}-performance`;
+                  const isNearBottom = index >= comerciales.length - 2;
+                  
+                  return (
+                    <div
+                      key={comercial.email}
+                      className={`px-4 py-3 transition-colors ${
+                        selectedComercial === comercial.email
+                          ? 'bg-[#1717AF]/5'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <button
+                          onClick={() => {
+                            onComercialChange(comercial.email);
+                            setComercialOpen(false);
+                          }}
+                          className="flex items-center gap-2 flex-1 text-left"
+                        >
+                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <div>
+                            <span className={`font-medium text-sm ${selectedComercial === comercial.email ? 'text-[#1717AF]' : 'text-slate-700'}`}>
+                              {comercial.nombre}
+                            </span>
+                            <div className={`text-xs ${online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {connectionStatus}
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 ml-4 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-24">Disponibilidad:</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleComercialConfigUpdate(comercial, 'disponibilidad', !isDisponible);
+                            }}
+                            disabled={isUpdatingDisp}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                              isDisponible ? 'bg-emerald-500' : 'bg-slate-300'
+                            } ${isUpdatingDisp ? 'opacity-50' : ''}`}
+                          >
+                            {isUpdatingDisp ? (
+                              <span className="absolute inset-0 flex items-center justify-center">
+                                <Loader2 size={12} className="animate-spin text-white" />
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                  isDisponible ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            )}
+                          </button>
+                          <span className={`text-xs font-medium ${isDisponible ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {isDisponible ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-24">Performance:</span>
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPerformanceDropdownOpen(performanceDropdownOpen === comercial.card_id ? null : comercial.card_id);
+                              }}
+                              disabled={isUpdatingPerf}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${performanceOption.bgLight} ${performanceOption.text} ${performanceOption.border} ${isUpdatingPerf ? 'opacity-50' : 'hover:shadow-sm'}`}
+                            >
+                              {isUpdatingPerf ? (
+                                <Loader2 size={10} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <span className={`w-2 h-2 rounded-full ${performanceOption.bg}`} />
+                                  <span>{performanceOption.label}</span>
+                                  <ChevronDown size={10} className={`transition-transform ${performanceDropdownOpen === comercial.card_id ? 'rotate-180' : ''}`} />
+                                </>
+                              )}
+                            </button>
+                            
+                            {performanceDropdownOpen === comercial.card_id && (
+                              <div className={`absolute left-0 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-[60] min-w-[140px] ${
+                                isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                              }`}>
+                                {performanceOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (option.value !== currentPerformance) {
+                                        handleComercialConfigUpdate(comercial, 'performance', option.value);
+                                      } else {
+                                        setPerformanceDropdownOpen(null);
+                                      }
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2 ${
+                                      option.value === currentPerformance 
+                                        ? `${option.bgLight} ${option.text}` 
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${option.bg}`} />
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de Categoría de Seguimiento */}
+      {categorias.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1001,8 +1347,8 @@ const DashboardFilters = ({
         </div>
       )}
 
-      {/* Filtro por Tag */}
-      {tags.length > 0 && (
+      {/* Filtro por Tag (multi-select) */}
+      {showTagFilter && tags.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1017,21 +1363,21 @@ const DashboardFilters = ({
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedTag
+              selectedTag.length > 0
                 ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-violet-400 hover:text-violet-600'
             }`}
           >
             <Tag size={16} />
             <span className="max-w-[150px] truncate">
-              {selectedTag || 'Tags'}
+              {selectedTag.length > 0 ? `Tags (${selectedTag.length})` : 'Tags'}
             </span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${tagOpen ? 'rotate-180' : ''}`} />
-            {selectedTag && (
+            {selectedTag.length > 0 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTagChange(null);
+                  onTagChange([]);
                 }}
                 className="ml-1 p-0.5 rounded-full hover:bg-white/20"
               >
@@ -1043,12 +1389,9 @@ const DashboardFilters = ({
           {tagOpen && (
             <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
               <button
-                onClick={() => {
-                  onTagChange(null);
-                  setTagOpen(false);
-                }}
+                onClick={() => onTagChange([])}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedTag 
+                  selectedTag.length === 0
                     ? 'bg-violet-100 text-violet-700 font-medium' 
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -1056,30 +1399,41 @@ const DashboardFilters = ({
                 Todos los tags
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {tags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => {
-                    onTagChange(tag);
-                    setTagOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                    selectedTag === tag
-                      ? 'bg-violet-100 text-violet-700 font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Tag size={12} />
-                  {tag}
-                </button>
-              ))}
+              {tags.map((tag) => {
+                const isChecked = selectedTag.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      if (isChecked) {
+                        onTagChange(selectedTag.filter(t => t !== tag));
+                      } else {
+                        onTagChange([...selectedTag, tag]);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                      isChecked
+                        ? 'bg-violet-50 text-violet-700 font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      isChecked ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
+                    }`}>
+                      {isChecked && <Check size={10} className="text-white" />}
+                    </div>
+                    <Tag size={12} />
+                    {tag}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Filtro por Fuente */}
-      {!showOnlyComercial && fuentes.length > 0 && (
+      {/* Filtro por Fuente (multi-select) */}
+      {showFuenteFilter && fuentes.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1094,21 +1448,21 @@ const DashboardFilters = ({
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-              selectedFuente
+              selectedFuente.length > 0
                 ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
             }`}
           >
             <Globe size={16} />
             <span className="max-w-[150px] truncate">
-              {selectedFuente || 'Fuente'}
+              {selectedFuente.length > 0 ? `Fuente (${selectedFuente.length})` : 'Fuente'}
             </span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${fuenteOpen ? 'rotate-180' : ''}`} />
-            {selectedFuente && (
+            {selectedFuente.length > 0 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onFuenteChange(null);
+                  onFuenteChange([]);
                 }}
                 className="ml-1 p-0.5 rounded-full hover:bg-white/20"
               >
@@ -1120,12 +1474,9 @@ const DashboardFilters = ({
           {fuenteOpen && (
             <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
               <button
-                onClick={() => {
-                  onFuenteChange(null);
-                  setFuenteOpen(false);
-                }}
+                onClick={() => onFuenteChange([])}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedFuente 
+                  selectedFuente.length === 0
                     ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -1133,30 +1484,41 @@ const DashboardFilters = ({
                 Todas las fuentes
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {fuentes.map((fuente) => (
-                <button
-                  key={fuente}
-                  onClick={() => {
-                    onFuenteChange(fuente);
-                    setFuenteOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                    selectedFuente === fuente
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Globe size={12} />
-                  {fuente}
-                </button>
-              ))}
+              {fuentes.map((fuente) => {
+                const isChecked = selectedFuente.includes(fuente);
+                return (
+                  <button
+                    key={fuente}
+                    onClick={() => {
+                      if (isChecked) {
+                        onFuenteChange(selectedFuente.filter(f => f !== fuente));
+                      } else {
+                        onFuenteChange([...selectedFuente, fuente]);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                      isChecked
+                        ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      isChecked ? 'bg-[#1717AF] border-[#1717AF]' : 'border-slate-300'
+                    }`}>
+                      {isChecked && <Check size={10} className="text-white" />}
+                    </div>
+                    <Globe size={12} />
+                    {fuente}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {/* Filtro por Referido */}
-      {!showOnlyComercial && referidos.length > 0 && (
+      {showReferidoFilter && referidos.length > 0 && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1234,7 +1596,7 @@ const DashboardFilters = ({
       )}
       
       {/* Filtro por Gestión WhatsApp */}
-      {!showOnlyComercial && (
+      {showGestionWAFilter && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {
@@ -1323,6 +1685,7 @@ const DashboardFilters = ({
           )}
         </div>
       )}
+      </div>
       
       {/* Toast de notificación */}
       {toastMessage && (
@@ -1333,6 +1696,9 @@ const DashboardFilters = ({
           </div>
         </div>
       )}
+
+      {/* Modal de configuración de mes */}
+      {renderMonthConfigModal()}
     </div>
   );
 };

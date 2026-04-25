@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowUpDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X } from 'lucide-react';
+import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowUpDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X, MailOpen, Mail, Check } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import CrearRespondModal from './CrearRespondModal';
 
@@ -319,7 +319,7 @@ const LeadsTable = ({
   onMarcarNoRevisado,
   onToggleHot,
   onToggleGestionWA,
-  activeEtapa, 
+  activeEtapas = [],
   onEtapaChange,
   activeFilter,
   ultimosSeguimientos = {},
@@ -349,12 +349,17 @@ const LeadsTable = ({
   // Props de ordenamiento
   sortConfig = { field: 'updated_at', ascending: false },
   onSortChange,
+  filtroSinSeguimiento = false,
+  onFiltroSinSeguimientoChange,
   // Configuración de colores de tags
   configTags = {},
   // Colores de las fases para indicador visual
   coloresFases = {},
   // Callback para refrescar datos después de acciones
-  onRefreshData
+  onRefreshData,
+  // Callbacks de selección bulk
+  onMarcarLeidoBulk,
+  onMarcarNoLeidoBulk,
 }) => {
   // Extraer etapas y grupos del prop
   const { etapas: todasLasEtapas = [], grupos: todosLosGrupos = [] } = etapasFunnel;
@@ -380,6 +385,47 @@ const LeadsTable = ({
   // Estado para modal de Crear en Respond
   const [crearRespondModalOpen, setCrearRespondModalOpen] = useState(false);
   const [leadParaRespond, setLeadParaRespond] = useState(null);
+
+  // Estado de selección de filas (bulk actions)
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Limpiar selección cuando cambia la lista de leads (paginación, filtros)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [leads]);
+
+  const allSelected = leads.length > 0 && leads.every(l => selectedIds.has(l.card_id));
+  const someSelected = leads.length > 0 && leads.some(l => selectedIds.has(l.card_id));
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(leads.map(l => l.card_id)));
+    }
+  };
+
+  const handleToggleSelect = (cardId, e) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  };
+
+  const handleBulkLeido = () => {
+    if (selectedIds.size === 0) return;
+    onMarcarLeidoBulk?.(Array.from(selectedIds));
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkNoLeido = () => {
+    if (selectedIds.size === 0) return;
+    onMarcarNoLeidoBulk?.(Array.from(selectedIds));
+    setSelectedIds(new Set());
+  };
   
   // Estado para modal de Activar Recordatorios Automáticos
   const [activarRecordatorioModalOpen, setActivarRecordatorioModalOpen] = useState(false);
@@ -533,23 +579,66 @@ const LeadsTable = ({
           {/* Chips de filtro por etapa del funnel */}
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {etapasParaMostrar.map((etapa) => {
-              // Obtener conteo desde statsData (datos globales)
               const count = porEtapa[etapa.id] || 0;
+              const isActive = activeEtapas.includes(etapa.id);
               return (
                 <button
                   key={etapa.id}
-                  onClick={() => onEtapaChange?.(activeEtapa === etapa.id ? null : etapa.id)}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 border ${
-                    activeEtapa === etapa.id
+                  onClick={() => onEtapaChange?.(etapa.id)}
+                  className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 border ${
+                    isActive
                       ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
                   }`}
                 >
+                  <span
+                    className={`flex items-center justify-center w-4 h-4 rounded border transition-all ${
+                      isActive
+                        ? 'bg-white border-white text-[#1717AF]'
+                        : 'bg-white border-slate-300'
+                    }`}
+                  >
+                    {isActive && <Check size={11} strokeWidth={3} />}
+                  </span>
                   {etapa.label} ({count})
                 </button>
               );
             })}
           </div>
+
+          {/* Chips de etapas seleccionadas */}
+          {activeEtapas.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-slate-400 mr-0.5">Filtrando:</span>
+              {activeEtapas.map(id => {
+                const etapa = etapasAUsar.find(e => e.id === id);
+                if (!etapa) return null;
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-medium bg-[#1717AF]/10 text-[#1717AF] border border-[#1717AF]/20"
+                  >
+                    {etapa.label}
+                    <button
+                      onClick={() => onEtapaChange?.(id)}
+                      className="flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-[#1717AF]/20 transition-colors"
+                      title={`Quitar ${etapa.label}`}
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                    </button>
+                  </span>
+                );
+              })}
+              {activeEtapas.length > 1 && (
+                <button
+                  onClick={() => onEtapaChange?.(null)}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors ml-1"
+                >
+                  Limpiar todo
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -558,6 +647,18 @@ const LeadsTable = ({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-100">
+              {/* Checkbox seleccionar todo */}
+              <th className="py-4 pl-4 pr-2 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                  onChange={handleSelectAll}
+                  onClick={e => e.stopPropagation()}
+                  className="w-4 h-4 rounded border-slate-300 text-[#1717AF] cursor-pointer accent-[#1717AF]"
+                  title="Seleccionar todos"
+                />
+              </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider w-24">
                 <button
                   onClick={() => onSortChange?.({
@@ -595,7 +696,20 @@ const LeadsTable = ({
                 </button>
               </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Contacto</th>
-              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">Seguimiento</th>
+              <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider min-w-[280px]">
+                <button
+                  onClick={() => onFiltroSinSeguimientoChange?.(!filtroSinSeguimiento)}
+                  className="flex items-center gap-1 hover:text-slate-600 transition-colors group"
+                  title={filtroSinSeguimiento ? 'Mostrando leads sin seguimiento (más antiguos primero). Clic para desactivar.' : 'Mostrar leads sin seguimiento primero'}
+                >
+                  Seguimiento
+                  {filtroSinSeguimiento ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-[#1717AF]" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                  )}
+                </button>
+              </th>
               <th className="text-left py-4 px-4 font-medium text-slate-400 text-xs uppercase tracking-wider">Etapa</th>
               <th className="text-right py-4 px-6 font-medium text-slate-400 text-xs uppercase tracking-wider">
                 <div className="flex items-center justify-end gap-2">
@@ -641,7 +755,8 @@ const LeadsTable = ({
                     </button>
                     
                     {/* Sparkles activo - Con recordatorio automático */}
-                    <button
+                    {/* COMENTADO: reemplazado por acciones bulk de leído/no leído */}
+                    {/* <button
                       onClick={() => handleFiltroEmdi('activo')}
                       className={`p-1 rounded-lg transition-all duration-200 ${
                         filtroEmdi === 'activo'
@@ -651,10 +766,11 @@ const LeadsTable = ({
                       title="Con recordatorio automático"
                     >
                       <Sparkles size={20} fill={filtroEmdi === 'activo' ? 'currentColor' : 'none'} />
-                    </button>
+                    </button> */}
                     
                     {/* Sparkles inactivo - Sin recordatorio automático */}
-                    <button
+                    {/* COMENTADO: reemplazado por acciones bulk de leído/no leído */}
+                    {/* <button
                       onClick={() => handleFiltroEmdi('inactivo')}
                       className={`p-1 rounded-lg transition-all duration-200 ${
                         filtroEmdi === 'inactivo'
@@ -664,6 +780,34 @@ const LeadsTable = ({
                       title="Sin recordatorio automático"
                     >
                       <Sparkles size={20} strokeDasharray={filtroEmdi === 'inactivo' ? '0' : '2 2'} />
+                    </button> */}
+
+                    {/* Marcar seleccionados como leídos */}
+                    <button
+                      onClick={handleBulkLeido}
+                      disabled={selectedIds.size === 0}
+                      className={`p-1 rounded-lg transition-all duration-200 ${
+                        selectedIds.size > 0
+                          ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
+                          : 'text-slate-200 cursor-not-allowed'
+                      }`}
+                      title={selectedIds.size > 0 ? `Marcar ${selectedIds.size} seleccionado(s) como leído` : 'Selecciona filas primero'}
+                    >
+                      <MailOpen size={20} />
+                    </button>
+
+                    {/* Marcar seleccionados como no leídos */}
+                    <button
+                      onClick={handleBulkNoLeido}
+                      disabled={selectedIds.size === 0}
+                      className={`p-1 rounded-lg transition-all duration-200 ${
+                        selectedIds.size > 0
+                          ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
+                          : 'text-slate-200 cursor-not-allowed'
+                      }`}
+                      title={selectedIds.size > 0 ? `Marcar ${selectedIds.size} seleccionado(s) como no leído` : 'Selecciona filas primero'}
+                    >
+                      <Mail size={20} />
                     </button>
                   </div>
                 </div>
@@ -689,6 +833,15 @@ const LeadsTable = ({
                   }`}
                   style={isHot ? { boxShadow: 'inset 4px 0 0 0 #f97316' } : {}}
                 >
+                  {/* Checkbox de selección */}
+                  <td className="py-4 pl-4 pr-2" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.card_id)}
+                      onChange={e => handleToggleSelect(lead.card_id, e)}
+                      className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-[#1717AF]"
+                    />
+                  </td>
                   {/* Creación - 2 líneas */}
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">

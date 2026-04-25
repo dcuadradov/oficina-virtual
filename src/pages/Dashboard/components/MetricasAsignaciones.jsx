@@ -2,19 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
-// Config IDs para contar (prod)
-const CONFIG_IDS = {
-  'Nuevo WEB': '514a5826-12c2-4639-924e-9920c4d0e024',
-  'Nuevo META 1': 'e91b3860-5b8d-4d8a-a470-6e53f695bc36'
-};
-
 export default function MetricasAsignaciones({
   selectedComercial,
   selectedMes,
   selectedPeriodo,
   selectedDia,
   selectedTag,
-  puedeVerTodos
+  puedeVerTodos,
+  monthConfigs = {}
 }) {
   const [metricasData, setMetricasData] = useState([]);
   const [metricasTotalLeads, setMetricasTotalLeads] = useState(0);
@@ -45,18 +40,32 @@ export default function MetricasAsignaciones({
       fechaInicio = `${inicio} 05:00:00+00`;
       fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
-      // Mes tiene formato: "2025-01"
       const [año, mes] = selectedMes.split('-');
-      // Primer día del mes siguiente
-      const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
-      const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
-      
-      fechaInicio = `${año}-${mes}-01 05:00:00+00`;
-      fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      const config = monthConfigs[selectedMes];
+
+      if (config) {
+        fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
+        if (config.fecha_fin) {
+          const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
+          const finMasUno = new Date(yF, mF - 1, dF + 1);
+          const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaFinMasUno} 05:00:00+00`;
+        } else {
+          const now = new Date();
+          const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaManana} 05:00:00+00`;
+        }
+      } else {
+        const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
+        const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
+        fechaInicio = `${año}-${mes}-01 05:00:00+00`;
+        fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      }
     }
 
     return { fechaInicio, fechaFin };
-  }, [selectedDia, selectedMes, selectedPeriodo]);
+  }, [selectedDia, selectedMes, selectedPeriodo, monthConfigs]);
 
   // Función para cargar métricas de asignaciones
   const fetchMetricas = useCallback(async () => {
@@ -64,17 +73,20 @@ export default function MetricasAsignaciones({
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
       
-      // Config IDs para contar
-      let configIds = Object.values(CONFIG_IDS);
+      const { data: configData, error: configError } = await supabase
+        .from('config_notificaciones')
+        .select('id')
+        .eq('contador_nuevos_leads', true);
       
-      // Filtrar por tag si está seleccionado
-      if (selectedTag === 'Nuevo WEB') {
-        configIds = [CONFIG_IDS['Nuevo WEB']];
-      } else if (selectedTag === 'Nuevo META 1') {
-        configIds = [CONFIG_IDS['Nuevo META 1']];
+      if (configError) throw configError;
+      
+      const configIds = (configData || []).map(c => c.id);
+      if (configIds.length === 0) {
+        setMetricasData([]);
+        setMetricasTotalLeads(0);
+        return;
       }
       
-      // Query a notificaciones agrupando por comercial_email
       let query = supabase
         .from('notificaciones')
         .select('comercial_email, config_id')
@@ -84,7 +96,6 @@ export default function MetricasAsignaciones({
       if (fechaInicio && fechaFin) {
         query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
       } else {
-        // Por defecto: solo hoy (en zona horaria Colombia UTC-5)
         const opcionesFecha = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
         const fechaColombia = new Date().toLocaleDateString('en-CA', opcionesFecha);
         
@@ -94,8 +105,6 @@ export default function MetricasAsignaciones({
         
         const inicioHoyUTC = `${fechaColombia} 05:00:00+00`;
         const finHoyUTC = `${fechaManana} 05:00:00+00`;
-        
-        console.log('Filtro métricas - Fecha Colombia:', fechaColombia, '| Rango UTC:', inicioHoyUTC, '-', finHoyUTC);
         
         query = query.gte('created_at', inicioHoyUTC).lt('created_at', finHoyUTC);
       }

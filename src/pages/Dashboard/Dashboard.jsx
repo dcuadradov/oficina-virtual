@@ -6,6 +6,7 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
+import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
@@ -36,7 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('todos');
-  const [activeEtapa, setActiveEtapa] = useState(null);
+  const [activeEtapas, setActiveEtapas] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initialTab, setInitialTab] = useState('info');
@@ -47,12 +48,13 @@ export default function Dashboard() {
   const [selectedMes, setSelectedMes] = useState(null);
   const [selectedPeriodo, setSelectedPeriodo] = useState(null);
   const [selectedDia, setSelectedDia] = useState(null);
+  const [dateFilterField, setDateFilterField] = useState('created_at');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [categoriasSeguimiento, setCategoriasSeguimiento] = useState([]);
-  const [selectedTag, setSelectedTag] = useState(null);
+  const [selectedTag, setSelectedTag] = useState([]);
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
-  const [selectedFuente, setSelectedFuente] = useState(null);
+  const [selectedFuente, setSelectedFuente] = useState([]);
   const [fuentesDisponibles, setFuentesDisponibles] = useState([]);
   const [selectedReferido, setSelectedReferido] = useState(null);
   const [referidosDisponibles, setReferidosDisponibles] = useState([]);
@@ -88,8 +90,10 @@ export default function Dashboard() {
   // Estado para filtro de recordatorios automáticos (Emdi)
   const [filtroEmdi, setFiltroEmdi] = useState(null); // null = todos, 'activo' = con recordatorio, 'inactivo' = sin recordatorio
   const [filtroGestionWA, setFiltroGestionWA] = useState(null); // null = todos, 'respond' = false, 'personal' = true
-  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false }); // Ordenamiento de la tabla
-  
+  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false });
+  const [filtroSinSeguimiento, setFiltroSinSeguimiento] = useState(false);
+  const [monthConfigs, setMonthConfigs] = useState({});
+
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
@@ -144,6 +148,36 @@ export default function Dashboard() {
       setSelectedLead(leadActualizado);
     } catch (error) {
       console.error('Error al marcar como no revisado:', error);
+    }
+  };
+
+  // Marcar múltiples leads como leídos (revisado: true)
+  const handleMarcarLeidoBulk = async (cardIds) => {
+    setLeads(prevLeads =>
+      prevLeads.map(l => cardIds.includes(l.card_id) ? { ...l, revisado: true } : l)
+    );
+    try {
+      await supabase
+        .from('leads')
+        .update({ revisado: true })
+        .in('card_id', cardIds);
+    } catch (error) {
+      console.error('Error al marcar como leídos:', error);
+    }
+  };
+
+  // Marcar múltiples leads como no leídos (revisado: false)
+  const handleMarcarNoLeidoBulk = async (cardIds) => {
+    setLeads(prevLeads =>
+      prevLeads.map(l => cardIds.includes(l.card_id) ? { ...l, revisado: false } : l)
+    );
+    try {
+      await supabase
+        .from('leads')
+        .update({ revisado: false })
+        .in('card_id', cardIds);
+    } catch (error) {
+      console.error('Error al marcar como no leídos:', error);
     }
   };
 
@@ -451,14 +485,39 @@ export default function Dashboard() {
     return shortLabels[etapa] || etapa.substring(0, 10);
   };
 
+  // Cargar configuraciones de meses personalizados
+  const fetchMonthConfigs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('config_meses')
+        .select('mes, fecha_inicio, fecha_fin');
+      if (error) throw error;
+      const map = {};
+      (data || []).forEach(c => { map[c.mes] = c; });
+      setMonthConfigs(map);
+    } catch (error) {
+      console.error('Error cargando config_meses:', error.message);
+    }
+  }, []);
+
+  const handleSaveMonthConfig = useCallback(async (mes, fechaInicio, fechaFin) => {
+    try {
+      const { error } = await supabase
+        .from('config_meses')
+        .upsert({ mes, fecha_inicio: fechaInicio, fecha_fin: fechaFin || null, updated_at: new Date().toISOString() }, { onConflict: 'mes' });
+      if (error) throw error;
+      await fetchMonthConfigs();
+    } catch (error) {
+      console.error('Error guardando config_meses:', error.message);
+    }
+  }, [fetchMonthConfigs]);
+
   // Parsear filtros de fecha (ajustados a zona horaria Colombia UTC-5)
   const parseDateFilters = useCallback(() => {
     let fechaInicio = null;
     let fechaFin = null;
 
     if (selectedDia) {
-      // Día tiene formato: "2025-01-28"
-      // Convertir a UTC: 00:00 Colombia = 05:00 UTC
       const [year, month, day] = selectedDia.split('-').map(Number);
       const mananaDate = new Date(year, month - 1, day + 1);
       const fechaManana = `${mananaDate.getFullYear()}-${String(mananaDate.getMonth() + 1).padStart(2, '0')}-${String(mananaDate.getDate()).padStart(2, '0')}`;
@@ -466,9 +525,7 @@ export default function Dashboard() {
       fechaInicio = `${selectedDia} 05:00:00+00`;
       fechaFin = `${fechaManana} 05:00:00+00`;
     } else if (selectedPeriodo) {
-      // Periodo tiene formato: "2025-01-07_2025-01-14"
       const [inicio, fin] = selectedPeriodo.split('_');
-      // Convertir a UTC
       const [yearFin, monthFin, dayFin] = fin.split('-').map(Number);
       const finMasUno = new Date(yearFin, monthFin - 1, dayFin + 1);
       const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
@@ -476,20 +533,34 @@ export default function Dashboard() {
       fechaInicio = `${inicio} 05:00:00+00`;
       fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
-      // Mes tiene formato: "2025-01"
       const [año, mes] = selectedMes.split('-');
-      // Último día del mes
-      const ultimoDia = new Date(parseInt(año), parseInt(mes), 0).getDate();
-      // Primer día del mes siguiente
-      const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
-      const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
-      
-      fechaInicio = `${año}-${mes}-01 05:00:00+00`;
-      fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      const config = monthConfigs[selectedMes];
+
+      if (config) {
+        fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
+        if (config.fecha_fin) {
+          const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
+          const finMasUno = new Date(yF, mF - 1, dF + 1);
+          const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaFinMasUno} 05:00:00+00`;
+        } else {
+          // Mes actual sin fecha_fin configurada: hasta ahora
+          const now = new Date();
+          const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
+          fechaFin = `${fechaManana} 05:00:00+00`;
+        }
+      } else {
+        // Sin configuración: rango tradicional del 1 al último día
+        const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
+        const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
+        fechaInicio = `${año}-${mes}-01 05:00:00+00`;
+        fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
+      }
     }
 
     return { fechaInicio, fechaFin };
-  }, [selectedDia, selectedMes, selectedPeriodo]);
+  }, [selectedDia, selectedMes, selectedPeriodo, monthConfigs]);
 
   // Función para calcular ventanas de WhatsApp abiertas (< 24 horas)
   const fetchVentanasAbiertas = useCallback(async () => {
@@ -503,7 +574,7 @@ export default function Dashboard() {
       let query = supabase
         .from('leads')
         .select('card_id', { count: 'exact', head: true })
-        .neq('etapa_funnel', 'No mostrar')
+        .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
         .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
         .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
 
@@ -564,84 +635,88 @@ export default function Dashboard() {
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      // Query única para obtener estado_gestion y etapa_funnel
-      let statsQuery = supabase
-        .from('leads')
-        .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
-        .neq('etapa_funnel', 'No mostrar');
-
-      // Aplicar filtro de comercial
-      if (puedeVerTodos && selectedComercial) {
-        statsQuery = statsQuery.eq('comercial_email', selectedComercial);
-      } else if (!puedeVerTodos) {
-        statsQuery = statsQuery.eq('comercial_email', userEmail);
-      }
-
-      // Aplicar filtros de fecha (por fecha de creación del lead)
-      if (fechaInicio && fechaFin) {
-        statsQuery = statsQuery.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-      }
-
-      // Aplicar filtro por tag
-      if (selectedTag) {
-        statsQuery = statsQuery.eq('label', selectedTag);
-      }
-
-      // Aplicar filtro por fuente
-      if (selectedFuente) {
-        statsQuery = statsQuery.eq('fuente_dato', selectedFuente);
-      }
-
-      // Aplicar filtro por referido
-      if (selectedReferido) {
-        statsQuery = statsQuery.eq('referido_por', selectedReferido);
-      }
-
-      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
-      if (filtroWhatsApp === 'abierta') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        statsQuery = statsQuery
-          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
-          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
-      } else if (filtroWhatsApp === 'cerrada') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        statsQuery = statsQuery.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
-      }
-
-      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
-      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
-        statsQuery = statsQuery.in('card_id', nuevosLeadsCardIds);
-      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
-        // No hay nuevos leads
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
         setStatsData({ total: 0, porEstado: {}, porEtapa: {} });
         return;
       }
 
-      // Aplicar filtro de leads HOT
-      if (filtroHot) {
-        statsQuery = statsQuery.eq('is_hot', true);
-      }
+      const PAGE_SIZE = 1000;
+      let allLeads = [];
+      let from = 0;
+      let keepFetching = true;
 
-      // Aplicar filtro de recordatorios automáticos (Emdi)
+      const hace24Horas = (filtroWhatsApp === 'abierta' || filtroWhatsApp === 'cerrada')
+        ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        : null;
       const fasesEmdi = ['340832804', '339756097', '341769991'];
-      if (filtroEmdi === 'activo') {
-        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
-      } else if (filtroEmdi === 'inactivo') {
-        statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+      const nowISO = new Date().toISOString();
+
+      while (keepFetching) {
+        let statsQuery = supabase
+          .from('leads')
+          .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
+
+        if (puedeVerTodos && selectedComercial) {
+          statsQuery = statsQuery.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          statsQuery = statsQuery.eq('comercial_email', userEmail);
+        }
+
+        if (fechaInicio && fechaFin) {
+          statsQuery = statsQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+
+        if (selectedTag.length > 0) {
+          statsQuery = statsQuery.in('label', selectedTag);
+        }
+
+        if (selectedFuente.length > 0) {
+          statsQuery = statsQuery.in('fuente_dato', selectedFuente);
+        }
+
+        if (selectedReferido) {
+          statsQuery = statsQuery.eq('referido_por', selectedReferido);
+        }
+
+        if (filtroWhatsApp === 'abierta') {
+          statsQuery = statsQuery
+            .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          statsQuery = statsQuery.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          statsQuery = statsQuery.in('card_id', nuevosLeadsCardIds);
+        }
+
+        if (filtroHot) {
+          statsQuery = statsQuery.eq('is_hot', true);
+        }
+
+        if (filtroEmdi === 'activo') {
+          statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', nowISO);
+        } else if (filtroEmdi === 'inactivo') {
+          statsQuery = statsQuery.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + nowISO);
+        }
+
+        if (filtroGestionWA === 'respond') {
+          statsQuery = statsQuery.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
+        }
+
+        const { data, error: statsError } = await statsQuery.range(from, from + PAGE_SIZE - 1);
+        if (statsError) throw statsError;
+
+        allLeads = allLeads.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) {
+          keepFetching = false;
+        } else {
+          from += PAGE_SIZE;
+        }
       }
-
-      // Aplicar filtro de gestión WhatsApp
-      if (filtroGestionWA === 'respond') {
-        statsQuery = statsQuery.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
-      } else if (filtroGestionWA === 'personal') {
-        statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
-      }
-
-      const { data: statsData, error: statsError } = await statsQuery.limit(10000);
-
-      if (statsError) throw statsError;
-
-      let allLeads = statsData || [];
 
       // Aplicar filtro por categoría de seguimiento (post-query porque requiere join con comentarios)
       if (selectedCategoria) {
@@ -683,7 +758,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -699,143 +774,136 @@ export default function Dashboard() {
 
       const { fechaInicio, fechaFin } = parseDateFilters();
 
-      // Construir query base
-      let query = supabase
-        .from('leads')
-        .select('*', { count: 'exact' })
-        .neq('etapa_funnel', 'No mostrar');
-
-      // Aplicar filtro de comercial
-      if (puedeVerTodos && selectedComercial) {
-        query = query.eq('comercial_email', selectedComercial);
-      } else if (!puedeVerTodos) {
-        query = query.eq('comercial_email', userEmail);
-      }
-      // Si puede ver todos y no hay comercial seleccionado, traer todos los leads
-
-      // Aplicar filtros de fecha (por fecha de creación del lead)
-      if (fechaInicio && fechaFin) {
-        query = query.gte('created_at', fechaInicio).lte('created_at', fechaFin);
-      }
-
-      // Aplicar filtro por estado si está activo
-      if (activeFilter !== 'todos') {
-        query = query.eq('estado_gestion', activeFilter);
-      }
-
-      // Aplicar filtro por etapa si está activo
-      if (activeEtapa) {
-        query = query.eq('etapa_funnel', activeEtapa);
-      }
-
-      // Aplicar búsqueda de texto (búsqueda en múltiples campos)
-      if (searchQuery && searchQuery.trim()) {
-        const searchTerm = `%${searchQuery.trim()}%`;
-        query = query.or(
-          `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
-        );
-      }
-
-      // Aplicar filtro por categoría de seguimiento
+      // Pre-fetch: IDs de leads con categoría seleccionada
+      let cardIdsConCategoria = null;
       if (selectedCategoria) {
-        // Obtener los card_ids de leads que tienen comentarios con esta categoría
         const { data: comentariosConCategoria, error: errorCat } = await supabase
           .from('comentarios')
           .select('lead_id')
           .eq('categoria', selectedCategoria);
-        
         if (!errorCat && comentariosConCategoria) {
-          const cardIdsConCategoria = [...new Set(comentariosConCategoria.map(c => c.lead_id))];
-          if (cardIdsConCategoria.length > 0) {
-            query = query.in('card_id', cardIdsConCategoria);
-          } else {
-            // No hay leads con esta categoría, retornar vacío
-            setLeads([]);
-            setTotalLeads(0);
-            setCurrentPage(page);
-            setLoading(false);
-            setIsRefreshing(false);
-            return;
+          cardIdsConCategoria = [...new Set(comentariosConCategoria.map(c => c.lead_id))];
+          if (cardIdsConCategoria.length === 0) {
+            setLeads([]); setTotalLeads(0); setCurrentPage(page);
+            setLoading(false); setIsRefreshing(false); return;
           }
         }
       }
 
-      // Aplicar filtro por tag
-      if (selectedTag) {
-        query = query.eq('label', selectedTag);
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
+        setLeads([]); setTotalLeads(0); setCurrentPage(page);
+        setLoading(false); setIsRefreshing(false); return;
       }
 
-      // Aplicar filtro por fuente
-      if (selectedFuente) {
-        query = query.eq('fuente_dato', selectedFuente);
-      }
+      const buildQuery = (selectCols = '*') => {
+        let q = supabase.from('leads').select(selectCols, { count: 'exact' })
+          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
+        if (puedeVerTodos && selectedComercial) {
+          q = q.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          q = q.eq('comercial_email', userEmail);
+        }
+        if (fechaInicio && fechaFin) {
+          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+        if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
+        if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
+        if (searchQuery && searchQuery.trim()) {
+          const searchTerm = `%${searchQuery.trim()}%`;
+          q = q.or(
+            `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+          );
+        }
+        if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
+        if (selectedTag.length > 0) q = q.in('label', selectedTag);
+        if (selectedFuente.length > 0) q = q.in('fuente_dato', selectedFuente);
+        if (selectedReferido) q = q.eq('referido_por', selectedReferido);
+        if (filtroWhatsApp === 'abierta') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          q = q.in('card_id', nuevosLeadsCardIds);
+        }
+        if (filtroHot) q = q.eq('is_hot', true);
+        const fasesEmdi = ['340832804', '339756097', '341769991'];
+        if (filtroEmdi === 'activo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+        } else if (filtroEmdi === 'inactivo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+        }
+        if (filtroGestionWA === 'respond') {
+          q = q.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          q = q.eq('gestion_whatsapp_personal', true);
+        }
+        return q;
+      };
 
-      // Aplicar filtro por referido
-      if (selectedReferido) {
-        query = query.eq('referido_por', selectedReferido);
-      }
+      let data, totalCount;
 
-      // Aplicar filtro de ventana WhatsApp abierta (< 24 horas)
-      if (filtroWhatsApp === 'abierta') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      if (filtroSinSeguimiento) {
+        // IDs de leads que tienen al menos un comentario (cualquier origen)
+        const { data: conSeg } = await supabase
+          .from('comentarios')
+          .select('lead_id');
+        const idsConSeg = new Set((conSeg || []).map(c => c.lead_id));
+
+        // Fetch ligero: solo card_id + updated_at de todos los leads filtrados
+        let allRefs = [];
+        let batchOffset = 0;
+        const BATCH = 1000;
+        while (true) {
+          const qBatch = buildQuery('card_id, updated_at');
+          const { data: batch } = await qBatch
+            .order('updated_at', { ascending: true })
+            .range(batchOffset, batchOffset + BATCH - 1);
+          if (!batch || batch.length === 0) break;
+          allRefs = allRefs.concat(batch);
+          if (batch.length < BATCH) break;
+          batchOffset += BATCH;
+        }
+
+        // Separar en sin/con seguimiento (ambos ya ordenados por updated_at ASC)
+        const sinSeg = allRefs.filter(l => !idsConSeg.has(l.card_id));
+        const conSegLeads = allRefs.filter(l => idsConSeg.has(l.card_id));
+        const combined = [...sinSeg, ...conSegLeads];
+
+        totalCount = combined.length;
+        const from = page * LEADS_PER_PAGE;
+        const pageIds = combined.slice(from, from + LEADS_PER_PAGE).map(l => l.card_id);
+
+        if (pageIds.length > 0) {
+          const { data: fullData } = await supabase
+            .from('leads')
+            .select('*')
+            .in('card_id', pageIds);
+          const dataMap = new Map((fullData || []).map(l => [l.card_id, l]));
+          data = pageIds.map(id => dataMap.get(id)).filter(Boolean);
+        } else {
+          data = [];
+        }
+      } else {
+        let query = buildQuery();
+        const from = page * LEADS_PER_PAGE;
+        const to = from + LEADS_PER_PAGE - 1;
         query = query
-          .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
-          .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
-      } else if (filtroWhatsApp === 'cerrada') {
-        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        query = query.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+          .order(sortConfig.field, { ascending: sortConfig.ascending, nullsFirst: true })
+          .range(from, to);
+        const result = await query;
+        if (result.error) throw result.error;
+        data = result.data || [];
+        totalCount = result.count || 0;
       }
-
-      // Aplicar filtro de nuevos leads (por card_ids de notificaciones)
-      if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
-        query = query.in('card_id', nuevosLeadsCardIds);
-      } else if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
-        // No hay nuevos leads, retornar vacío
-        setLeads([]);
-        setTotalLeads(0);
-        setCurrentPage(page);
-        setLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-
-      // Aplicar filtro de leads HOT
-      if (filtroHot) {
-        query = query.eq('is_hot', true);
-      }
-
-      // Aplicar filtro de recordatorios automáticos (Emdi)
-      const fasesEmdi = ['340832804', '339756097', '341769991'];
-      if (filtroEmdi === 'activo') {
-        query = query.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
-      } else if (filtroEmdi === 'inactivo') {
-        query = query.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
-      }
-
-      // Aplicar filtro de gestión WhatsApp
-      if (filtroGestionWA === 'respond') {
-        query = query.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
-      } else if (filtroGestionWA === 'personal') {
-        query = query.eq('gestion_whatsapp_personal', true);
-      }
-
-      // Ordenar y paginar
-      const from = page * LEADS_PER_PAGE;
-      const to = from + LEADS_PER_PAGE - 1;
-      
-      query = query
-        .order(sortConfig.field, { ascending: sortConfig.ascending, nullsFirst: true })
-        .range(from, to);
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
 
       setLeads(data || []);
-      setTotalLeads(count || 0);
+      setTotalLeads(totalCount || 0);
       setCurrentPage(page);
-      
-      // Cargar últimos seguimientos para los leads cargados
+
       if (data && data.length > 0) {
         const cardIds = data.map(lead => lead.card_id);
         const { data: comentarios, error: errorComentarios } = await supabase
@@ -843,9 +911,8 @@ export default function Dashboard() {
           .select('lead_id, texto, created_at, categoria')
           .in('lead_id', cardIds)
           .order('created_at', { ascending: false });
-        
+
         if (!errorComentarios && comentarios) {
-          // Agrupar por lead_id y tomar solo el último
           const ultimosMap = {};
           comentarios.forEach(c => {
             if (!ultimosMap[c.lead_id]) {
@@ -862,7 +929,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -874,6 +941,7 @@ export default function Dashboard() {
       fetchReferidos();
       fetchColoresFases();
       fetchEtapasFunnel();
+      fetchMonthConfigs();
       fetchStats();
       fetchVentanasAbiertas();
       fetchNuevosLeads();
@@ -922,7 +990,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig]);
+  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -992,8 +1060,16 @@ export default function Dashboard() {
     setCurrentPage(0);
   };
 
-  const handleEtapaChange = (etapa) => {
-    setActiveEtapa(etapa);
+  const handleEtapaChange = (etapaId) => {
+    if (etapaId === null) {
+      setActiveEtapas([]);
+    } else {
+      setActiveEtapas(prev =>
+        prev.includes(etapaId)
+          ? prev.filter(id => id !== etapaId)
+          : [...prev, etapaId]
+      );
+    }
     setCurrentPage(0);
   };
 
@@ -1180,6 +1256,11 @@ export default function Dashboard() {
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
                   onRefreshComerciales={fetchComerciales}
+                  dateFilterField={dateFilterField}
+                  onDateFilterFieldChange={setDateFilterField}
+                  puedeVerTodos={puedeVerTodos}
+                  monthConfigs={monthConfigs}
+                  onSaveMonthConfig={handleSaveMonthConfig}
                 />
 
                 {/* KPIs - Debajo de los filtros */}
@@ -1197,20 +1278,20 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag || selectedFuente || selectedReferido || filtroGestionWA) && (
+                {(activeFilter !== 'todos' || activeEtapas.length > 0 || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedReferido || filtroGestionWA) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
                       Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
                       {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
                       {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
-                      {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
+                      {activeEtapas.length > 0 && <span className="text-slate-400"> • {activeEtapas.length} etapa{activeEtapas.length > 1 ? 's' : ''} seleccionada{activeEtapas.length > 1 ? 's' : ''}</span>}
                       {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
                       {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
-                      {selectedTag && <span className="text-slate-400"> • Tag: {selectedTag}</span>}
-                      {selectedFuente && <span className="text-slate-400"> • Fuente: {selectedFuente}</span>}
+                      {selectedTag.length > 0 && <span className="text-slate-400"> • Tags: {selectedTag.join(', ')}</span>}
+                      {selectedFuente.length > 0 && <span className="text-slate-400"> • Fuentes: {selectedFuente.join(', ')}</span>}
                       {selectedReferido && <span className="text-slate-400"> • Referido por: {selectedReferido}</span>}
                       {filtroGestionWA && <span className="text-slate-400"> • Gestión WA: {filtroGestionWA === 'respond' ? 'Respond' : 'WA Business del Comercial'}</span>}
                 </span>
@@ -1224,10 +1305,11 @@ export default function Dashboard() {
                         setSelectedDia(null);
                         setSearchQuery('');
                         setSelectedCategoria(null);
-                        setSelectedTag(null);
-                        setSelectedFuente(null);
+                        setSelectedTag([]);
+                        setSelectedFuente([]);
                         setSelectedReferido(null);
                         setFiltroGestionWA(null);
+                        setFiltroSinSeguimiento(false);
                       }}
                   className="ml-auto text-sm text-[#1717AF] hover:text-[#02214A] font-medium hover:underline transition-all"
                 >
@@ -1236,8 +1318,16 @@ export default function Dashboard() {
               </div>
             )}
 
-                {/* Tabla de leads */}
-            <LeadsTable 
+                {/* Vista calendario de recordatorios cuando el filtro "Recordatorio Activo" está activo */}
+                {activeFilter === 'gestionado' ? (
+                  <RecordatoriosCalendar
+                    selectedComercial={selectedComercial}
+                    userEmail={userEmail}
+                    puedeVerTodos={puedeVerTodos}
+                    onOpenLead={handleOpenSidebar}
+                  />
+                ) : (
+                <LeadsTable 
                   leads={leads}
                   statsData={statsData}
                   etapasFunnel={etapasFunnel}
@@ -1247,7 +1337,9 @@ export default function Dashboard() {
                   onMarcarNoRevisado={handleMarcarNoRevisado}
                   onToggleHot={handleToggleHot}
                   onToggleGestionWA={handleToggleGestionWhatsApp}
-                  activeEtapa={activeEtapa}
+                  onMarcarLeidoBulk={handleMarcarLeidoBulk}
+                  onMarcarNoLeidoBulk={handleMarcarNoLeidoBulk}
+                  activeEtapas={activeEtapas}
                   onEtapaChange={handleEtapaChange}
                   activeFilter={activeFilter}
                   ultimosSeguimientos={ultimosSeguimientos}
@@ -1271,6 +1363,8 @@ export default function Dashboard() {
                   onFiltroGestionWAChange={setFiltroGestionWA}
                   sortConfig={sortConfig}
                   onSortChange={setSortConfig}
+                  filtroSinSeguimiento={filtroSinSeguimiento}
+                  onFiltroSinSeguimientoChange={setFiltroSinSeguimiento}
                   configTags={configTags}
                   coloresFases={coloresFases}
                   onRefreshData={() => {
@@ -1280,6 +1374,7 @@ export default function Dashboard() {
                     fetchLeads(true, currentPage);
                   }}
                 />
+                )}
               </>
             ) : activeView === 'pitch' ? (
               <>
@@ -1331,6 +1426,16 @@ export default function Dashboard() {
                   onFiltroGestionWAChange={setFiltroGestionWA}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
+                  dateFilterField={dateFilterField}
+                  onDateFilterFieldChange={setDateFilterField}
+                  showDateFilterToggle={metricasSubTab !== 'asignaciones'}
+                  puedeVerTodos={puedeVerTodos}
+                  monthConfigs={monthConfigs}
+                  onSaveMonthConfig={handleSaveMonthConfig}
+                  showTagFilter={metricasSubTab !== 'asignaciones'}
+                  showFuenteFilter={metricasSubTab !== 'asignaciones'}
+                  showReferidoFilter={false}
+                  showGestionWAFilter={false}
                 />
 
                 {/* Sub-tabs de Métricas */}
@@ -1368,6 +1473,7 @@ export default function Dashboard() {
                     selectedDia={selectedDia}
                     selectedTag={selectedTag}
                     puedeVerTodos={puedeVerTodos}
+                    monthConfigs={monthConfigs}
                   />
                 )}
 
@@ -1378,8 +1484,11 @@ export default function Dashboard() {
                     selectedPeriodo={selectedPeriodo}
                     selectedDia={selectedDia}
                     selectedTag={selectedTag}
+                    selectedFuente={selectedFuente}
                     puedeVerTodos={puedeVerTodos}
                     comerciales={comerciales}
+                    dateFilterField={dateFilterField}
+                    monthConfigs={monthConfigs}
                   />
                 )}
               </>
