@@ -6,6 +6,7 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
+import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
@@ -36,7 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('todos');
-  const [activeEtapa, setActiveEtapa] = useState(null);
+  const [activeEtapas, setActiveEtapas] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initialTab, setInitialTab] = useState('info');
@@ -147,6 +148,36 @@ export default function Dashboard() {
       setSelectedLead(leadActualizado);
     } catch (error) {
       console.error('Error al marcar como no revisado:', error);
+    }
+  };
+
+  // Marcar múltiples leads como leídos (revisado: true)
+  const handleMarcarLeidoBulk = async (cardIds) => {
+    setLeads(prevLeads =>
+      prevLeads.map(l => cardIds.includes(l.card_id) ? { ...l, revisado: true } : l)
+    );
+    try {
+      await supabase
+        .from('leads')
+        .update({ revisado: true })
+        .in('card_id', cardIds);
+    } catch (error) {
+      console.error('Error al marcar como leídos:', error);
+    }
+  };
+
+  // Marcar múltiples leads como no leídos (revisado: false)
+  const handleMarcarNoLeidoBulk = async (cardIds) => {
+    setLeads(prevLeads =>
+      prevLeads.map(l => cardIds.includes(l.card_id) ? { ...l, revisado: false } : l)
+    );
+    try {
+      await supabase
+        .from('leads')
+        .update({ revisado: false })
+        .in('card_id', cardIds);
+    } catch (error) {
+      console.error('Error al marcar como no leídos:', error);
     }
   };
 
@@ -776,7 +807,7 @@ export default function Dashboard() {
           q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
         }
         if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
-        if (activeEtapa) q = q.eq('etapa_funnel', activeEtapa);
+        if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
           const searchTerm = `%${searchQuery.trim()}%`;
           q = q.or(
@@ -898,7 +929,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapa, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -959,7 +990,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapa, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento]);
+  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1029,8 +1060,16 @@ export default function Dashboard() {
     setCurrentPage(0);
   };
 
-  const handleEtapaChange = (etapa) => {
-    setActiveEtapa(etapa);
+  const handleEtapaChange = (etapaId) => {
+    if (etapaId === null) {
+      setActiveEtapas([]);
+    } else {
+      setActiveEtapas(prev =>
+        prev.includes(etapaId)
+          ? prev.filter(id => id !== etapaId)
+          : [...prev, etapaId]
+      );
+    }
     setCurrentPage(0);
   };
 
@@ -1239,14 +1278,14 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapa || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedReferido || filtroGestionWA) && (
+                {(activeFilter !== 'todos' || activeEtapas.length > 0 || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedReferido || filtroGestionWA) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
                       Mostrando <strong className="text-[#02214A]">{totalLeads}</strong> leads filtrados
                       {searchQuery && <span className="text-slate-400"> • Búsqueda: "{searchQuery}"</span>}
                       {selectedComercial && <span className="text-slate-400"> • {comerciales.find(c => c.email === selectedComercial)?.nombre || selectedComercial}</span>}
-                      {activeEtapa && <span className="text-slate-400"> • Etapa: {activeEtapa}</span>}
+                      {activeEtapas.length > 0 && <span className="text-slate-400"> • {activeEtapas.length} etapa{activeEtapas.length > 1 ? 's' : ''} seleccionada{activeEtapas.length > 1 ? 's' : ''}</span>}
                       {selectedMes && <span className="text-slate-400"> • Mes seleccionado</span>}
                       {selectedPeriodo && <span className="text-slate-400"> • Periodo seleccionado</span>}
                       {selectedDia && <span className="text-slate-400"> • Día seleccionado</span>}
@@ -1279,8 +1318,16 @@ export default function Dashboard() {
               </div>
             )}
 
-                {/* Tabla de leads */}
-            <LeadsTable 
+                {/* Vista calendario de recordatorios cuando el filtro "Recordatorio Activo" está activo */}
+                {activeFilter === 'gestionado' ? (
+                  <RecordatoriosCalendar
+                    selectedComercial={selectedComercial}
+                    userEmail={userEmail}
+                    puedeVerTodos={puedeVerTodos}
+                    onOpenLead={handleOpenSidebar}
+                  />
+                ) : (
+                <LeadsTable 
                   leads={leads}
                   statsData={statsData}
                   etapasFunnel={etapasFunnel}
@@ -1290,7 +1337,9 @@ export default function Dashboard() {
                   onMarcarNoRevisado={handleMarcarNoRevisado}
                   onToggleHot={handleToggleHot}
                   onToggleGestionWA={handleToggleGestionWhatsApp}
-                  activeEtapa={activeEtapa}
+                  onMarcarLeidoBulk={handleMarcarLeidoBulk}
+                  onMarcarNoLeidoBulk={handleMarcarNoLeidoBulk}
+                  activeEtapas={activeEtapas}
                   onEtapaChange={handleEtapaChange}
                   activeFilter={activeFilter}
                   ultimosSeguimientos={ultimosSeguimientos}
@@ -1325,6 +1374,7 @@ export default function Dashboard() {
                     fetchLeads(true, currentPage);
                   }}
                 />
+                )}
               </>
             ) : activeView === 'pitch' ? (
               <>
