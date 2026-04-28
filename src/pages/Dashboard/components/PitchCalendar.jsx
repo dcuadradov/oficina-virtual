@@ -62,72 +62,45 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     return date.toDateString() === today.toDateString();
   };
 
-  // Cargar pitches
+  // Cargar pitches desde la vista `vw_pitches_calendario` que ya aplica la
+  // regla de negocio: una sola tarjeta por lead/fecha (sin conflictos entre
+  // historial y pitch agendado).
   useEffect(() => {
     const fetchPitches = async () => {
       setLoading(true);
       try {
-        console.log('=== DEBUG PITCH CALENDAR ===');
-        console.log('selectedComercial:', selectedComercial);
-        console.log('userEmail:', userEmail);
-        console.log('puedeVerTodos:', puedeVerTodos);
-        
         let query = supabase
-          .from('leads')
-          .select('*')
-          .not('fecha_pitch', 'is', null);
+          .from('vw_pitches_calendario')
+          .select('*');
 
-        // Filtrar por comercial
-        // Si puede ver todos y no ha seleccionado comercial, mostrar todos
-        // Si no puede ver todos, filtrar por su email
         if (selectedComercial) {
           query = query.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos && userEmail) {
           query = query.eq('comercial_email', userEmail);
         }
-        // Si puedeVerTodos y no hay selectedComercial, no filtramos (muestra todos)
 
         const { data, error } = await query;
-
-        console.log('Pitches desde BD:', data);
-        console.log('Error:', error);
-
         if (error) throw error;
-        
-        // Filtrar por fecha en el frontend (más confiable con formatos mixtos)
+
         const weekStart = getWeekStart(currentDate);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        
-        console.log('Semana actual:', weekStart.toDateString(), '-', weekEnd.toDateString());
-        
+
         const filteredData = (data || []).filter(pitch => {
-          if (!pitch.fecha_pitch) return false;
-          
-          // Extraer año, mes, día de la fecha del pitch
-          const match = pitch.fecha_pitch.match(/(\d{4})-(\d{2})-(\d{2})/);
-          if (!match) {
-            console.log('No match para:', pitch.fecha_pitch);
-            return false;
-          }
-          
+          if (!pitch.fecha_pitch_calendario) return false;
+
+          const match = pitch.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if (!match) return false;
+
           const [, year, month, day] = match;
           const pitchDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-          
-          console.log('Pitch:', pitch.nombre, '| fecha_pitch:', pitch.fecha_pitch, '| pitchDate:', pitchDate.toDateString());
-          
+
           if (viewMode === 'week') {
-            const inRange = pitchDate >= weekStart && pitchDate <= weekEnd;
-            console.log('  En rango semana?', inRange);
-            return inRange;
-          } else {
-            const sameDay = pitchDate.toDateString() === currentDate.toDateString();
-            console.log('  Mismo día?', sameDay);
-            return sameDay;
+            return pitchDate >= weekStart && pitchDate <= weekEnd;
           }
+          return pitchDate.toDateString() === currentDate.toDateString();
         });
-        
-        console.log('Pitches filtrados:', filteredData.length);
+
         setPitches(filteredData);
       } catch (error) {
         console.error('Error cargando pitches:', error);
@@ -137,7 +110,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     };
 
     fetchPitches();
-  }, [currentDate, viewMode, selectedComercial, userEmail]);
+  }, [currentDate, viewMode, selectedComercial, userEmail, puedeVerTodos]);
 
   // Auto-scroll a las 7 AM cuando termina de cargar
   useEffect(() => {
@@ -167,7 +140,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
   // Obtener pitches para una fecha y hora específica
   const getPitchesForSlot = (date, hour) => {
     return pitches.filter(pitch => {
-      const parsed = parseDateWithoutTimezone(pitch.fecha_pitch);
+      const parsed = parseDateWithoutTimezone(pitch.fecha_pitch_calendario);
       if (!parsed) return false;
       // Comparar fecha (día/mes/año) y hora SIN conversión de zona horaria
       const sameDate = parsed.year === date.getFullYear() &&
@@ -348,13 +321,13 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
                           
                           return (
                             <div
-                              key={pitch.card_id}
+                              key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onOpenLead?.(pitch);
                               }}
                               className={`absolute rounded-lg px-1.5 py-1 text-xs font-medium shadow-sm transition-all hover:z-20 hover:scale-[1.03] hover:shadow-lg cursor-pointer border-2 ${
-                                isPastPitch(pitch.fecha_pitch)
+                                isPastPitch(pitch.fecha_pitch_calendario)
                                   ? 'bg-slate-200 text-slate-600 border-slate-400 hover:bg-slate-300'
                                   : 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600'
                               }`}
@@ -371,7 +344,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
                                 {pitch.nombre?.split(' ')[0]}
                               </div>
                               <div className="truncate text-[9px] opacity-90">
-                                {formatTimeWithAmPm(pitch.fecha_pitch)}
+                                {formatTimeWithAmPm(pitch.fecha_pitch_calendario)}
                               </div>
                               {total === 1 && (
                                 <div className="truncate text-[8px] opacity-75">
@@ -415,17 +388,17 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
                     <div className="flex-1 p-2 relative">
                       {slotPitches.map((pitch) => (
                         <div
-                          key={pitch.card_id}
+                          key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
                           onClick={() => onOpenLead?.(pitch)}
                           className={`rounded-xl px-4 py-3 text-sm font-medium shadow-sm mb-2 transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer ${
-                            isPastPitch(pitch.fecha_pitch)
+                            isPastPitch(pitch.fecha_pitch_calendario)
                               ? 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
                               : 'bg-amber-400 text-amber-900 border border-amber-500 hover:bg-amber-500'
                           }`}
                         >
                           <div className="font-semibold">{pitch.nombre}</div>
                           <div className="text-xs opacity-80 mt-1">
-                            {formatTimeWithAmPm(pitch.fecha_pitch)} - 1 hora
+                            {formatTimeWithAmPm(pitch.fecha_pitch_calendario)} - 1 hora
                           </div>
                           <div className="text-xs opacity-60 mt-0.5">
                             📧 {pitch.comercial_email?.split('@')[0] || 'Sin asignar'}
