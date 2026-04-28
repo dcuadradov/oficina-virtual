@@ -6,6 +6,8 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
+import PitchKpis, { DEFAULT_PITCH_KPI_TAGS } from './components/PitchKpis';
+import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
@@ -93,6 +95,10 @@ export default function Dashboard() {
   const [sortConfig, setSortConfig] = useState({ field: 'updated_at', ascending: false });
   const [filtroSinSeguimiento, setFiltroSinSeguimiento] = useState(false);
   const [monthConfigs, setMonthConfigs] = useState({});
+
+  // Tags por defecto para el denominador del KPI Efectividad de Mis Pitch.
+  // Estado independiente de selectedTag (Métricas) para no acoplar vistas.
+  const [pitchKpiTags, setPitchKpiTags] = useState(DEFAULT_PITCH_KPI_TAGS);
 
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -1378,8 +1384,9 @@ export default function Dashboard() {
               </>
             ) : activeView === 'pitch' ? (
               <>
-                {/* Filtros para Mis Pitch: tiempo (mes/periodo/día) + comercial.
-                    Los handlers handle*Change garantizan exclusión mutua. */}
+                {/* Filtros para Mis Pitch: tiempo (mes/periodo/día) + comercial + tags.
+                    Los handlers handle*Change garantizan exclusión mutua entre tiempo.
+                    El filtro de tags usa pitchKpiTags (estado propio de Mis Pitch). */}
                 <DashboardFilters
                   comerciales={comerciales}
                   selectedComercial={selectedComercial}
@@ -1390,12 +1397,34 @@ export default function Dashboard() {
                   onPeriodoChange={handlePeriodoChange}
                   selectedDia={selectedDia}
                   onDiaChange={handleDiaChange}
+                  selectedTag={pitchKpiTags}
+                  onTagChange={setPitchKpiTags}
+                  tags={tagsDisponibles}
+                  showFuenteFilter={false}
+                  showReferidoFilter={false}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}
                   puedeVerTodos={puedeVerTodos}
                 />
+
+                {/* KPIs (10 cards 5x2): efectividad, asistencia y distribución por etapa */}
+                {(() => {
+                  const { rangeStart, rangeEnd } = resolvePitchRange({
+                    selectedDia, selectedPeriodo, selectedMes, monthConfigs,
+                  });
+                  return (
+                    <PitchKpis
+                      rangeStart={rangeStart}
+                      rangeEnd={rangeEnd}
+                      selectedComercial={selectedComercial}
+                      userEmail={userEmail}
+                      puedeVerTodos={puedeVerTodos}
+                      selectedTags={pitchKpiTags}
+                    />
+                  );
+                })()}
 
                 {/* Calendario de Pitches */}
                 <PitchCalendar

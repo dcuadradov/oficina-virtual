@@ -2,36 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { Loader2 } from 'lucide-react';
 import { PITCH_STATES, getPitchState, getPitchCardClasses } from '../../../constants/pitchColors';
-
-// Días de la semana abreviados (DOM=0 ... SAB=6, en orden JS)
-const DAY_LABELS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-const MONTH_LABELS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
-// Construye una Date local (00:00) a partir de una cadena 'YYYY-MM-DD'
-const parseLocalDate = (str) => {
-  if (!str) return null;
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
+import { resolvePitchRange, MONTH_LABELS, DAY_LABELS } from '../../../utils/pitchRange';
 
 // Suma N días a una Date (sin mutar la original)
 const addDays = (date, n) => {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
-  return d;
-};
-
-// Devuelve el martes anterior (incluido si la fecha YA es martes)
-// que ancla el periodo de 7 días Mar-Lun.
-const getTuesdayWeekStart = (date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // Tuesday=2 en JS (Sun=0)
-  const offset = (d.getDay() - 2 + 7) % 7;
-  d.setDate(d.getDate() - offset);
   return d;
 };
 
@@ -65,55 +41,16 @@ export default function PitchCalendar({
   // Prioridad: día > periodo > mes > (default: periodo actual martes-lunes).
   // viewMode: 'day' | 'period' | 'month'.
   const { viewMode, rangeStart, rangeEnd, headerTitle } = useMemo(() => {
-    if (selectedDia) {
-      const start = parseLocalDate(selectedDia);
-      return {
-        viewMode: 'day',
-        rangeStart: start,
-        rangeEnd: start,
-        headerTitle: `${start.getDate()} de ${MONTH_LABELS[start.getMonth()]} ${start.getFullYear()}`,
-      };
+    const r = resolvePitchRange({ selectedDia, selectedPeriodo, selectedMes, monthConfigs });
+    let title = '';
+    if (r.viewMode === 'day') {
+      title = `${r.rangeStart.getDate()} de ${MONTH_LABELS[r.rangeStart.getMonth()]} ${r.rangeStart.getFullYear()}`;
+    } else if (r.viewMode === 'month') {
+      title = `${MONTH_LABELS[r.rangeStart.getMonth()]} ${r.rangeStart.getFullYear()}`;
+    } else {
+      title = `${r.rangeStart.getDate()} ${MONTH_LABELS[r.rangeStart.getMonth()].slice(0, 3)} - ${r.rangeEnd.getDate()} ${MONTH_LABELS[r.rangeEnd.getMonth()].slice(0, 3)} ${r.rangeEnd.getFullYear()}`;
     }
-    if (selectedPeriodo) {
-      const [ini, fin] = selectedPeriodo.split('_');
-      const start = parseLocalDate(ini);
-      const end = parseLocalDate(fin);
-      return {
-        viewMode: 'period',
-        rangeStart: start,
-        rangeEnd: end,
-        headerTitle: `${start.getDate()} ${MONTH_LABELS[start.getMonth()].slice(0, 3)} - ${end.getDate()} ${MONTH_LABELS[end.getMonth()].slice(0, 3)} ${end.getFullYear()}`,
-      };
-    }
-    if (selectedMes) {
-      const cfg = monthConfigs?.[selectedMes];
-      const [yStr, mStr] = selectedMes.split('-');
-      const año = parseInt(yStr, 10);
-      const mes = parseInt(mStr, 10);
-      let start, end;
-      if (cfg?.fecha_inicio) {
-        start = parseLocalDate(cfg.fecha_inicio);
-        end = cfg.fecha_fin ? parseLocalDate(cfg.fecha_fin) : new Date();
-      } else {
-        start = new Date(año, mes - 1, 1);
-        end = new Date(año, mes, 0); // último día del mes
-      }
-      return {
-        viewMode: 'month',
-        rangeStart: start,
-        rangeEnd: end,
-        headerTitle: `${MONTH_LABELS[mes - 1]} ${año}`,
-      };
-    }
-    // Default: periodo actual (martes a lunes que contiene hoy)
-    const start = getTuesdayWeekStart(new Date());
-    const end = addDays(start, 6);
-    return {
-      viewMode: 'period',
-      rangeStart: start,
-      rangeEnd: end,
-      headerTitle: `${start.getDate()} ${MONTH_LABELS[start.getMonth()].slice(0, 3)} - ${end.getDate()} ${MONTH_LABELS[end.getMonth()].slice(0, 3)} ${end.getFullYear()}`,
-    };
+    return { ...r, headerTitle: title };
   }, [selectedDia, selectedPeriodo, selectedMes, monthConfigs]);
 
   // Días contenidos en el rango (para renders por columnas/secciones)
