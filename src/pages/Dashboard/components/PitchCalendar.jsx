@@ -1,11 +1,50 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { PITCH_STATES, getPitchState, getPitchCardClasses } from '../../../constants/pitchColors';
 
-export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead, puedeVerTodos = false }) {
-  const [viewMode, setViewMode] = useState('week'); // 'week' o 'day'
-  const [currentDate, setCurrentDate] = useState(new Date());
+// Días de la semana abreviados (DOM=0 ... SAB=6, en orden JS)
+const DAY_LABELS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+const MONTH_LABELS = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+// Construye una Date local (00:00) a partir de una cadena 'YYYY-MM-DD'
+const parseLocalDate = (str) => {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+// Suma N días a una Date (sin mutar la original)
+const addDays = (date, n) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+
+// Devuelve el martes anterior (incluido si la fecha YA es martes)
+// que ancla el periodo de 7 días Mar-Lun.
+const getTuesdayWeekStart = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  // Tuesday=2 en JS (Sun=0)
+  const offset = (d.getDay() - 2 + 7) % 7;
+  d.setDate(d.getDate() - offset);
+  return d;
+};
+
+export default function PitchCalendar({
+  selectedComercial,
+  userEmail,
+  onOpenLead,
+  puedeVerTodos = false,
+  selectedMes = null,
+  selectedPeriodo = null,
+  selectedDia = null,
+  monthConfigs = {},
+}) {
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
   // Set de IDs de PITCH_STATES seleccionados como filtro. Vacío = mostrar todos.
@@ -22,131 +61,151 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
   };
   const clearStateFilters = () => setSelectedStateIds(new Set());
 
-  // Obtener el inicio de la semana (domingo)
-  const getWeekStart = (date) => {
-    const d = new Date(date);
-    const day = d.getDay();
-    d.setDate(d.getDate() - day);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  };
+  // ----- Determinar modo y rango a partir de los filtros del Dashboard -----
+  // Prioridad: día > periodo > mes > (default: periodo actual martes-lunes).
+  // viewMode: 'day' | 'period' | 'month'.
+  const { viewMode, rangeStart, rangeEnd, headerTitle } = useMemo(() => {
+    if (selectedDia) {
+      const start = parseLocalDate(selectedDia);
+      return {
+        viewMode: 'day',
+        rangeStart: start,
+        rangeEnd: start,
+        headerTitle: `${start.getDate()} de ${MONTH_LABELS[start.getMonth()]} ${start.getFullYear()}`,
+      };
+    }
+    if (selectedPeriodo) {
+      const [ini, fin] = selectedPeriodo.split('_');
+      const start = parseLocalDate(ini);
+      const end = parseLocalDate(fin);
+      return {
+        viewMode: 'period',
+        rangeStart: start,
+        rangeEnd: end,
+        headerTitle: `${start.getDate()} ${MONTH_LABELS[start.getMonth()].slice(0, 3)} - ${end.getDate()} ${MONTH_LABELS[end.getMonth()].slice(0, 3)} ${end.getFullYear()}`,
+      };
+    }
+    if (selectedMes) {
+      const cfg = monthConfigs?.[selectedMes];
+      const [yStr, mStr] = selectedMes.split('-');
+      const año = parseInt(yStr, 10);
+      const mes = parseInt(mStr, 10);
+      let start, end;
+      if (cfg?.fecha_inicio) {
+        start = parseLocalDate(cfg.fecha_inicio);
+        end = cfg.fecha_fin ? parseLocalDate(cfg.fecha_fin) : new Date();
+      } else {
+        start = new Date(año, mes - 1, 1);
+        end = new Date(año, mes, 0); // último día del mes
+      }
+      return {
+        viewMode: 'month',
+        rangeStart: start,
+        rangeEnd: end,
+        headerTitle: `${MONTH_LABELS[mes - 1]} ${año}`,
+      };
+    }
+    // Default: periodo actual (martes a lunes que contiene hoy)
+    const start = getTuesdayWeekStart(new Date());
+    const end = addDays(start, 6);
+    return {
+      viewMode: 'period',
+      rangeStart: start,
+      rangeEnd: end,
+      headerTitle: `${start.getDate()} ${MONTH_LABELS[start.getMonth()].slice(0, 3)} - ${end.getDate()} ${MONTH_LABELS[end.getMonth()].slice(0, 3)} ${end.getFullYear()}`,
+    };
+  }, [selectedDia, selectedPeriodo, selectedMes, monthConfigs]);
 
-  // Obtener los días de la semana actual
-  const weekDays = useMemo(() => {
-    const start = getWeekStart(currentDate);
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-      return day;
-    });
-  }, [currentDate]);
+  // Días contenidos en el rango (para renders por columnas/secciones)
+  const rangeDays = useMemo(() => {
+    if (!rangeStart || !rangeEnd) return [];
+    const days = [];
+    const start = new Date(rangeStart);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(rangeEnd);
+    end.setHours(0, 0, 0, 0);
+    let cursor = new Date(start);
+    // Hard-cap defensivo: 366 iteraciones (en caso de mes mal configurado)
+    let i = 0;
+    while (cursor <= end && i < 366) {
+      days.push(new Date(cursor));
+      cursor = addDays(cursor, 1);
+      i++;
+    }
+    return days;
+  }, [rangeStart, rangeEnd]);
 
-  // Horas del día (12 AM a 11 PM - 24 horas completas)
-  const hours = useMemo(() => {
-    return Array.from({ length: 24 }, (_, i) => i); // 0 a 23
-  }, []);
-  
-  // Altura de cada slot de hora en píxeles (para calcular scroll)
+  // Horas del día (12 AM a 11 PM)
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+
+  // Altura de cada slot de hora en píxeles (para auto-scroll a 7 AM)
   const HOUR_SLOT_HEIGHT = 70;
 
-  // Formatear hora
   const formatHour = (hour) => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const h = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
     return `${h} ${ampm}`;
   };
 
-  // Formatear día
-  const formatDay = (date) => {
-    const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-    return days[date.getDay()];
-  };
+  const formatDay = (date) => DAY_LABELS[date.getDay()];
 
-  // Formatear mes
-  const formatMonth = (date) => {
-    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    return `${months[date.getMonth()]} ${date.getFullYear()}`;
-  };
+  const isToday = (date) => date.toDateString() === new Date().toDateString();
 
-  // Verificar si es hoy
-  const isToday = (date) => {
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
-  };
-
-  // Cargar pitches desde la vista `vw_pitches_calendario` que ya aplica la
-  // regla de negocio: una sola tarjeta por lead/fecha (sin conflictos entre
-  // historial y pitch agendado).
+  // ----- Carga de datos: la vista vw_pitches_calendario ya aplica la regla
+  // de negocio (una sola tarjeta por lead/fecha) -----
   useEffect(() => {
     const fetchPitches = async () => {
       setLoading(true);
       try {
-        let query = supabase
-          .from('vw_pitches_calendario')
-          .select('*');
-
+        let query = supabase.from('vw_pitches_calendario').select('*');
         if (selectedComercial) {
           query = query.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos && userEmail) {
           query = query.eq('comercial_email', userEmail);
         }
-
         const { data, error } = await query;
         if (error) throw error;
 
-        const weekStart = getWeekStart(currentDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-
-        const filteredData = (data || []).filter(pitch => {
-          if (!pitch.fecha_pitch_calendario) return false;
-
-          const match = pitch.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
-          if (!match) return false;
-
-          const [, year, month, day] = match;
-          const pitchDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
-          if (viewMode === 'week') {
-            return pitchDate >= weekStart && pitchDate <= weekEnd;
-          }
-          return pitchDate.toDateString() === currentDate.toDateString();
+        // Filtrar por rango sin conversión de zona horaria
+        const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
+        const end = new Date(rangeEnd); end.setHours(23, 59, 59, 999);
+        const filtered = (data || []).filter(p => {
+          if (!p.fecha_pitch_calendario) return false;
+          const m = p.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if (!m) return false;
+          const [, y, mo, d] = m;
+          const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
+          return dt >= start && dt <= end;
         });
-
-        setPitches(filteredData);
+        setPitches(filtered);
       } catch (error) {
         console.error('Error cargando pitches:', error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchPitches();
-  }, [currentDate, viewMode, selectedComercial, userEmail, puedeVerTodos]);
+  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos]);
 
-  // Auto-scroll a las 7 AM cuando termina de cargar
+  // Auto-scroll a las 7 AM cuando termina de cargar (solo en vistas con grid horario)
   useEffect(() => {
-    if (!loading && calendarScrollRef.current) {
-      // Scroll a la hora 7 (7 AM) - cada hora tiene HOUR_SLOT_HEIGHT px
-      const scrollTo7AM = 7 * HOUR_SLOT_HEIGHT;
-      calendarScrollRef.current.scrollTop = scrollTo7AM;
+    if (!loading && calendarScrollRef.current && viewMode !== 'month') {
+      calendarScrollRef.current.scrollTop = 7 * HOUR_SLOT_HEIGHT;
     }
-  }, [loading]);
+  }, [loading, viewMode]);
 
-  // Extraer fecha/hora sin conversión de zona horaria (soporta formato con T o espacio)
+  // Extraer fecha/hora sin conversión de zona horaria
   const parseDateWithoutTimezone = (dateString) => {
     if (!dateString) return null;
-    // Soporta "2025-12-03T18:00:00" o "2025-12-03 18:00:00+00"
     const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
     if (!match) return null;
     const [, year, month, day, hour, minute] = match;
     return {
       year: parseInt(year),
-      month: parseInt(month) - 1, // 0-indexed
+      month: parseInt(month) - 1,
       day: parseInt(day),
       hour: parseInt(hour),
-      minute: parseInt(minute)
+      minute: parseInt(minute),
     };
   };
 
@@ -157,13 +216,12 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     return selectedStateIds.has(state.id);
   };
 
-  // Obtener pitches para una fecha y hora específica
+  // Pitches que caen en (date, hour)
   const getPitchesForSlot = (date, hour) => {
     return pitches.filter(pitch => {
       if (!matchesStateFilter(pitch)) return false;
       const parsed = parseDateWithoutTimezone(pitch.fecha_pitch_calendario);
       if (!parsed) return false;
-      // Comparar fecha (día/mes/año) y hora SIN conversión de zona horaria
       const sameDate = parsed.year === date.getFullYear() &&
                        parsed.month === date.getMonth() &&
                        parsed.day === date.getDate();
@@ -172,13 +230,29 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     });
   };
 
-  // Conteo de pitches visibles tras aplicar el filtro (para mostrar en footer)
+  // Pitches del día completo (para vista mes - lista)
+  const getPitchesForDay = (date) => {
+    return pitches.filter(pitch => {
+      if (!matchesStateFilter(pitch)) return false;
+      const parsed = parseDateWithoutTimezone(pitch.fecha_pitch_calendario);
+      if (!parsed) return false;
+      return parsed.year === date.getFullYear() &&
+             parsed.month === date.getMonth() &&
+             parsed.day === date.getDate();
+    }).sort((a, b) => {
+      const pa = parseDateWithoutTimezone(a.fecha_pitch_calendario);
+      const pb = parseDateWithoutTimezone(b.fecha_pitch_calendario);
+      return (pa.hour * 60 + pa.minute) - (pb.hour * 60 + pb.minute);
+    });
+  };
+
+  // Pitches visibles tras filtro (para footer)
   const visiblePitchesCount = useMemo(
     () => pitches.filter(matchesStateFilter).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pitches, selectedStateIds]
   );
 
-  // Formatear hora con AM/PM para mostrar en tarjetas (sin conversión de zona horaria)
   const formatTimeWithAmPm = (dateString) => {
     const parsed = parseDateWithoutTimezone(dateString);
     if (!parsed) return '';
@@ -189,7 +263,6 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     return `${hours}:${minutes} ${ampm}`;
   };
 
-  // Verificar si un pitch ya pasó (sin conversión de zona horaria)
   const isPastPitch = (fecha_pitch) => {
     const parsed = parseDateWithoutTimezone(fecha_pitch);
     if (!parsed) return false;
@@ -197,101 +270,25 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     return pitchDate < new Date();
   };
 
-  // Navegación
-  const goToToday = () => setCurrentDate(new Date());
-  
-  const goToPrevious = () => {
-    const newDate = new Date(currentDate);
-    if (viewMode === 'week') {
-      newDate.setDate(newDate.getDate() - 7);
-    } else {
-      newDate.setDate(newDate.getDate() - 1);
-    }
-    setCurrentDate(newDate);
-  };
-
-  const goToNext = () => {
-    const newDate = new Date(currentDate);
-    if (viewMode === 'week') {
-      newDate.setDate(newDate.getDate() + 7);
-    } else {
-      newDate.setDate(newDate.getDate() + 1);
-    }
-    setCurrentDate(newDate);
-  };
-
-  // Click en día para ir a vista diaria
-  const handleDayClick = (date) => {
-    setCurrentDate(date);
-    setViewMode('day');
-  };
-
+  // ----- Render -----
   return (
     <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-      {/* Header del calendario */}
+      {/* Header del calendario: solo título (la navegación temporal vive
+          en el DashboardFilters de arriba). */}
       <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-        <div className="flex items-center justify-between">
-          {/* Navegación y título */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={goToToday}
-              className="px-4 py-2 text-sm font-medium text-[#1717AF] bg-[#1717AF]/10 rounded-xl hover:bg-[#1717AF]/20 transition-all"
-            >
-              Hoy
-            </button>
-            
-            <div className="flex items-center gap-1">
-              <button
-                onClick={goToPrevious}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <ChevronLeft size={20} className="text-slate-600" />
-              </button>
-              <button
-                onClick={goToNext}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <ChevronRight size={20} className="text-slate-600" />
-              </button>
-            </div>
-            
-            <h2 className="text-lg font-semibold text-slate-800">
-              {viewMode === 'day' 
-                ? `${currentDate.getDate()} de ${formatMonth(currentDate)}`
-                : formatMonth(weekDays[0])
-              }
-            </h2>
-          </div>
-
-          {/* Selector de vista */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('week')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                viewMode === 'week'
-                  ? 'bg-white text-[#1717AF] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Semana
-            </button>
-            <button
-              onClick={() => setViewMode('day')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                viewMode === 'day'
-                  ? 'bg-white text-[#1717AF] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Día
-            </button>
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {headerTitle}
+          </h2>
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+            {viewMode === 'day' && 'Vista día'}
+            {viewMode === 'period' && 'Vista periodo'}
+            {viewMode === 'month' && 'Vista mes'}
+          </span>
         </div>
       </div>
 
-      {/* Barra de chips: leyenda + filtro multi-select.
-          Click en un chip lo marca como filtro activo (anillo);
-          si no hay ninguno marcado, se muestran todos los estados. */}
+      {/* Barra de chips: leyenda + filtro multi-select. */}
       <div className="px-6 py-3 border-b border-slate-100 bg-white">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mr-1">
@@ -335,146 +332,154 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
         <div className="flex items-center justify-center py-20">
           <Loader2 size={32} className="text-[#1717AF] animate-spin" />
         </div>
-      ) : (
+      ) : viewMode === 'month' ? (
+        // ===== Vista MES (lista) =====
+        <MonthListView
+          rangeDays={rangeDays}
+          getPitchesForDay={getPitchesForDay}
+          formatDay={formatDay}
+          formatTimeWithAmPm={formatTimeWithAmPm}
+          isPastPitch={isPastPitch}
+          isToday={isToday}
+          onOpenLead={onOpenLead}
+          visiblePitchesCount={visiblePitchesCount}
+        />
+      ) : viewMode === 'day' ? (
+        // ===== Vista DÍA (grid horario, 1 columna) =====
         <div ref={calendarScrollRef} className="overflow-auto max-h-[600px]">
-          {viewMode === 'week' ? (
-            /* Vista de semana */
-            <div className="min-w-[800px]">
-              {/* Header con días */}
-              <div className="grid grid-cols-8 border-b border-slate-100 sticky top-0 bg-white z-30">
-                <div className="p-3 text-xs font-medium text-slate-400 border-r border-slate-100">
-                  GMT-05
+          <div className="min-w-[400px]">
+            <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className={`text-center ${isToday(rangeStart) ? 'text-[#1717AF]' : 'text-slate-600'}`}>
+                <div className="text-sm font-medium">{formatDay(rangeStart)}</div>
+                <div className={`text-3xl font-bold mt-1 ${
+                  isToday(rangeStart)
+                    ? 'w-12 h-12 rounded-full bg-[#1717AF] text-white flex items-center justify-center mx-auto'
+                    : ''
+                }`}>
+                  {rangeStart.getDate()}
                 </div>
-                {weekDays.map((day, index) => (
-                  <div 
-                    key={index}
-                    onClick={() => handleDayClick(day)}
-                    className={`p-3 text-center border-r border-slate-100 last:border-r-0 cursor-pointer hover:bg-slate-50 transition-colors ${
-                      isToday(day) ? 'bg-[#1717AF]/5' : ''
-                    }`}
-                  >
-                    <div className={`text-xs font-medium ${isToday(day) ? 'text-[#1717AF]' : 'text-slate-400'}`}>
-                      {formatDay(day)}
-                    </div>
-                    <div className={`text-lg font-semibold mt-1 ${
-                      isToday(day) 
-                        ? 'w-8 h-8 rounded-full bg-[#1717AF] text-white flex items-center justify-center mx-auto' 
-                        : 'text-slate-700'
-                    }`}>
-                      {day.getDate()}
-                    </div>
-                  </div>
-                ))}
               </div>
-
-              {/* Grid de horas */}
-              {hours.map((hour) => (
-                <div key={hour} className="grid grid-cols-8 border-b border-slate-50 min-h-[70px]">
-                  <div className="p-2 text-xs font-medium text-slate-400 border-r border-slate-100 text-right pr-3">
+            </div>
+            {hours.map((hour) => {
+              const slotPitches = getPitchesForSlot(rangeStart, hour);
+              return (
+                <div key={hour} className="flex border-b border-slate-50 min-h-[70px]">
+                  <div className="w-20 p-3 text-xs font-medium text-slate-400 border-r border-slate-100 text-right flex-shrink-0">
                     {formatHour(hour)}
                   </div>
-                  {weekDays.map((day, dayIndex) => {
-                    const slotPitches = getPitchesForSlot(day, hour);
-                    return (
-                      <div 
-                        key={dayIndex} 
-                        className={`border-r border-slate-50 last:border-r-0 p-1 relative ${
-                          isToday(day) ? 'bg-[#1717AF]/[0.02]' : ''
+                  <div className="flex-1 p-2 relative">
+                    {slotPitches.map((pitch) => (
+                      <div
+                        key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
+                        onClick={() => onOpenLead?.(pitch)}
+                        className={`rounded-xl px-4 py-3 text-sm font-medium shadow-sm mb-2 transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer border ${
+                          getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
                         }`}
                       >
-                        {slotPitches.map((pitch, pitchIndex) => {
-                          const total = slotPitches.length;
-                          const width = total > 1 ? `calc(${100 / total}% - 2px)` : 'calc(100% - 8px)';
-                          const left = total > 1 ? `calc(${(pitchIndex / total) * 100}% + 1px)` : '4px';
-                          
-                          return (
-                            <div
-                              key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenLead?.(pitch);
-                              }}
-                              className={`absolute rounded-lg px-1.5 py-1 text-xs font-medium shadow-sm transition-all hover:z-20 hover:scale-[1.03] hover:shadow-lg cursor-pointer border-2 ${
-                                getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
-                              }`}
-                              style={{
-                                top: '2px',
-                                left: left,
-                                width: width,
-                                height: 'calc(100% - 4px)',
-                                zIndex: 10 + pitchIndex
-                              }}
-                              title={`${pitch.nombre} - ${pitch.comercial_email?.split('@')[0] || ''} - Clic para ver detalles`}
-                            >
-                              <div className="truncate font-semibold text-[11px]">
-                                {pitch.nombre?.split(' ')[0]}
-                              </div>
-                              <div className="truncate text-[9px] opacity-90">
-                                {formatTimeWithAmPm(pitch.fecha_pitch_calendario)}
-                              </div>
-                              {total === 1 && (
-                                <div className="truncate text-[8px] opacity-75">
-                                  {pitch.comercial_email?.split('@')[0] || ''}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        <div className="font-semibold">{pitch.nombre}</div>
+                        <div className="text-xs opacity-80 mt-1">
+                          {formatTimeWithAmPm(pitch.fecha_pitch_calendario)} - 1 hora
+                        </div>
+                        <div className="text-xs opacity-60 mt-0.5">
+                          {pitch.comercial_email?.split('@')[0] || 'Sin asignar'}
+                        </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        // ===== Vista PERIODO (grid horario, N columnas: 7 días Mar-Lun por defecto) =====
+        <div ref={calendarScrollRef} className="overflow-auto max-h-[600px]">
+          <div className="min-w-[800px]">
+            <div
+              className="grid border-b border-slate-100 sticky top-0 bg-white z-30"
+              style={{ gridTemplateColumns: `80px repeat(${rangeDays.length}, minmax(0, 1fr))` }}
+            >
+              <div className="p-3 text-xs font-medium text-slate-400 border-r border-slate-100">
+                GMT-05
+              </div>
+              {rangeDays.map((day, index) => (
+                <div
+                  key={index}
+                  className={`p-3 text-center border-r border-slate-100 last:border-r-0 ${
+                    isToday(day) ? 'bg-[#1717AF]/5' : ''
+                  }`}
+                >
+                  <div className={`text-xs font-medium ${isToday(day) ? 'text-[#1717AF]' : 'text-slate-400'}`}>
+                    {formatDay(day)}
+                  </div>
+                  <div className={`text-lg font-semibold mt-1 ${
+                    isToday(day)
+                      ? 'w-8 h-8 rounded-full bg-[#1717AF] text-white flex items-center justify-center mx-auto'
+                      : 'text-slate-700'
+                  }`}>
+                    {day.getDate()}
+                  </div>
                 </div>
               ))}
             </div>
-          ) : (
-            /* Vista de día */
-            <div className="min-w-[400px]">
-              {/* Header del día */}
-              <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-                <div className={`text-center ${isToday(currentDate) ? 'text-[#1717AF]' : 'text-slate-600'}`}>
-                  <div className="text-sm font-medium">{formatDay(currentDate)}</div>
-                  <div className={`text-3xl font-bold mt-1 ${
-                    isToday(currentDate) 
-                      ? 'w-12 h-12 rounded-full bg-[#1717AF] text-white flex items-center justify-center mx-auto' 
-                      : ''
-                  }`}>
-                    {currentDate.getDate()}
-                  </div>
+            {hours.map((hour) => (
+              <div
+                key={hour}
+                className="grid border-b border-slate-50 min-h-[70px]"
+                style={{ gridTemplateColumns: `80px repeat(${rangeDays.length}, minmax(0, 1fr))` }}
+              >
+                <div className="p-2 text-xs font-medium text-slate-400 border-r border-slate-100 text-right pr-3">
+                  {formatHour(hour)}
                 </div>
+                {rangeDays.map((day, dayIndex) => {
+                  const slotPitches = getPitchesForSlot(day, hour);
+                  return (
+                    <div
+                      key={dayIndex}
+                      className={`border-r border-slate-50 last:border-r-0 p-1 relative ${
+                        isToday(day) ? 'bg-[#1717AF]/[0.02]' : ''
+                      }`}
+                    >
+                      {slotPitches.map((pitch, pitchIndex) => {
+                        const total = slotPitches.length;
+                        const width = total > 1 ? `calc(${100 / total}% - 2px)` : 'calc(100% - 8px)';
+                        const left = total > 1 ? `calc(${(pitchIndex / total) * 100}% + 1px)` : '4px';
+                        return (
+                          <div
+                            key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
+                            onClick={(e) => { e.stopPropagation(); onOpenLead?.(pitch); }}
+                            className={`absolute rounded-lg px-1.5 py-1 text-xs font-medium shadow-sm transition-all hover:z-20 hover:scale-[1.03] hover:shadow-lg cursor-pointer border-2 ${
+                              getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
+                            }`}
+                            style={{
+                              top: '2px',
+                              left,
+                              width,
+                              height: 'calc(100% - 4px)',
+                              zIndex: 10 + pitchIndex,
+                            }}
+                            title={`${pitch.nombre} - ${pitch.comercial_email?.split('@')[0] || ''} - Clic para ver detalles`}
+                          >
+                            <div className="truncate font-semibold text-[11px]">
+                              {pitch.nombre?.split(' ')[0]}
+                            </div>
+                            <div className="truncate text-[9px] opacity-90">
+                              {formatTimeWithAmPm(pitch.fecha_pitch_calendario)}
+                            </div>
+                            {total === 1 && (
+                              <div className="truncate text-[8px] opacity-75">
+                                {pitch.comercial_email?.split('@')[0] || ''}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
-
-              {/* Grid de horas */}
-              {hours.map((hour) => {
-                const slotPitches = getPitchesForSlot(currentDate, hour);
-                return (
-                  <div key={hour} className="flex border-b border-slate-50 min-h-[70px]">
-                    <div className="w-20 p-3 text-xs font-medium text-slate-400 border-r border-slate-100 text-right flex-shrink-0">
-                      {formatHour(hour)}
-                    </div>
-                    <div className="flex-1 p-2 relative">
-                      {slotPitches.map((pitch) => (
-                        <div
-                          key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
-                          onClick={() => onOpenLead?.(pitch)}
-                          className={`rounded-xl px-4 py-3 text-sm font-medium shadow-sm mb-2 transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer border ${
-                            getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
-                          }`}
-                        >
-                          <div className="font-semibold">{pitch.nombre}</div>
-                          <div className="text-xs opacity-80 mt-1">
-                            {formatTimeWithAmPm(pitch.fecha_pitch_calendario)} - 1 hora
-                          </div>
-                          <div className="text-xs opacity-60 mt-0.5">
-                            📧 {pitch.comercial_email?.split('@')[0] || 'Sin asignar'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
@@ -491,4 +496,106 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
   );
 }
 
+// ============================================================================
+// Vista MES como lista: cada día con pitches se muestra como una sección
+// con encabezado de fecha y filas clickeables (abren el sidebar).
+// ============================================================================
+function MonthListView({
+  rangeDays,
+  getPitchesForDay,
+  formatDay,
+  formatTimeWithAmPm,
+  isPastPitch,
+  isToday,
+  onOpenLead,
+  visiblePitchesCount,
+}) {
+  // Construir grupos: solo días con pitches visibles tras filtros.
+  const groups = useMemo(() => {
+    return rangeDays
+      .map(day => ({ day, items: getPitchesForDay(day) }))
+      .filter(g => g.items.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeDays, getPitchesForDay]);
 
+  if (visiblePitchesCount === 0) {
+    return (
+      <div className="px-6 py-16 text-center text-slate-400">
+        <div className="text-sm">No hay pitches en este mes</div>
+        <div className="text-xs mt-1">Prueba con otro periodo o limpia los filtros de estado.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-auto max-h-[600px]">
+      <div className="divide-y divide-slate-100">
+        {groups.map(({ day, items }) => (
+          <div key={day.toISOString()}>
+            {/* Encabezado del día (sticky) */}
+            <div className={`px-6 py-2 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100 ${
+              isToday(day) ? 'bg-[#1717AF]/5' : 'bg-white/95'
+            }`}>
+              <div className="flex items-baseline gap-3">
+                <span className={`text-xs font-semibold uppercase tracking-wider ${
+                  isToday(day) ? 'text-[#1717AF]' : 'text-slate-400'
+                }`}>
+                  {formatDay(day)}
+                </span>
+                <span className={`text-base font-bold ${
+                  isToday(day) ? 'text-[#1717AF]' : 'text-slate-700'
+                }`}>
+                  {day.getDate()}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {items.length} pitch{items.length !== 1 ? 'es' : ''}
+                </span>
+              </div>
+            </div>
+            {/* Filas */}
+            <div>
+              {items.map(pitch => {
+                const past = isPastPitch(pitch.fecha_pitch_calendario);
+                const cls = getPitchCardClasses(pitch, past);
+                return (
+                  <div
+                    key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
+                    onClick={() => onOpenLead?.(pitch)}
+                    className="group px-6 py-3 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors border-l-4 border-transparent hover:border-[#1717AF]/40"
+                  >
+                    {/* Hora */}
+                    <div className="w-24 flex-shrink-0 text-sm font-mono text-slate-600 tabular-nums">
+                      {formatTimeWithAmPm(pitch.fecha_pitch_calendario)}
+                    </div>
+                    {/* Chip de estado */}
+                    <div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${cls}`}>
+                      {(() => {
+                        const st = getStateLabel(pitch);
+                        return st;
+                      })()}
+                    </div>
+                    {/* Nombre del lead */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">
+                        {pitch.nombre || 'Sin nombre'}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {pitch.comercial_email?.split('@')[0] || 'Sin asignar'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Helper local: obtiene el label del estado para el chip de la lista.
+const getStateLabel = (pitch) => {
+  const state = getPitchState(pitch);
+  return state?.label || 'Estado';
+};
