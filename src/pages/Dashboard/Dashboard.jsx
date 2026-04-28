@@ -1402,6 +1402,7 @@ export default function Dashboard() {
                   selectedTag={pitchKpiTags}
                   onTagChange={setPitchKpiTags}
                   tags={tagsDisponibles}
+                  tagsStaged={true}
                   showFuenteFilter={false}
                   showReferidoFilter={false}
                   showGestionWAFilter={false}

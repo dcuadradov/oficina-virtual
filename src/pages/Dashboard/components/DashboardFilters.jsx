@@ -164,7 +164,11 @@ const DashboardFilters = ({
   showTagFilter = true,
   showFuenteFilter = true,
   showReferidoFilter = true,
-  showGestionWAFilter = true
+  showGestionWAFilter = true,
+  // Si true: el filtro de tags acumula cambios localmente y solo aplica al
+  // hacer click en "Filtrar". Útil cuando los datos son costosos de recargar
+  // (e.g. Mis Pitch).
+  tagsStaged = false,
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -177,6 +181,18 @@ const DashboardFilters = ({
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
+  // Buffer local para modo staged (cambios pendientes hasta hacer click en
+  // "Filtrar"). En modo no-staged este estado se ignora.
+  const [pendingTags, setPendingTags] = useState(selectedTag || []);
+  // Re-sincroniza el buffer cuando el dropdown se abre (snapshot del estado
+  // aplicado actual). No depende de selectedTag para evitar re-sync mientras
+  // el usuario está editando.
+  useEffect(() => {
+    if (tagOpen && tagsStaged) {
+      setPendingTags(selectedTag || []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagOpen, tagsStaged]);
   const [fuenteOpen, setFuenteOpen] = useState(false);
   const [referidoOpen, setReferidoOpen] = useState(false);
   const [gestionWAOpen, setGestionWAOpen] = useState(false);
@@ -1386,49 +1402,107 @@ const DashboardFilters = ({
             )}
           </button>
           
-          {tagOpen && (
-            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
-              <button
-                onClick={() => onTagChange([])}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  selectedTag.length === 0
-                    ? 'bg-violet-100 text-violet-700 font-medium' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Todos los tags
-              </button>
-              <div className="h-px bg-slate-100 my-1" />
-              {tags.map((tag) => {
-                const isChecked = selectedTag.includes(tag);
-                return (
+          {tagOpen && (() => {
+            // En modo staged trabajamos contra pendingTags; en modo instant,
+            // contra selectedTag (cada click llama onTagChange directamente).
+            const currentTags = tagsStaged ? pendingTags : (selectedTag || []);
+            const allSelected = tags.length > 0 && currentTags.length === tags.length;
+            const setCurrent = (next) => {
+              if (tagsStaged) setPendingTags(next);
+              else onTagChange(next);
+            };
+            const toggleTag = (tag) => {
+              const isChecked = currentTags.includes(tag);
+              setCurrent(isChecked ? currentTags.filter(t => t !== tag) : [...currentTags, tag]);
+            };
+            const toggleAll = () => setCurrent(allSelected ? [] : [...tags]);
+            const applyFilter = () => {
+              onTagChange(pendingTags);
+              setTagOpen(false);
+            };
+            const cancelFilter = () => {
+              setPendingTags(selectedTag || []);
+              setTagOpen(false);
+            };
+
+            return (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 flex flex-col" style={{ maxHeight: '420px' }}>
+                {/* Toggle "Seleccionar / Deseleccionar todos" */}
+                <button
+                  onClick={toggleAll}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                    allSelected
+                      ? 'bg-violet-50 text-violet-700 font-medium'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    allSelected ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
+                  }`}>
+                    {allSelected && <Check size={10} className="text-white" />}
+                  </div>
+                  {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                </button>
+                {/* Modo no-staged conserva el botón histórico "Todos los tags"
+                    para limpiar el filtro (selectedTag = []). */}
+                {!tagsStaged && (
                   <button
-                    key={tag}
-                    onClick={() => {
-                      if (isChecked) {
-                        onTagChange(selectedTag.filter(t => t !== tag));
-                      } else {
-                        onTagChange([...selectedTag, tag]);
-                      }
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
-                      isChecked
-                        ? 'bg-violet-50 text-violet-700 font-medium'
+                    onClick={() => onTagChange([])}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                      (selectedTag || []).length === 0
+                        ? 'bg-violet-100 text-violet-700 font-medium'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      isChecked ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
-                    }`}>
-                      {isChecked && <Check size={10} className="text-white" />}
-                    </div>
-                    <Tag size={12} />
-                    {tag}
+                    Todos los tags (sin filtro)
                   </button>
-                );
-              })}
-            </div>
-          )}
+                )}
+                <div className="h-px bg-slate-100 my-1" />
+                {/* Lista de tags scrolleable */}
+                <div className="flex-1 overflow-y-auto">
+                  {tags.map((tag) => {
+                    const isChecked = currentTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                          isChecked
+                            ? 'bg-violet-50 text-violet-700 font-medium'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isChecked ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
+                        }`}>
+                          {isChecked && <Check size={10} className="text-white" />}
+                        </div>
+                        <Tag size={12} />
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Footer de acciones (solo modo staged) */}
+                {tagsStaged && (
+                  <div className="border-t border-slate-100 px-3 py-2 flex items-center justify-end gap-2">
+                    <button
+                      onClick={cancelFilter}
+                      className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={applyFilter}
+                      className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors shadow-sm"
+                    >
+                      Filtrar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
