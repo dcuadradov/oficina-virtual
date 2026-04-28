@@ -1,0 +1,299 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../../../supabaseClient';
+import { Loader2, Target, UserCheck } from 'lucide-react';
+import { PITCH_STATES } from '../../../constants/pitchColors';
+
+// Tags por defecto para el denominador del KPI Efectividad comercial.
+// Si el usuario no selecciona ningún tag, usamos estos.
+export const DEFAULT_PITCH_KPI_TAGS = [
+  'Nuevo META 1',
+  'Nuevo WEB',
+  'Revivió',
+  'Revivió (Correos ST)',
+  'Revivió (Correos)',
+  'Revivió (META 1)',
+];
+
+// Valores válidos en pitch_result que indican que el lead asistió al pitch.
+const PITCH_RESULT_VALUES = [
+  'Matrícula',
+  'No matrícula',
+  'Pago pendiente',
+  'Posible matrícula',
+  'Reprobado',
+  'Interés futuro',
+];
+
+/**
+ * Bloque de 10 KPIs (5x2) para "Mis Pitch":
+ *   1. Efectividad comercial = pitches del periodo / leads creados con tag válido
+ *   2. Asistencia = pitches asistidos / T2 (universo con resultado o no-show)
+ *   3-10. Distribución por etapa: cada % se calcula sobre el mismo T2
+ *         (los 8 suman ~100% porque asistido+no-asistido = T2).
+ */
+export default function PitchKpis({
+  rangeStart,
+  rangeEnd,
+  selectedComercial,
+  userEmail,
+  puedeVerTodos = false,
+  selectedTags = [],
+}) {
+  const [pitches, setPitches] = useState([]);
+  const [leadsCount, setLeadsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Tags efectivos: si el usuario no seleccionó ninguno, usar los defaults.
+  const effectiveTags = useMemo(() => {
+    if (selectedTags && selectedTags.length > 0) return selectedTags;
+    return DEFAULT_PITCH_KPI_TAGS;
+  }, [selectedTags]);
+
+  // Carga datos en paralelo: pitches del periodo y count de leads válidos.
+  useEffect(() => {
+    if (!rangeStart || !rangeEnd) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
+        const end = new Date(rangeEnd); end.setHours(0, 0, 0, 0);
+        end.setDate(end.getDate() + 1); // upper bound exclusivo (local)
+
+        // Mismo formato que parseDateFilters de Dashboard: 05:00:00+00 (Colombia UTC-5)
+        const fmtUtc = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day} 05:00:00+00`;
+        };
+        const fechaInicio = fmtUtc(start);
+        const fechaFin = fmtUtc(end);
+
+        // 1) Pitches en el periodo (vista vw_pitches_calendario)
+        let pq = supabase.from('vw_pitches_calendario').select('*');
+        if (selectedComercial) pq = pq.eq('comercial_email', selectedComercial);
+        else if (!puedeVerTodos && userEmail) pq = pq.eq('comercial_email', userEmail);
+
+        // 2) Leads creados en el periodo con label en effectiveTags
+        let lq = supabase
+          .from('leads')
+          .select('card_id', { count: 'exact', head: true })
+          .gte('created_at', fechaInicio)
+          .lt('created_at', fechaFin);
+        if (effectiveTags.length > 0) lq = lq.in('label', effectiveTags);
+        if (selectedComercial) lq = lq.eq('comercial_email', selectedComercial);
+        else if (!puedeVerTodos && userEmail) lq = lq.eq('comercial_email', userEmail);
+
+        const [pRes, lRes] = await Promise.all([pq, lq]);
+        if (cancelled) return;
+        if (pRes.error) throw pRes.error;
+        if (lRes.error) throw lRes.error;
+
+        // Filtrar pitches por rango (mismo criterio sin TZ que el calendario)
+        const filtered = (pRes.data || []).filter(p => {
+          if (!p.fecha_pitch_calendario) return false;
+          const m = p.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if (!m) return false;
+          const [, y, mo, d] = m;
+          const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
+          return dt >= start && dt < end;
+        });
+
+        setPitches(filtered);
+        setLeadsCount(lRes.count || 0);
+      } catch (err) {
+        console.error('Error cargando KPIs de Pitch:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    rangeStart?.getTime(),
+    rangeEnd?.getTime(),
+    selectedComercial,
+    userEmail,
+    puedeVerTodos,
+    effectiveTags.join('|'),
+  ]);
+
+  // T = todos los pitches en el periodo (numerador de Efectividad)
+  const T = pitches.length;
+
+  // T2 = universo con resultado definitivo (asistido O no-show declarado)
+  const T2pitches = useMemo(() => {
+    return pitches.filter(p => {
+      const hasResult = p.resultado_pitch_result && PITCH_RESULT_VALUES.includes(p.resultado_pitch_result);
+      const noShow = p.resultado_attended === 'No';
+      return hasResult || noShow;
+    });
+  }, [pitches]);
+  const T2 = T2pitches.length;
+
+  // Conteos por categoría sobre T2
+  const counts = useMemo(() => {
+    const c = {
+      asistieron: 0,
+      matricula: 0,
+      no_matricula: 0,
+      pago_pendiente: 0,
+      posible_matricula: 0,
+      reprobado: 0,
+      interes_futuro: 0,
+      reprogramado: 0,
+      sin_reprogramar: 0,
+    };
+    for (const p of T2pitches) {
+      if (p.resultado_attended === 'No') {
+        if (p.resultado_rescheduled === 'Si') c.reprogramado++;
+        else c.sin_reprogramar++;
+      } else if (p.resultado_pitch_result) {
+        c.asistieron++;
+        const r = p.resultado_pitch_result;
+        if (r === 'Matrícula') c.matricula++;
+        else if (r === 'No matrícula') c.no_matricula++;
+        else if (r === 'Pago pendiente') c.pago_pendiente++;
+        else if (r === 'Posible matrícula') c.posible_matricula++;
+        else if (r === 'Reprobado') c.reprobado++;
+        else if (r === 'Interés futuro') c.interes_futuro++;
+      }
+    }
+    return c;
+  }, [T2pitches]);
+
+  const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
+
+  // Mapa de PITCH_STATES por id (para reutilizar colores/labels del calendario)
+  const stateById = useMemo(() => {
+    const m = {};
+    PITCH_STATES.forEach(s => { m[s.id] = s; });
+    return m;
+  }, []);
+
+  const cards = [
+    {
+      id: 'efectividad',
+      title: 'Efectividad comercial',
+      value: pct(T, leadsCount),
+      sub: `${T} pitches / ${leadsCount} leads`,
+      icon: Target,
+      tone: 'primary',
+    },
+    {
+      id: 'asistencia',
+      title: 'Asistencia',
+      value: pct(counts.asistieron, T2),
+      sub: `${counts.asistieron} / ${T2}`,
+      icon: UserCheck,
+      tone: 'primary',
+    },
+    {
+      id: 'matricula',
+      title: 'Matrícula',
+      value: pct(counts.matricula, T2),
+      sub: `${counts.matricula} / ${T2}`,
+      state: stateById.matricula,
+    },
+    {
+      id: 'no_matricula',
+      title: 'No matrícula',
+      value: pct(counts.no_matricula, T2),
+      sub: `${counts.no_matricula} / ${T2}`,
+      state: stateById.no_matricula,
+    },
+    {
+      id: 'pago_pendiente',
+      title: 'Pago pendiente',
+      value: pct(counts.pago_pendiente, T2),
+      sub: `${counts.pago_pendiente} / ${T2}`,
+      state: stateById.pago_pendiente,
+    },
+    {
+      id: 'posible_matricula',
+      title: 'Posible matrícula',
+      value: pct(counts.posible_matricula, T2),
+      sub: `${counts.posible_matricula} / ${T2}`,
+      state: stateById.posible_matricula,
+    },
+    {
+      id: 'reprobado',
+      title: 'Reprobado',
+      value: pct(counts.reprobado, T2),
+      sub: `${counts.reprobado} / ${T2}`,
+      state: stateById.reprobado,
+    },
+    {
+      id: 'interes_futuro',
+      title: 'Interés futuro',
+      value: pct(counts.interes_futuro, T2),
+      sub: `${counts.interes_futuro} / ${T2}`,
+      state: stateById.interes_futuro,
+    },
+    {
+      id: 'reprogramado',
+      title: 'Reprogramado',
+      value: pct(counts.reprogramado, T2),
+      sub: `${counts.reprogramado} / ${T2}`,
+      state: stateById.reprogramado,
+    },
+    {
+      id: 'sin_reprogramar',
+      title: 'Sin reprogramar',
+      value: pct(counts.sin_reprogramar, T2),
+      sub: `${counts.sin_reprogramar} / ${T2}`,
+      state: stateById.sin_reprogramar,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      {cards.map((c, i) => (
+        <KpiCard key={c.id} card={c} loading={loading} highlight={i < 2} />
+      ))}
+    </div>
+  );
+}
+
+function KpiCard({ card, loading, highlight }) {
+  const hasState = !!card.state;
+  const Icon = card.icon;
+  return (
+    <div
+      className={`bg-white rounded-2xl border shadow-sm p-4 transition-all hover:shadow-md ${
+        highlight ? 'border-[#1717AF]/20 ring-1 ring-[#1717AF]/10' : 'border-slate-100'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2 min-h-[20px]">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+          {card.title}
+        </span>
+        {hasState && (
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${card.state.chip}`} />
+        )}
+        {!hasState && Icon && (
+          <Icon size={14} className="text-[#1717AF]/70 flex-shrink-0" />
+        )}
+      </div>
+      <div className="flex items-baseline gap-1">
+        {loading ? (
+          <Loader2 size={20} className="text-slate-300 animate-spin" />
+        ) : (
+          <>
+            <span className={`text-2xl font-bold ${highlight ? 'text-[#1717AF]' : 'text-slate-800'}`}>
+              {card.value}
+            </span>
+            <span className="text-sm font-medium text-slate-500">%</span>
+          </>
+        )}
+      </div>
+      <div className="text-[11px] text-slate-400 mt-1 truncate">
+        {loading ? '\u00a0' : card.sub}
+      </div>
+    </div>
+  );
+}
