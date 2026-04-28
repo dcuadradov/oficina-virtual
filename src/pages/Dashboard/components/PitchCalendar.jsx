@@ -20,6 +20,9 @@ export default function PitchCalendar({
   selectedPeriodo = null,
   selectedDia = null,
   monthConfigs = {},
+  // Lista de labels (tags) por la cual filtrar los pitches del calendario.
+  // Vacío => sin filtro de tag (mostrar todos).
+  tagFilter = [],
 }) {
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +106,9 @@ export default function PitchCalendar({
         const { data, error } = await query;
         if (error) throw error;
 
-        // Filtrar por rango sin conversión de zona horaria
+        // Filtrar por rango sin conversión de zona horaria + tag (label).
+        // tagFilter aplica a TODA la vista Mis Pitch (KPIs y calendario), por
+        // consistencia con el filtro de tags global del Dashboard.
         const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
         const end = new Date(rangeEnd); end.setHours(23, 59, 59, 999);
         const filtered = (data || []).filter(p => {
@@ -112,7 +117,9 @@ export default function PitchCalendar({
           if (!m) return false;
           const [, y, mo, d] = m;
           const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
-          return dt >= start && dt <= end;
+          if (dt < start || dt > end) return false;
+          if (tagFilter.length > 0 && !tagFilter.includes(p.label)) return false;
+          return true;
         });
         setPitches(filtered);
       } catch (error) {
@@ -122,7 +129,10 @@ export default function PitchCalendar({
       }
     };
     fetchPitches();
-  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos]);
+    // Nota: usamos tagFilter.join('|') para reaccionar a cambios de contenido
+    // sin re-fetch innecesario por re-renders con la misma lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, tagFilter.join('|')]);
 
   // Auto-scroll a las 7 AM cuando termina de cargar (solo en vistas con grid horario)
   useEffect(() => {
