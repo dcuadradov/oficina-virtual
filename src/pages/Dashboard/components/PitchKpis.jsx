@@ -28,6 +28,7 @@ export const PITCH_TAG_PRESETS = [
     label: 'Gestionados',
     tags: [
       'Cliente en frío',
+      'Migración',
       'Nuevo gestionado',
       'Nuevo manual',
       'Referido',
