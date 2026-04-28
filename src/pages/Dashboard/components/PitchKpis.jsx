@@ -3,17 +3,6 @@ import { supabase } from '../../../supabaseClient';
 import { Loader2, Target, UserCheck } from 'lucide-react';
 import { PITCH_STATES } from '../../../constants/pitchColors';
 
-// Tags por defecto para el denominador del KPI Efectividad comercial.
-// Si el usuario no selecciona ningún tag, usamos estos.
-export const DEFAULT_PITCH_KPI_TAGS = [
-  'Nuevo META 1',
-  'Nuevo WEB',
-  'Revivió',
-  'Revivió (Correos ST)',
-  'Revivió (Correos)',
-  'Revivió (META 1)',
-];
-
 // Presets de selección rápida para el filtro de tags en Mis Pitch.
 // Se renderizan como chips arriba del dropdown del filtro.
 //   - "todos" = todos los tags disponibles (resuelto en runtime).
@@ -70,7 +59,7 @@ export default function PitchKpis({
   selectedComercial,
   userEmail,
   puedeVerTodos = false,
-  effectiveTags = DEFAULT_PITCH_KPI_TAGS,
+  selectedTags = [],
 }) {
   const [pitches, setPitches] = useState([]);
   const [leadsCount, setLeadsCount] = useState(0);
@@ -103,13 +92,14 @@ export default function PitchKpis({
         if (selectedComercial) pq = pq.eq('comercial_email', selectedComercial);
         else if (!puedeVerTodos && userEmail) pq = pq.eq('comercial_email', userEmail);
 
-        // 2) Leads creados en el periodo con label en effectiveTags
+        // 2) Leads creados en el periodo con label en selectedTags (si aplica).
+        // Si selectedTags está vacío, no se restringe por label (= todos).
         let lq = supabase
           .from('leads')
           .select('card_id', { count: 'exact', head: true })
           .gte('created_at', fechaInicio)
           .lt('created_at', fechaFin);
-        if (effectiveTags.length > 0) lq = lq.in('label', effectiveTags);
+        if (selectedTags.length > 0) lq = lq.in('label', selectedTags);
         if (selectedComercial) lq = lq.eq('comercial_email', selectedComercial);
         else if (!puedeVerTodos && userEmail) lq = lq.eq('comercial_email', userEmail);
 
@@ -120,8 +110,7 @@ export default function PitchKpis({
 
         // Filtrar pitches por:
         // - rango de fecha (mismo criterio sin TZ que el calendario)
-        // - label (tag) IN effectiveTags. La vista vw_pitches_calendario hace
-        //   join con leads y trae l.* incluyendo label.
+        // - label (tag) IN selectedTags si hay selección; vacío = sin filtro.
         const filtered = (pRes.data || []).filter(p => {
           if (!p.fecha_pitch_calendario) return false;
           const m = p.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -129,7 +118,7 @@ export default function PitchKpis({
           const [, y, mo, d] = m;
           const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
           if (dt < start || dt >= end) return false;
-          if (effectiveTags.length > 0 && !effectiveTags.includes(p.label)) return false;
+          if (selectedTags.length > 0 && !selectedTags.includes(p.label)) return false;
           return true;
         });
 
@@ -151,7 +140,7 @@ export default function PitchKpis({
     selectedComercial,
     userEmail,
     puedeVerTodos,
-    effectiveTags.join('|'),
+    selectedTags.join('|'),
   ]);
 
   // T = todos los pitches en el periodo (numerador de Efectividad)

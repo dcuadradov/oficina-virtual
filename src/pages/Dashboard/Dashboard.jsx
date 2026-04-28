@@ -6,7 +6,7 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
-import PitchKpis, { DEFAULT_PITCH_KPI_TAGS, PITCH_TAG_PRESETS } from './components/PitchKpis';
+import PitchKpis, { PITCH_TAG_PRESETS } from './components/PitchKpis';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -96,11 +96,9 @@ export default function Dashboard() {
   const [filtroSinSeguimiento, setFiltroSinSeguimiento] = useState(false);
   const [monthConfigs, setMonthConfigs] = useState({});
 
-  // Tags para Mis Pitch. Inicia vacío (sin chips marcados) — si el usuario no
-  // selecciona ninguno, internamente se aplica DEFAULT_PITCH_KPI_TAGS como
-  // fallback (cálculo y filtro de calendario), pero la UI muestra "sin filtro".
+  // Tags para Mis Pitch. Inicia vacío = sin filtro (equivalente a "Todos").
+  // Si el usuario marca tags, KPIs y calendario se restringen a esa lista.
   const [pitchKpiTags, setPitchKpiTags] = useState([]);
-  const effectivePitchTags = pitchKpiTags.length > 0 ? pitchKpiTags : DEFAULT_PITCH_KPI_TAGS;
 
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -1426,7 +1424,7 @@ export default function Dashboard() {
                       selectedComercial={selectedComercial}
                       userEmail={userEmail}
                       puedeVerTodos={puedeVerTodos}
-                      effectiveTags={effectivePitchTags}
+                      selectedTags={pitchKpiTags}
                     />
                   );
                 })()}
@@ -1441,7 +1439,7 @@ export default function Dashboard() {
                   selectedPeriodo={selectedPeriodo}
                   selectedDia={selectedDia}
                   monthConfigs={monthConfigs}
-                  tagFilter={effectivePitchTags}
+                  tagFilter={pitchKpiTags}
                 />
               </>
             ) : activeView === 'metricas' ? (
