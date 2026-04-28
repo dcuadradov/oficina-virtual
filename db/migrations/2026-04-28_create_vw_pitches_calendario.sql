@@ -1,13 +1,19 @@
 -- ============================================================================
 -- Vista unificada para el calendario "Mis Pitch".
 --
--- Resuelve el conflicto de doble pintado cuando un lead está en fase Pitch
--- (340566951) y a la vez tiene un registro en pitches_resultados.
+-- Resuelve el conflicto de doble pintado cuando un lead está en una fase de
+-- Pitch activo y a la vez tiene un registro en pitches_resultados.
+--
+-- Fases consideradas como "Pitch activo":
+--   - 339756098  Agendado
+--   - 340566951  Pitch
+--   - 340859031  Agendado (Pitch reprogramado)
 --
 -- Reglas:
---   1) historial  → pitches_resultados de leads que YA salieron de la fase
---                   Pitch. Se pinta usando pitches_resultados.fecha_pitch.
---   2) agendado   → leads actualmente en fase Pitch (340566951) con
+--   1) historial  → pitches_resultados de leads cuya fase actual NO es
+--                   ninguna de las anteriores. Se pinta usando
+--                   pitches_resultados.fecha_pitch.
+--   2) agendado   → leads actualmente en alguna de esas 3 fases con
 --                   fecha_pitch no nulo. Se pinta usando leads.fecha_pitch.
 --
 -- El frontend lee de la vista y nunca tiene que aplicar la regla manualmente.
@@ -57,7 +63,8 @@ select
   pr.fecha_pitch          as fecha_pitch_calendario
 from public.pitches_resultados pr
 join public.leads l on l.card_id = pr.card_id
-where l.fase_id_pipefy <> '340566951'
+where (l.fase_id_pipefy is null
+       or l.fase_id_pipefy not in ('339756098', '340566951', '340859031'))
   and pr.fecha_pitch is not null
 
 union all
@@ -74,7 +81,7 @@ select
   null::text              as resultado_estado,
   l.fecha_pitch           as fecha_pitch_calendario
 from public.leads l
-where l.fase_id_pipefy = '340566951'
+where l.fase_id_pipefy in ('339756098', '340566951', '340859031')
   and l.fecha_pitch is not null;
 
 -- 3) Permisos. La vista hereda RLS de las tablas base (leads y
