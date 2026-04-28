@@ -96,9 +96,11 @@ export default function Dashboard() {
   const [filtroSinSeguimiento, setFiltroSinSeguimiento] = useState(false);
   const [monthConfigs, setMonthConfigs] = useState({});
 
-  // Tags por defecto para el denominador del KPI Efectividad de Mis Pitch.
-  // Estado independiente de selectedTag (Métricas) para no acoplar vistas.
-  const [pitchKpiTags, setPitchKpiTags] = useState(DEFAULT_PITCH_KPI_TAGS);
+  // Tags para Mis Pitch. Inicia vacío (sin chips marcados) — si el usuario no
+  // selecciona ninguno, internamente se aplica DEFAULT_PITCH_KPI_TAGS como
+  // fallback (cálculo y filtro de calendario), pero la UI muestra "sin filtro".
+  const [pitchKpiTags, setPitchKpiTags] = useState([]);
+  const effectivePitchTags = pitchKpiTags.length > 0 ? pitchKpiTags : DEFAULT_PITCH_KPI_TAGS;
 
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -1422,7 +1424,7 @@ export default function Dashboard() {
                       selectedComercial={selectedComercial}
                       userEmail={userEmail}
                       puedeVerTodos={puedeVerTodos}
-                      selectedTags={pitchKpiTags}
+                      effectiveTags={effectivePitchTags}
                     />
                   );
                 })()}
@@ -1437,6 +1439,7 @@ export default function Dashboard() {
                   selectedPeriodo={selectedPeriodo}
                   selectedDia={selectedDia}
                   monthConfigs={monthConfigs}
+                  tagFilter={effectivePitchTags}
                 />
               </>
             ) : activeView === 'metricas' ? (

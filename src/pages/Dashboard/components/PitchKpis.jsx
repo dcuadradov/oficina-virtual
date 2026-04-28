@@ -37,17 +37,11 @@ export default function PitchKpis({
   selectedComercial,
   userEmail,
   puedeVerTodos = false,
-  selectedTags = [],
+  effectiveTags = DEFAULT_PITCH_KPI_TAGS,
 }) {
   const [pitches, setPitches] = useState([]);
   const [leadsCount, setLeadsCount] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  // Tags efectivos: si el usuario no seleccionó ninguno, usar los defaults.
-  const effectiveTags = useMemo(() => {
-    if (selectedTags && selectedTags.length > 0) return selectedTags;
-    return DEFAULT_PITCH_KPI_TAGS;
-  }, [selectedTags]);
 
   // Carga datos en paralelo: pitches del periodo y count de leads válidos.
   useEffect(() => {
@@ -91,14 +85,19 @@ export default function PitchKpis({
         if (pRes.error) throw pRes.error;
         if (lRes.error) throw lRes.error;
 
-        // Filtrar pitches por rango (mismo criterio sin TZ que el calendario)
+        // Filtrar pitches por:
+        // - rango de fecha (mismo criterio sin TZ que el calendario)
+        // - label (tag) IN effectiveTags. La vista vw_pitches_calendario hace
+        //   join con leads y trae l.* incluyendo label.
         const filtered = (pRes.data || []).filter(p => {
           if (!p.fecha_pitch_calendario) return false;
           const m = p.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
           if (!m) return false;
           const [, y, mo, d] = m;
           const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
-          return dt >= start && dt < end;
+          if (dt < start || dt >= end) return false;
+          if (effectiveTags.length > 0 && !effectiveTags.includes(p.label)) return false;
+          return true;
         });
 
         setPitches(filtered);
