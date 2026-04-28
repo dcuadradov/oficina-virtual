@@ -169,6 +169,10 @@ const DashboardFilters = ({
   // hacer click en "Filtrar". Útil cuando los datos son costosos de recargar
   // (e.g. Mis Pitch).
   tagsStaged = false,
+  // Atajos de selección rápida para el filtro de tags. Forma:
+  //   [{ id, label, tags: string[] | 'all' }]
+  // Cuando se proveen, reemplazan el toggle "Seleccionar todos".
+  tagPresets = null,
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -1425,24 +1429,55 @@ const DashboardFilters = ({
               setTagOpen(false);
             };
 
+            // Resolver presets contra los tags disponibles (intersección).
+            const resolvedPresets = (tagPresets || []).map(p => ({
+              ...p,
+              resolved: p.tags === 'all' ? tags : p.tags.filter(t => tags.includes(t)),
+            }));
+            const isPresetActive = (preset) =>
+              preset.resolved.length === currentTags.length &&
+              preset.resolved.every(t => currentTags.includes(t));
+
             return (
               <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 flex flex-col" style={{ maxHeight: '420px' }}>
-                {/* Toggle "Seleccionar / Deseleccionar todos" */}
-                <button
-                  onClick={toggleAll}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
-                    allSelected
-                      ? 'bg-violet-50 text-violet-700 font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                    allSelected ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
-                  }`}>
-                    {allSelected && <Check size={10} className="text-white" />}
+                {/* Atajos de selección rápida (presets) */}
+                {resolvedPresets.length > 0 ? (
+                  <div className="px-3 py-2 border-b border-slate-100 flex flex-wrap gap-1.5">
+                    {resolvedPresets.map(preset => {
+                      const active = isPresetActive(preset);
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => setCurrent(preset.resolved)}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                            active
+                              ? 'bg-violet-600 text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                </button>
+                ) : (
+                  /* Sin presets: toggle clásico "Seleccionar / Deseleccionar todos" */
+                  <button
+                    onClick={toggleAll}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                      allSelected
+                        ? 'bg-violet-50 text-violet-700 font-medium'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      allSelected ? 'bg-violet-600 border-violet-600' : 'border-slate-300'
+                    }`}>
+                      {allSelected && <Check size={10} className="text-white" />}
+                    </div>
+                    {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                  </button>
+                )}
                 {/* Modo no-staged conserva el botón histórico "Todos los tags"
                     para limpiar el filtro (selectedTag = []). */}
                 {!tagsStaged && (

@@ -6,7 +6,7 @@ import DashboardFilters from './components/DashboardFilters';
 import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
-import PitchKpis, { DEFAULT_PITCH_KPI_TAGS } from './components/PitchKpis';
+import PitchKpis, { DEFAULT_PITCH_KPI_TAGS, PITCH_TAG_PRESETS } from './components/PitchKpis';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -1403,6 +1403,7 @@ export default function Dashboard() {
                   onTagChange={setPitchKpiTags}
                   tags={tagsDisponibles}
                   tagsStaged={true}
+                  tagPresets={PITCH_TAG_PRESETS}
                   showFuenteFilter={false}
                   showReferidoFilter={false}
                   showGestionWAFilter={false}

@@ -14,6 +14,39 @@ export const DEFAULT_PITCH_KPI_TAGS = [
   'Revivió (META 1)',
 ];
 
+// Presets de selección rápida para el filtro de tags en Mis Pitch.
+// Se renderizan como chips arriba del dropdown del filtro.
+//   - "todos" = todos los tags disponibles (resuelto en runtime).
+//   - "asignados" = tags de leads recién entregados al comercial.
+//   - "gestionados" = tags de leads ya en gestión activa.
+export const PITCH_TAG_PRESETS = [
+  { id: 'todos', label: 'Todos', tags: 'all' },
+  {
+    id: 'asignados',
+    label: 'Asignados',
+    tags: [
+      'Nuevo (OD)',
+      'Nuevo META 1',
+      'Nuevo WEB',
+      'Revivió',
+      'Revivió (Correos ST)',
+      'Revivió (Correos)',
+      'Revivió (META 1)',
+    ],
+  },
+  {
+    id: 'gestionados',
+    label: 'Gestionados',
+    tags: [
+      'Cliente en frío',
+      'Nuevo gestionado',
+      'Nuevo manual',
+      'Referido',
+      'Reingresado',
+    ],
+  },
+];
+
 // Valores válidos en pitch_result que indican que el lead asistió al pitch.
 const PITCH_RESULT_VALUES = [
   'Matrícula',
