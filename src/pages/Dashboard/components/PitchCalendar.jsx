@@ -1,13 +1,26 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
-import { ChevronLeft, ChevronRight, Calendar, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { PITCH_STATES, getPitchState, getPitchCardClasses } from '../../../constants/pitchColors';
 
 export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead, puedeVerTodos = false }) {
   const [viewMode, setViewMode] = useState('week'); // 'week' o 'day'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Set de IDs de PITCH_STATES seleccionados como filtro. Vacío = mostrar todos.
+  const [selectedStateIds, setSelectedStateIds] = useState(() => new Set());
   const calendarScrollRef = useRef(null);
+
+  const toggleStateFilter = (stateId) => {
+    setSelectedStateIds(prev => {
+      const next = new Set(prev);
+      if (next.has(stateId)) next.delete(stateId);
+      else next.add(stateId);
+      return next;
+    });
+  };
+  const clearStateFilters = () => setSelectedStateIds(new Set());
 
   // Obtener el inicio de la semana (domingo)
   const getWeekStart = (date) => {
@@ -137,9 +150,17 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
     };
   };
 
+  // Filtrado por estado (chips). Si no hay chips activos → no aplica filtro.
+  const matchesStateFilter = (pitch) => {
+    if (selectedStateIds.size === 0) return true;
+    const state = getPitchState(pitch);
+    return selectedStateIds.has(state.id);
+  };
+
   // Obtener pitches para una fecha y hora específica
   const getPitchesForSlot = (date, hour) => {
     return pitches.filter(pitch => {
+      if (!matchesStateFilter(pitch)) return false;
       const parsed = parseDateWithoutTimezone(pitch.fecha_pitch_calendario);
       if (!parsed) return false;
       // Comparar fecha (día/mes/año) y hora SIN conversión de zona horaria
@@ -150,6 +171,12 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
       return sameDate && sameHour;
     });
   };
+
+  // Conteo de pitches visibles tras aplicar el filtro (para mostrar en footer)
+  const visiblePitchesCount = useMemo(
+    () => pitches.filter(matchesStateFilter).length,
+    [pitches, selectedStateIds]
+  );
 
   // Formatear hora con AM/PM para mostrar en tarjetas (sin conversión de zona horaria)
   const formatTimeWithAmPm = (dateString) => {
@@ -262,6 +289,47 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
         </div>
       </div>
 
+      {/* Barra de chips: leyenda + filtro multi-select.
+          Click en un chip lo marca como filtro activo (anillo);
+          si no hay ninguno marcado, se muestran todos los estados. */}
+      <div className="px-6 py-3 border-b border-slate-100 bg-white">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mr-1">
+            Estados
+          </span>
+          {PITCH_STATES.map(state => {
+            const active = selectedStateIds.has(state.id);
+            return (
+              <button
+                key={state.id}
+                type="button"
+                onClick={() => toggleStateFilter(state.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  active
+                    ? `${state.chip} ${state.chipText} border-transparent shadow-sm`
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+                title={active ? `Quitar filtro: ${state.label}` : `Filtrar: ${state.label}`}
+              >
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${state.chip} ${active ? 'ring-2 ring-white/40' : ''}`}
+                />
+                {state.label}
+              </button>
+            );
+          })}
+          {selectedStateIds.size > 0 && (
+            <button
+              type="button"
+              onClick={clearStateFilters}
+              className="ml-1 text-[11px] text-[#1717AF] hover:text-[#1717AF]/80 font-medium underline-offset-2 hover:underline"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Contenido del calendario */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -327,9 +395,7 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
                                 onOpenLead?.(pitch);
                               }}
                               className={`absolute rounded-lg px-1.5 py-1 text-xs font-medium shadow-sm transition-all hover:z-20 hover:scale-[1.03] hover:shadow-lg cursor-pointer border-2 ${
-                                isPastPitch(pitch.fecha_pitch_calendario)
-                                  ? 'bg-slate-200 text-slate-600 border-slate-400 hover:bg-slate-300'
-                                  : 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600'
+                                getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
                               }`}
                               style={{
                                 top: '2px',
@@ -390,10 +456,8 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
                         <div
                           key={pitch.pitch_resultado_id || `agendado-${pitch.card_id}`}
                           onClick={() => onOpenLead?.(pitch)}
-                          className={`rounded-xl px-4 py-3 text-sm font-medium shadow-sm mb-2 transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer ${
-                            isPastPitch(pitch.fecha_pitch_calendario)
-                              ? 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                              : 'bg-amber-400 text-amber-900 border border-amber-500 hover:bg-amber-500'
+                          className={`rounded-xl px-4 py-3 text-sm font-medium shadow-sm mb-2 transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer border ${
+                            getPitchCardClasses(pitch, isPastPitch(pitch.fecha_pitch_calendario))
                           }`}
                         >
                           <div className="font-semibold">{pitch.nombre}</div>
@@ -414,18 +478,13 @@ export default function PitchCalendar({ selectedComercial, userEmail, onOpenLead
         </div>
       )}
 
-      {/* Footer con leyenda */}
-      <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-amber-400 border border-amber-500" />
-          <span className="text-xs text-slate-600">Pitch programado</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-slate-200 border border-slate-300" />
-          <span className="text-xs text-slate-600">Pitch pasado</span>
-        </div>
-        <div className="ml-auto text-xs text-slate-400">
-          {pitches.length} pitch{pitches.length !== 1 ? 'es' : ''} en esta vista
+      {/* Footer: contador de pitches visibles (post-filtro) */}
+      <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+        <div className="text-xs text-slate-400">
+          {visiblePitchesCount} pitch{visiblePitchesCount !== 1 ? 'es' : ''} en esta vista
+          {selectedStateIds.size > 0 && (
+            <span className="text-slate-500"> (filtrado)</span>
+          )}
         </div>
       </div>
     </div>
