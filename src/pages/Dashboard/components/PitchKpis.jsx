@@ -125,6 +125,28 @@ export default function PitchKpis({
 
         setPitches(filtered);
         setLeadsCount(lRes.count || 0);
+
+        if (typeof window !== 'undefined') {
+          const FM = '339756299';
+          const dbg = filtered
+            .filter(p => p.resultado_attended !== 'No' && p.resultado_pitch_result)
+            .map(p => ({
+              card_id: p.card_id,
+              pitch_result: p.resultado_pitch_result,
+              fase_id_pipefy: p.fase_id_pipefy,
+              fase_tipo: typeof p.fase_id_pipefy,
+              en_matricula: String(p.fase_id_pipefy) === FM,
+            }));
+          const totales = dbg.reduce((acc, x) => {
+            acc.asistieron++;
+            if (x.en_matricula) acc.en_matricula++;
+            const k = `${x.pitch_result} → fase ${x.fase_id_pipefy}`;
+            acc.detalle[k] = (acc.detalle[k] || 0) + 1;
+            return acc;
+          }, { asistieron: 0, en_matricula: 0, detalle: {} });
+          // eslint-disable-next-line no-console
+          console.log('[PitchKpis] debug matrícula real:', totales);
+        }
       } catch (err) {
         console.error('Error cargando KPIs de Pitch:', err);
       } finally {
