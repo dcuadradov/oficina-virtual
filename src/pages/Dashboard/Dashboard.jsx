@@ -1378,25 +1378,36 @@ export default function Dashboard() {
               </>
             ) : activeView === 'pitch' ? (
               <>
-                {/* Filtro de comercial para Mis Pitch */}
-                {puedeVerTodos && (
-                  <DashboardFilters
-                    comerciales={comerciales}
-                    selectedComercial={selectedComercial}
-                    onComercialChange={handleComercialChange}
-                    showComercialFilter={true}
-                    showOnlyComercial={true}
-                    onRefreshComerciales={fetchComerciales}
-                  />
-                )}
+                {/* Filtros para Mis Pitch: tiempo (mes/periodo/día) + comercial.
+                    Los handlers handle*Change garantizan exclusión mutua. */}
+                <DashboardFilters
+                  comerciales={comerciales}
+                  selectedComercial={selectedComercial}
+                  onComercialChange={handleComercialChange}
+                  selectedMes={selectedMes}
+                  onMesChange={handleMesChange}
+                  selectedPeriodo={selectedPeriodo}
+                  onPeriodoChange={handlePeriodoChange}
+                  selectedDia={selectedDia}
+                  onDiaChange={handleDiaChange}
+                  showComercialFilter={puedeVerTodos}
+                  onRefreshComerciales={fetchComerciales}
+                  monthConfigs={monthConfigs}
+                  onSaveMonthConfig={handleSaveMonthConfig}
+                  puedeVerTodos={puedeVerTodos}
+                />
 
                 {/* Calendario de Pitches */}
-                <PitchCalendar 
+                <PitchCalendar
                   selectedComercial={selectedComercial}
                   userEmail={userEmail}
                   onOpenLead={handleOpenSidebar}
                   puedeVerTodos={puedeVerTodos}
-            />
+                  selectedMes={selectedMes}
+                  selectedPeriodo={selectedPeriodo}
+                  selectedDia={selectedDia}
+                  monthConfigs={monthConfigs}
+                />
               </>
             ) : activeView === 'metricas' ? (
               <>
