@@ -161,16 +161,11 @@ export default function PitchKpis({
   //   - asistieron / no_show: subuniversos que componen T2
   //   - matricula..interes_futuro: sobre los que asistieron (según pitch_result)
   //   - reprogramado / sin_reprogramar: sobre los que NO asistieron
-  //   - matricula_real: de los que asistieron, cuántos están HOY en la fase
-  //     "Matrícula" (339756299) en Pipefy. Útil porque un lead que en su
-  //     pitch quedó como "Posible matrícula" puede haber convertido después.
-  const FASE_MATRICULA = '339756299';
   const counts = useMemo(() => {
     const c = {
       asistieron: 0,
       no_show: 0,
       matricula: 0,
-      matricula_real: 0,
       no_matricula: 0,
       pago_pendiente: 0,
       posible_matricula: 0,
@@ -186,7 +181,6 @@ export default function PitchKpis({
         else c.sin_reprogramar++;
       } else if (p.resultado_pitch_result) {
         c.asistieron++;
-        if (String(p.fase_id_pipefy) === FASE_MATRICULA) c.matricula_real++;
         const r = p.resultado_pitch_result;
         if (r === 'Matrícula') c.matricula++;
         else if (r === 'No matrícula') c.no_matricula++;
@@ -198,6 +192,22 @@ export default function PitchKpis({
     }
     return c;
   }, [T2pitches]);
+
+  // Matrícula REAL: leads únicos del periodo (cualquier pitch, sin importar
+  // attended/result) que actualmente están en la fase "Matrícula" (339756299)
+  // en Pipefy. Mide la efectividad real del periodo, capturando conversiones
+  // posteriores (ej. "Posible matrícula" → matriculó después).
+  const FASE_MATRICULA = '339756299';
+  const matriculaReal = useMemo(() => {
+    const seen = new Set();
+    let n = 0;
+    for (const p of pitches) {
+      if (!p.card_id || seen.has(p.card_id)) continue;
+      seen.add(p.card_id);
+      if (String(p.fase_id_pipefy) === FASE_MATRICULA) n++;
+    }
+    return n;
+  }, [pitches]);
 
   const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
@@ -230,9 +240,9 @@ export default function PitchKpis({
       title: 'Matrícula',
       value: pct(counts.matricula, counts.asistieron),
       sub: `${counts.matricula} / ${counts.asistieron} asist.`,
-      // Conversión real: leads que quedaron en fase Matrícula (339756299)
+      // Conversión real: leads del periodo (únicos) hoy en fase Matrícula
       // sobre el total de pitches asistidos del periodo.
-      extra: `Reales ${counts.matricula_real} - ${pct(counts.matricula_real, counts.asistieron)}%`,
+      extra: `Reales ${matriculaReal} - ${pct(matriculaReal, counts.asistieron)}%`,
       state: stateById.matricula,
     },
     {
