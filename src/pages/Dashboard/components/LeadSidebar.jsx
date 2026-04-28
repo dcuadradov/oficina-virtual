@@ -917,24 +917,6 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     setEditingPitchSelectOpenId(null);
   }, [lead?.card_id]);
 
-  // Log de diagnóstico: imprime la configuración de los campos del Pitch
-  // cuando entran al sub-tab, para verificar que `depende_de` y `nombre`
-  // coinciden con lo configurado en la BD.
-  useEffect(() => {
-    if (activeTab === 'info' && subActiveTab === 'pitch' && pitchFields.length > 0) {
-      console.log('[Pitch] Configuración de campos (orden | nombre | depende_de):');
-      pitchFields.forEach((f, i) => {
-        console.log(`  ${i + 1}.`, JSON.stringify({
-          nombre: f.nombre,
-          orden: f.orden,
-          depende_de: f.depende_de,
-          dinamico: f.dinamico,
-          tipo: f.tipo,
-        }));
-      });
-    }
-  }, [activeTab, subActiveTab, pitchFields]);
-
   // Determina si un campo del Pitch debe mostrarse según su dependencia
   // (depende_de). Usa los valores LOCALES (form nuevo o edición), no los de leads.
   const shouldShowPitchField = (field, values) => {
@@ -1030,15 +1012,40 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     });
   };
 
-  // Crear nuevo resultado de pitch
+  // Crear nuevo resultado de pitch.
+  // Inserta tarjeta con fecha_pitch + pitch_numero + estado='registrado' y
+  // suma 1 a leads.pitch_seguimientos para que el form quede bloqueado hasta
+  // que el lead vuelva a entrar a fase Pitch (lo cual incrementa pitch_intentos).
   const handleCrearResultadoPitch = async () => {
     if (!lead?.card_id || savingPitch || !isPitchFormValid()) return;
     setSavingPitch(true);
     try {
-      const payload = { card_id: lead.card_id, ...buildPitchPayload(pitchFormValues) };
-      const { error } = await supabase.from('pitches_resultados').insert(payload);
-      if (error) throw error;
+      const intentosActual    = lead.pitch_intentos     ?? localLeadData.pitch_intentos     ?? 0;
+      const seguimientosActual = lead.pitch_seguimientos ?? localLeadData.pitch_seguimientos ?? 0;
+      const nuevoSeguimientos = seguimientosActual + 1;
+      // pitch_numero corresponde al intento actual; usamos el contador de
+      // intentos como ancla del intento al que pertenece este resultado
+      const pitchNumero = Math.max(intentosActual, nuevoSeguimientos);
 
+      const payload = {
+        card_id: lead.card_id,
+        fecha_pitch: lead.fecha_pitch ?? null,
+        pitch_numero: pitchNumero,
+        estado: 'registrado',
+        ...buildPitchPayload(pitchFormValues),
+      };
+      const { error: insertErr } = await supabase
+        .from('pitches_resultados')
+        .insert(payload);
+      if (insertErr) throw insertErr;
+
+      const { error: updateErr } = await supabase
+        .from('leads')
+        .update({ pitch_seguimientos: nuevoSeguimientos })
+        .eq('card_id', lead.card_id);
+      if (updateErr) throw updateErr;
+
+      setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos }));
       setPitchFormValues({});
       setPitchSelectOpenId(null);
       await fetchPitchResultados();
@@ -3560,77 +3567,145 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       );
                     };
 
-                    // Tarjetas en orden descendente (más reciente primero), pero
-                    // numeradas según orden ascendente (Pitch 1 = más antiguo)
+                    // Tarjetas: ordenamos por pitch_numero asc (más antiguo primero)
+                    // y luego invertimos para mostrar más reciente arriba. Si la fila
+                    // no tiene pitch_numero (datos viejos), caemos al orden cronológico.
                     const tarjetas = pitchResultados
-                      .map((r, idx) => ({ ...r, numero: idx + 1 }))
+                      .map((r, idx) => ({ ...r, numero: r.pitch_numero ?? idx + 1 }))
                       .slice()
                       .reverse();
 
                     const formValid = isPitchFormValid();
 
+                    // Estado del sub-tab Pitch:
+                    //  - no_aplica:   el lead no está actualmente en fase Pitch (340566951)
+                    //  - pendiente:   está en fase Pitch y aún no ha registrado el resultado
+                    //                 del intento actual (pitch_seguimientos < pitch_intentos)
+                    //  - registrado:  está en fase Pitch pero ya registró el resultado
+                    //                 del intento actual (pitch_seguimientos === pitch_intentos)
+                    const FASE_PITCH_ACTIVA = '340566951';
+                    const enFasePitch = String(lead?.fase_id_pipefy ?? '') === FASE_PITCH_ACTIVA;
+                    const intentos = lead?.pitch_intentos ?? localLeadData.pitch_intentos ?? 0;
+                    const seguimientos = lead?.pitch_seguimientos ?? localLeadData.pitch_seguimientos ?? 0;
+                    const pitchTabState = !enFasePitch
+                      ? 'no_aplica'
+                      : (seguimientos < intentos ? 'pendiente' : 'registrado');
+
+                    const fechaPitchTexto = lead?.fecha_pitch
+                      ? new Date(lead.fecha_pitch).toLocaleDateString('es-ES', {
+                          day: 'numeric', month: 'long', year: 'numeric',
+                          hour: 'numeric', minute: '2-digit', hour12: true,
+                        })
+                      : null;
+
                     return (
                       <div className="space-y-5">
-                        {/* Card del formulario nuevo */}
-                        <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
-                          <div className="flex items-center gap-2 mb-4">
-                            <Trophy size={18} className="text-amber-500" />
-                            <h4 className="font-semibold text-slate-700">Pitch</h4>
-                            <span className="text-[10px] font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                              Resultado
-                            </span>
+                        {/* Estado: no aplica (lead no está en fase Pitch) */}
+                        {pitchTabState === 'no_aplica' && (
+                          <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200">
+                            <div className="flex items-start gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center flex-shrink-0">
+                                <Trophy size={16} className="text-slate-400" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-700 mb-1">
+                                  Sección no disponible
+                                </h4>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                  El registro de resultado se habilita cuando el lead entra a la fase <span className="font-medium text-slate-600">Pitch</span>. Mientras tanto, aquí podrás consultar el historial de pitches anteriores.
+                                </p>
+                              </div>
+                            </div>
                           </div>
+                        )}
 
-                          {loadingPitchForm ? (
-                            <div className="flex items-center justify-center py-8">
-                              <Loader2 size={20} className="animate-spin text-amber-500" />
+                        {/* Estado: pendiente — formulario activo */}
+                        {pitchTabState === 'pendiente' && (
+                          <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Trophy size={18} className="text-amber-500" />
+                              <h4 className="font-semibold text-slate-700">Pitch</h4>
+                              <span className="text-[10px] font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                                Resultado pendiente
+                              </span>
                             </div>
-                          ) : pitchFields.length === 0 ? (
-                            <div className="text-center py-6 text-sm text-slate-500">
-                              No se encontró el formulario Pitch.
-                            </div>
-                          ) : (
-                            <>
-                              <div className="space-y-3">
-                                {pitchFields
-                                  .filter(field => shouldShowPitchField(field, pitchFormValues))
-                                  .map(field => renderPitchInput({
-                                    field,
-                                    values: pitchFormValues,
-                                    setValue: setPitchFormValue,
-                                    openSelectId: pitchSelectOpenId,
-                                    setOpenSelectId: setPitchSelectOpenId,
-                                    keyPrefix: 'new',
-                                  }))}
-                              </div>
+                            {fechaPitchTexto && (
+                              <p className="text-[11px] text-slate-500 mb-4 ml-7">
+                                Pitch agendado para <span className="font-medium text-slate-700">{fechaPitchTexto}</span>
+                              </p>
+                            )}
+                            {!fechaPitchTexto && <div className="mb-3" />}
 
-                              <div className="flex justify-end mt-4">
-                                <button
-                                  type="button"
-                                  onClick={handleCrearResultadoPitch}
-                                  disabled={!formValid || savingPitch}
-                                  className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-amber-200 flex items-center gap-2 ${
-                                    !formValid || savingPitch
-                                      ? 'bg-amber-300 cursor-not-allowed'
-                                      : 'bg-amber-500 hover:bg-amber-600'
-                                  }`}
-                                >
-                                  {savingPitch ? (
-                                    <>
-                                      <Loader2 size={14} className="animate-spin" />
-                                      Guardando...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Plus size={14} />
-                                      Crear resultado
-                                    </>
-                                  )}
-                                </button>
+                            {loadingPitchForm ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 size={20} className="animate-spin text-amber-500" />
                               </div>
-                            </>
-                          )}
-                        </div>
+                            ) : pitchFields.length === 0 ? (
+                              <div className="text-center py-6 text-sm text-slate-500">
+                                No se encontró el formulario Pitch.
+                              </div>
+                            ) : (
+                              <>
+                                <div className="space-y-3">
+                                  {pitchFields
+                                    .filter(field => shouldShowPitchField(field, pitchFormValues))
+                                    .map(field => renderPitchInput({
+                                      field,
+                                      values: pitchFormValues,
+                                      setValue: setPitchFormValue,
+                                      openSelectId: pitchSelectOpenId,
+                                      setOpenSelectId: setPitchSelectOpenId,
+                                      keyPrefix: 'new',
+                                    }))}
+                                </div>
+
+                                <div className="flex justify-end mt-4">
+                                  <button
+                                    type="button"
+                                    onClick={handleCrearResultadoPitch}
+                                    disabled={!formValid || savingPitch}
+                                    className={`px-4 py-2 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg shadow-amber-200 flex items-center gap-2 ${
+                                      !formValid || savingPitch
+                                        ? 'bg-amber-300 cursor-not-allowed'
+                                        : 'bg-amber-500 hover:bg-amber-600'
+                                    }`}
+                                  >
+                                    {savingPitch ? (
+                                      <>
+                                        <Loader2 size={14} className="animate-spin" />
+                                        Guardando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Plus size={14} />
+                                        Crear resultado
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Estado: registrado — ya guardó el resultado del intento actual */}
+                        {pitchTabState === 'registrado' && (
+                          <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100">
+                            <div className="flex items-start gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center flex-shrink-0">
+                                <Check size={16} className="text-emerald-500" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-700 mb-1">
+                                  Resultado registrado
+                                </h4>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                  Ya registraste el resultado del pitch actual. Si el lead vuelve a entrar a la fase Pitch, podrás registrar un nuevo resultado.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Lista de tarjetas de resultados */}
                         <div>
