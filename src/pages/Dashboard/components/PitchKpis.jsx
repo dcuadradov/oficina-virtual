@@ -27,9 +27,9 @@ const PITCH_RESULT_VALUES = [
 /**
  * Bloque de 10 KPIs (5x2) para "Mis Pitch":
  *   1. Efectividad comercial = pitches del periodo / leads creados con tag válido
- *   2. Asistencia = pitches asistidos / T2 (universo con resultado o no-show)
- *   3-10. Distribución por etapa: cada % se calcula sobre el mismo T2
- *         (los 8 suman ~100% porque asistido+no-asistido = T2).
+ *   2. Asistencia            = asistieron / T2 (T2 = asistieron + no-show)
+ *   3-8. % por pitch_result  = cada categoría / # asistieron  (suman 100%)
+ *   9-10. % Reprogramado/Sin reprogramar = cada uno / # no-show (suman 100%)
  */
 export default function PitchKpis({
   rangeStart,
@@ -135,10 +135,14 @@ export default function PitchKpis({
   }, [pitches]);
   const T2 = T2pitches.length;
 
-  // Conteos por categoría sobre T2
+  // Conteos por categoría:
+  //   - asistieron / no_show: subuniversos que componen T2
+  //   - matricula..interes_futuro: sobre los que asistieron
+  //   - reprogramado / sin_reprogramar: sobre los que NO asistieron
   const counts = useMemo(() => {
     const c = {
       asistieron: 0,
+      no_show: 0,
       matricula: 0,
       no_matricula: 0,
       pago_pendiente: 0,
@@ -150,6 +154,7 @@ export default function PitchKpis({
     };
     for (const p of T2pitches) {
       if (p.resultado_attended === 'No') {
+        c.no_show++;
         if (p.resultado_rescheduled === 'Si') c.reprogramado++;
         else c.sin_reprogramar++;
       } else if (p.resultado_pitch_result) {
@@ -195,57 +200,57 @@ export default function PitchKpis({
     {
       id: 'matricula',
       title: 'Matrícula',
-      value: pct(counts.matricula, T2),
-      sub: `${counts.matricula} / ${T2}`,
+      value: pct(counts.matricula, counts.asistieron),
+      sub: `${counts.matricula} / ${counts.asistieron} asist.`,
       state: stateById.matricula,
     },
     {
       id: 'no_matricula',
       title: 'No matrícula',
-      value: pct(counts.no_matricula, T2),
-      sub: `${counts.no_matricula} / ${T2}`,
+      value: pct(counts.no_matricula, counts.asistieron),
+      sub: `${counts.no_matricula} / ${counts.asistieron} asist.`,
       state: stateById.no_matricula,
     },
     {
       id: 'pago_pendiente',
       title: 'Pago pendiente',
-      value: pct(counts.pago_pendiente, T2),
-      sub: `${counts.pago_pendiente} / ${T2}`,
+      value: pct(counts.pago_pendiente, counts.asistieron),
+      sub: `${counts.pago_pendiente} / ${counts.asistieron} asist.`,
       state: stateById.pago_pendiente,
     },
     {
       id: 'posible_matricula',
       title: 'Posible matrícula',
-      value: pct(counts.posible_matricula, T2),
-      sub: `${counts.posible_matricula} / ${T2}`,
+      value: pct(counts.posible_matricula, counts.asistieron),
+      sub: `${counts.posible_matricula} / ${counts.asistieron} asist.`,
       state: stateById.posible_matricula,
     },
     {
       id: 'reprobado',
       title: 'Reprobado',
-      value: pct(counts.reprobado, T2),
-      sub: `${counts.reprobado} / ${T2}`,
+      value: pct(counts.reprobado, counts.asistieron),
+      sub: `${counts.reprobado} / ${counts.asistieron} asist.`,
       state: stateById.reprobado,
     },
     {
       id: 'interes_futuro',
       title: 'Interés futuro',
-      value: pct(counts.interes_futuro, T2),
-      sub: `${counts.interes_futuro} / ${T2}`,
+      value: pct(counts.interes_futuro, counts.asistieron),
+      sub: `${counts.interes_futuro} / ${counts.asistieron} asist.`,
       state: stateById.interes_futuro,
     },
     {
       id: 'reprogramado',
       title: 'Reprogramado',
-      value: pct(counts.reprogramado, T2),
-      sub: `${counts.reprogramado} / ${T2}`,
+      value: pct(counts.reprogramado, counts.no_show),
+      sub: `${counts.reprogramado} / ${counts.no_show} no asist.`,
       state: stateById.reprogramado,
     },
     {
       id: 'sin_reprogramar',
       title: 'Sin reprogramar',
-      value: pct(counts.sin_reprogramar, T2),
-      sub: `${counts.sin_reprogramar} / ${T2}`,
+      value: pct(counts.sin_reprogramar, counts.no_show),
+      sub: `${counts.sin_reprogramar} / ${counts.no_show} no asist.`,
       state: stateById.sin_reprogramar,
     },
   ];

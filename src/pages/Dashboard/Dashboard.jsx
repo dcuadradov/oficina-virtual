@@ -1402,6 +1402,7 @@ export default function Dashboard() {
                   tags={tagsDisponibles}
                   showFuenteFilter={false}
                   showReferidoFilter={false}
+                  showGestionWAFilter={false}
                   showComercialFilter={puedeVerTodos}
                   onRefreshComerciales={fetchComerciales}
                   monthConfigs={monthConfigs}
