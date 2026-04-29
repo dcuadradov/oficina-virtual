@@ -1012,31 +1012,71 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     });
   };
 
+  // Mapping de combinación (attended | pitch_result) → fase_id_pipefy destino
+  // que el lead tomará tras registrar el resultado del pitch. Si attended='No'
+  // siempre cae en "Pitch perdido" (340855086) sin importar rescheduled.
+  const FASE_DESTINO_BY_PITCH = {
+    'Si|Matrícula':         '339756299',
+    'Si|Pago pendiente':    '340643642',
+    'Si|Posible matrícula': '340643263',
+    'Si|Interés futuro':    '340483950',
+    'Si|Reprobado':         '341775176',
+    'Si|No matrícula':      '341775176',
+  };
+  const FASE_DESTINO_NO_ASISTIO = '340855086';
+
+  const determinarFaseDestinoPitch = (payload) => {
+    if (payload.attended === 'No') return FASE_DESTINO_NO_ASISTIO;
+    const key = `${payload.attended}|${payload.pitch_result}`;
+    return FASE_DESTINO_BY_PITCH[key] || null;
+  };
+
+  // Espera a que la fase del lead se actualice en Supabase (Pipefy → sync
+  // toma unos segundos). Devuelve la fila actualizada o null si timeout.
+  const esperarCambioDeFase = async (cardId, faseDestinoId, maxWaitMs = 15000) => {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const { data } = await supabase
+        .from('leads')
+        .select('fase_id_pipefy, fase_nombre_pipefy, etapa_funnel, pitch_intentos, pitch_seguimientos')
+        .eq('card_id', cardId)
+        .maybeSingle();
+      if (data && String(data.fase_id_pipefy) === String(faseDestinoId)) {
+        return data;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return null;
+  };
+
   // Crear nuevo resultado de pitch.
-  // Inserta tarjeta con fecha_pitch + pitch_numero + estado='registrado' y
-  // suma 1 a leads.pitch_seguimientos para que el form quede bloqueado hasta
-  // que el lead vuelva a entrar a fase Pitch (lo cual incrementa pitch_intentos).
+  // Flujo:
+  //   1) Insert en pitches_resultados (estado='registrado').
+  //   2) Update leads.pitch_seguimientos += 1 → bloquea el form.
+  //   3) Webhook Pipefy: mover a la fase destino según attended/pitch_result.
+  //   4) Polling Supabase hasta que fase_id_pipefy refleje el cambio.
+  //   5) Toast + actualización optimista de localLeadData.
   const handleCrearResultadoPitch = async () => {
     if (!lead?.card_id || savingPitch || !isPitchFormValid()) return;
     setSavingPitch(true);
     try {
-      const intentosActual    = lead.pitch_intentos     ?? localLeadData.pitch_intentos     ?? 0;
-      const seguimientosActual = lead.pitch_seguimientos ?? localLeadData.pitch_seguimientos ?? 0;
+      const intentosActual    = localLeadData.pitch_intentos     ?? lead.pitch_intentos     ?? 0;
+      const seguimientosActual = localLeadData.pitch_seguimientos ?? lead.pitch_seguimientos ?? 0;
       const nuevoSeguimientos = seguimientosActual + 1;
-      // pitch_numero corresponde al intento actual; usamos el contador de
-      // intentos como ancla del intento al que pertenece este resultado
       const pitchNumero = Math.max(intentosActual, nuevoSeguimientos);
 
-      const payload = {
+      const pitchPayload = buildPitchPayload(pitchFormValues);
+      const insertPayload = {
         card_id: lead.card_id,
         fecha_pitch: lead.fecha_pitch ?? null,
         pitch_numero: pitchNumero,
         estado: 'registrado',
-        ...buildPitchPayload(pitchFormValues),
+        ...pitchPayload,
       };
+
       const { error: insertErr } = await supabase
         .from('pitches_resultados')
-        .insert(payload);
+        .insert(insertPayload);
       if (insertErr) throw insertErr;
 
       const { error: updateErr } = await supabase
@@ -1049,9 +1089,66 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setPitchFormValues({});
       setPitchSelectOpenId(null);
       await fetchPitchResultados();
+
+      const faseDestinoId = determinarFaseDestinoPitch(pitchPayload);
+      if (!faseDestinoId) {
+        setToastMessage('Resultado guardado. No hay regla de fase mapeada.');
+        setTimeout(() => setToastMessage(null), 4000);
+        return;
+      }
+
+      const { data: faseData } = await supabase
+        .from('config_stepper')
+        .select('nombre_fase')
+        .eq('fase_id_pipefy', faseDestinoId)
+        .maybeSingle();
+      const faseNombreDestino = faseData?.nombre_fase || faseDestinoId;
+
+      try {
+        const response = await fetch(
+          'https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              card_id: lead.card_id,
+              fase_destino: faseNombreDestino,
+            }),
+          }
+        );
+        if (!response.ok) throw new Error('Webhook respondió con error');
+      } catch (whErr) {
+        console.error('[Pitch] Error llamando webhook de fase:', whErr);
+        setToastMessage('Resultado guardado, pero falló el cambio de fase.');
+        setTimeout(() => setToastMessage(null), 5000);
+        return;
+      }
+
+      const updated = await esperarCambioDeFase(lead.card_id, faseDestinoId);
+      if (updated) {
+        setLocalLeadData(prev => ({
+          ...prev,
+          pitch_seguimientos: updated.pitch_seguimientos ?? nuevoSeguimientos,
+          pitch_intentos: updated.pitch_intentos ?? intentosActual,
+          fase_id_pipefy: updated.fase_id_pipefy,
+          fase_nombre_pipefy: updated.fase_nombre_pipefy,
+          etapa_funnel: updated.etapa_funnel,
+        }));
+        setFaseLocal(updated.fase_nombre_pipefy);
+        setToastMessage(
+          `Se registró el resultado de tu Pitch y se movió a la fase "${updated.fase_nombre_pipefy || faseNombreDestino}"`
+        );
+        onRefreshData?.();
+      } else {
+        setToastMessage(
+          `Resultado guardado. La fase debería pasar a "${faseNombreDestino}" en unos segundos.`
+        );
+      }
+      setTimeout(() => setToastMessage(null), 5000);
     } catch (e) {
       console.error('[Pitch] Error creando resultado:', e);
-      alert('No se pudo crear el resultado. Intenta de nuevo.');
+      setToastMessage('No se pudo crear el resultado. Intenta de nuevo.');
+      setTimeout(() => setToastMessage(null), 4000);
     } finally {
       setSavingPitch(false);
     }
@@ -3583,10 +3680,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     //                 del intento actual (pitch_seguimientos < pitch_intentos)
                     //  - registrado:  está en fase Pitch pero ya registró el resultado
                     //                 del intento actual (pitch_seguimientos === pitch_intentos)
+                    //
+                    // localLeadData tiene prioridad sobre lead para reflejar updates
+                    // optimistas (insert de resultado, cambio de fase post-webhook).
                     const FASE_PITCH_ACTIVA = '340566951';
-                    const enFasePitch = String(lead?.fase_id_pipefy ?? '') === FASE_PITCH_ACTIVA;
-                    const intentos = lead?.pitch_intentos ?? localLeadData.pitch_intentos ?? 0;
-                    const seguimientos = lead?.pitch_seguimientos ?? localLeadData.pitch_seguimientos ?? 0;
+                    const faseIdEfectiva = localLeadData.fase_id_pipefy ?? lead?.fase_id_pipefy ?? '';
+                    const enFasePitch = String(faseIdEfectiva) === FASE_PITCH_ACTIVA;
+                    const intentos = localLeadData.pitch_intentos ?? lead?.pitch_intentos ?? 0;
+                    const seguimientos = localLeadData.pitch_seguimientos ?? lead?.pitch_seguimientos ?? 0;
                     const pitchTabState = !enFasePitch
                       ? 'no_aplica'
                       : (seguimientos < intentos ? 'pendiente' : 'registrado');
