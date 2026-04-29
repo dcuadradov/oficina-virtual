@@ -64,9 +64,13 @@ export default function PitchKpis({
 }) {
   const [pitches, setPitches] = useState([]);
   const [leadsCount, setLeadsCount] = useState(0);
+  const [matriculaReal, setMatriculaReal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Carga datos en paralelo: pitches del periodo y count de leads válidos.
+  // Carga datos en paralelo: pitches del periodo, count de leads creados y
+  // count de matrículas reales (etapa_funnel='Matrícula' con updated_at en
+  // el periodo, igual que el contador de Gestión > Matrícula con
+  // "Actualización").
   useEffect(() => {
     if (!rangeStart || !rangeEnd) return;
     let cancelled = false;
@@ -104,10 +108,24 @@ export default function PitchKpis({
         if (selectedComercial) lq = lq.eq('comercial_email', selectedComercial);
         else if (!puedeVerTodos && userEmail) lq = lq.eq('comercial_email', userEmail);
 
-        const [pRes, lRes] = await Promise.all([pq, lq]);
+        // 3) Matrículas reales del periodo: réplica del contador de
+        // "Gestión > Matrícula" con filtro Actualización. Filtra por
+        // etapa_funnel y updated_at, aplicando comercial y tags.
+        let mq = supabase
+          .from('leads')
+          .select('card_id', { count: 'exact', head: true })
+          .eq('etapa_funnel', 'Matrícula')
+          .gte('updated_at', fechaInicio)
+          .lt('updated_at', fechaFin);
+        if (selectedTags.length > 0) mq = mq.in('label', selectedTags);
+        if (selectedComercial) mq = mq.eq('comercial_email', selectedComercial);
+        else if (!puedeVerTodos && userEmail) mq = mq.eq('comercial_email', userEmail);
+
+        const [pRes, lRes, mRes] = await Promise.all([pq, lq, mq]);
         if (cancelled) return;
         if (pRes.error) throw pRes.error;
         if (lRes.error) throw lRes.error;
+        if (mRes.error) throw mRes.error;
 
         // Filtrar pitches por:
         // - rango de fecha (mismo criterio sin TZ que el calendario)
@@ -125,6 +143,7 @@ export default function PitchKpis({
 
         setPitches(filtered);
         setLeadsCount(lRes.count || 0);
+        setMatriculaReal(mRes.count || 0);
       } catch (err) {
         console.error('Error cargando KPIs de Pitch:', err);
       } finally {
@@ -193,21 +212,6 @@ export default function PitchKpis({
     return c;
   }, [T2pitches]);
 
-  // Matrícula REAL: leads únicos del periodo (cualquier pitch, sin importar
-  // attended/result) que actualmente están en la fase "Matrícula" (339756299)
-  // en Pipefy. Mide la efectividad real del periodo, capturando conversiones
-  // posteriores (ej. "Posible matrícula" → matriculó después).
-  const FASE_MATRICULA = '339756299';
-  const matriculaReal = useMemo(() => {
-    const seen = new Set();
-    let n = 0;
-    for (const p of pitches) {
-      if (!p.card_id || seen.has(p.card_id)) continue;
-      seen.add(p.card_id);
-      if (String(p.fase_id_pipefy) === FASE_MATRICULA) n++;
-    }
-    return n;
-  }, [pitches]);
 
   const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
