@@ -620,6 +620,10 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const [pitchResultados, setPitchResultados] = useState([]);
   const [loadingPitchResultados, setLoadingPitchResultados] = useState(false);
   const [savingPitch, setSavingPitch] = useState(false);
+  // Info post-creación (mensaje extendido tras registrar resultado y mover
+  // de fase). Se limpia al cambiar de lead. Solo se setea cuando todo el
+  // flujo termina con éxito (insert + webhook + polling).
+  const [pitchCompletionInfo, setPitchCompletionInfo] = useState(null);
   const [editingPitchId, setEditingPitchId] = useState(null);
   const [editingPitchValues, setEditingPitchValues] = useState({}); // { fieldId: value }
   const [editingPitchSelectOpenId, setEditingPitchSelectOpenId] = useState(null);
@@ -915,6 +919,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     setEditingPitchId(null);
     setEditingPitchValues({});
     setEditingPitchSelectOpenId(null);
+    setPitchCompletionInfo(null);
   }, [lead?.card_id]);
 
   // Determina si un campo del Pitch debe mostrarse según su dependencia
@@ -1050,12 +1055,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   };
 
   // Crear nuevo resultado de pitch.
-  // Flujo:
+  // Flujo (loader activo durante TODO):
   //   1) Insert en pitches_resultados (estado='registrado').
-  //   2) Update leads.pitch_seguimientos += 1 → bloquea el form.
+  //   2) Update leads.pitch_seguimientos += 1.
   //   3) Webhook Pipefy: mover a la fase destino según attended/pitch_result.
   //   4) Polling Supabase hasta que fase_id_pipefy refleje el cambio.
-  //   5) Toast + actualización optimista de localLeadData.
+  //   5) Recién al final: actualizar localLeadData + setear pitchCompletionInfo
+  //      para mostrar el panel con el mensaje extendido.
+  // Sin toasts de éxito; los toasts solo se usan para errores.
   const handleCrearResultadoPitch = async () => {
     if (!lead?.card_id || savingPitch || !isPitchFormValid()) return;
     setSavingPitch(true);
@@ -1085,15 +1092,15 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .eq('card_id', lead.card_id);
       if (updateErr) throw updateErr;
 
-      setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos }));
-      setPitchFormValues({});
-      setPitchSelectOpenId(null);
-      await fetchPitchResultados();
-
       const faseDestinoId = determinarFaseDestinoPitch(pitchPayload);
+
+      // Caso degradado: sin regla de fase mapeada → terminamos sin webhook.
       if (!faseDestinoId) {
-        setToastMessage('Resultado guardado. No hay regla de fase mapeada.');
-        setTimeout(() => setToastMessage(null), 4000);
+        setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos }));
+        setPitchFormValues({});
+        setPitchSelectOpenId(null);
+        await fetchPitchResultados();
+        setPitchCompletionInfo({ faseNombre: null, faseError: false, fasePending: false });
         return;
       }
 
@@ -1104,6 +1111,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .maybeSingle();
       const faseNombreDestino = faseData?.nombre_fase || faseDestinoId;
 
+      let webhookOk = true;
       try {
         const response = await fetch(
           'https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal',
@@ -1119,12 +1127,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         if (!response.ok) throw new Error('Webhook respondió con error');
       } catch (whErr) {
         console.error('[Pitch] Error llamando webhook de fase:', whErr);
-        setToastMessage('Resultado guardado, pero falló el cambio de fase.');
-        setTimeout(() => setToastMessage(null), 5000);
-        return;
+        webhookOk = false;
       }
 
-      const updated = await esperarCambioDeFase(lead.card_id, faseDestinoId);
+      const updated = webhookOk
+        ? await esperarCambioDeFase(lead.card_id, faseDestinoId)
+        : null;
+
+      // Update final unificado (form + tarjetas + datos del lead).
       if (updated) {
         setLocalLeadData(prev => ({
           ...prev,
@@ -1135,16 +1145,19 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           etapa_funnel: updated.etapa_funnel,
         }));
         setFaseLocal(updated.fase_nombre_pipefy);
-        setToastMessage(
-          `Se registró el resultado de tu Pitch y se movió a la fase "${updated.fase_nombre_pipefy || faseNombreDestino}"`
-        );
         onRefreshData?.();
       } else {
-        setToastMessage(
-          `Resultado guardado. La fase debería pasar a "${faseNombreDestino}" en unos segundos.`
-        );
+        setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos }));
       }
-      setTimeout(() => setToastMessage(null), 5000);
+      setPitchFormValues({});
+      setPitchSelectOpenId(null);
+      await fetchPitchResultados();
+
+      setPitchCompletionInfo({
+        faseNombre: updated?.fase_nombre_pipefy || faseNombreDestino,
+        faseError: !webhookOk,
+        fasePending: webhookOk && !updated,
+      });
     } catch (e) {
       console.error('[Pitch] Error creando resultado:', e);
       setToastMessage('No se pudo crear el resultado. Intenta de nuevo.');
@@ -3701,8 +3714,47 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
 
                     return (
                       <div className="space-y-5">
+                        {/* Estado: completado — recién registrado este pitch + lead movido de fase. */}
+                        {/* Tiene prioridad sobre los 3 estados de abajo y se limpia al cambiar de lead. */}
+                        {pitchCompletionInfo && (
+                          <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100">
+                            <div className="flex items-start gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center flex-shrink-0">
+                                <Check size={16} className="text-emerald-500" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-700 mb-1">
+                                  Resultado registrado
+                                </h4>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                  Ya registraste el resultado del pitch actual. Si el lead vuelve a entrar a la fase Pitch, podrás registrar un nuevo resultado.
+                                  {pitchCompletionInfo.faseNombre && !pitchCompletionInfo.faseError && (
+                                    <>
+                                      {' '}Además movimos el lead a la fase{' '}
+                                      <span className="font-semibold text-emerald-700">
+                                        {pitchCompletionInfo.faseNombre}
+                                      </span>
+                                      {pitchCompletionInfo.fasePending && (
+                                        <span className="text-amber-600">
+                                          {' '}(la actualización puede tardar unos segundos)
+                                        </span>
+                                      )}
+                                      .
+                                    </>
+                                  )}
+                                  {pitchCompletionInfo.faseError && (
+                                    <span className="text-rose-600">
+                                      {' '}No pudimos mover el lead de fase automáticamente; intenta cambiarla manualmente.
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Estado: no aplica (lead no está en fase Pitch) */}
-                        {pitchTabState === 'no_aplica' && (
+                        {!pitchCompletionInfo && pitchTabState === 'no_aplica' && (
                           <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200">
                             <div className="flex items-start gap-3">
                               <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center flex-shrink-0">
@@ -3721,7 +3773,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                         )}
 
                         {/* Estado: pendiente — formulario activo */}
-                        {pitchTabState === 'pendiente' && (
+                        {!pitchCompletionInfo && pitchTabState === 'pendiente' && (
                           <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100">
                             <div className="flex items-center gap-2 mb-1">
                               <Trophy size={18} className="text-amber-500" />
@@ -3790,7 +3842,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                         )}
 
                         {/* Estado: registrado — ya guardó el resultado del intento actual */}
-                        {pitchTabState === 'registrado' && (
+                        {!pitchCompletionInfo && pitchTabState === 'registrado' && (
                           <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100">
                             <div className="flex items-start gap-3">
                               <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center flex-shrink-0">
