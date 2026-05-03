@@ -54,7 +54,10 @@ export default function RecordatoriosCalendar({ selectedComercial, userEmail, on
     return date.toDateString() === today.toDateString();
   };
 
-  // Cargar recordatorios activos (estado = 'Programado') con datos del lead
+  // Cargar recordatorios con datos del lead. Incluimos:
+  //   - 'Programado' (futuros / pendientes)
+  //   - 'Vencido'    (los que ya pasaron sin ejecutarse)
+  // Los 'Cancelado' se omiten porque el usuario los descartó.
   useEffect(() => {
     const fetchRecordatorios = async () => {
       setLoading(true);
@@ -79,7 +82,7 @@ export default function RecordatoriosCalendar({ selectedComercial, userEmail, on
               estado_gestion
             )
           `)
-          .eq('estado', 'Programado')
+          .in('estado', ['Programado', 'Vencido'])
           .not('fecha_programada', 'is', null);
 
         const { data, error } = await query;
@@ -181,7 +184,11 @@ export default function RecordatoriosCalendar({ selectedComercial, userEmail, on
   };
 
   // Categoría por recordatorio: 'pasado' | 'agendado' | 'otro'
+  //   - 'Vencido' siempre cuenta como pasado (lo dice el estado)
+  //   - 'Programado' con fecha < ahora también es pasado (transición todavía
+  //     no procesada por el backend)
   const getCategoria = (rec) => {
+    if (rec.estado === 'Vencido') return 'pasado';
     if (isPastRecordatorio(rec.fecha_programada)) return 'pasado';
     const etapa = rec.leads?.etapa_funnel || '';
     if (ETAPAS_AGENDADO.includes(etapa)) return 'agendado';
