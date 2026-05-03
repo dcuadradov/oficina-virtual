@@ -1347,6 +1347,7 @@ export default function Dashboard() {
                   onMarcarNoLeidoBulk={handleMarcarNoLeidoBulk}
                   activeEtapas={activeEtapas}
                   onEtapaChange={handleEtapaChange}
+                  onSetActiveEtapas={setActiveEtapas}
                   activeFilter={activeFilter}
                   ultimosSeguimientos={ultimosSeguimientos}
                   currentPage={currentPage}
