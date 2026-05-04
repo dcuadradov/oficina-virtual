@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowUpDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X, MailOpen, Mail, Check, Filter, Search } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
@@ -322,30 +322,59 @@ const FunnelDropdown = ({ etapas = [], grupos = [], porEtapa = {}, activeEtapas 
   const [isOpen, setIsOpen] = useState(false);
   const [pendingEtapas, setPendingEtapas] = useState(activeEtapas);
   const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 360 });
+  const triggerRef = useRef(null);
+  const popupRef = useRef(null);
 
-  // Sincronizar pending con activeEtapas cuando se abre el dropdown
+  // Sincronizar pending con activeEtapas al abrir
   useEffect(() => {
     if (isOpen) {
       setPendingEtapas(activeEtapas);
       setSearchTerm('');
     }
-  }, [isOpen, activeEtapas]);
-
-  // Click fuera cierra (descarta cambios pendientes)
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
+    // No incluimos activeEtapas como dep para evitar resets durante el flujo
+    // de selección. La sincronización solo importa al abrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Filtrado por buscador (case-insensitive, sin tildes)
+  // Calcula y actualiza la posición del popup (fixed, anclado al trigger).
+  // Se ejecuta al abrir, en resize y en scroll de cualquier ancestro.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const desiredWidth = 360;
+      const margin = 8;
+      const maxWidth = Math.min(desiredWidth, window.innerWidth - margin * 2);
+      let left = rect.right - maxWidth;
+      if (left < margin) left = margin;
+      const top = rect.bottom + 8;
+      setPosition({ top, left, width: maxWidth });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
+  // Click fuera cierra (incluye el popup en portal)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      const t = e.target;
+      if (triggerRef.current?.contains(t)) return;
+      if (popupRef.current?.contains(t)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  // Filtrado por buscador
   const normalizar = (s) => (s || '').toString().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const term = normalizar(searchTerm.trim());
@@ -353,13 +382,10 @@ const FunnelDropdown = ({ etapas = [], grupos = [], porEtapa = {}, activeEtapas 
     ? etapas.filter(e => normalizar(e.label).includes(term))
     : etapas;
 
-  // Agrupar etapas filtradas por grupo
   const gruposConEtapas = grupos
     .map(g => ({ ...g, etapas: etapasFiltradas.filter(e => e.grupo === g.id) }))
     .filter(g => g.etapas.length > 0);
 
-  // "Seleccionar todas / Deseleccionar todas" opera sobre el conjunto VISIBLE
-  // (después de aplicar el buscador) — más útil cuando hay muchas etapas.
   const idsVisibles = etapasFiltradas.map(e => e.id);
   const todasVisiblesSeleccionadas = idsVisibles.length > 0 &&
     idsVisibles.every(id => pendingEtapas.includes(id));
@@ -391,11 +417,111 @@ const FunnelDropdown = ({ etapas = [], grupos = [], porEtapa = {}, activeEtapas 
     ? 'Mostrando todas las etapas'
     : `${activeEtapas.length} etapa${activeEtapas.length !== 1 ? 's' : ''} seleccionada${activeEtapas.length !== 1 ? 's' : ''}`;
 
+  // El popup se renderiza en document.body via portal para escapar del
+  // overflow:hidden de la card padre. position: fixed → no afectado por
+  // overflow ni scroll de ningún ancestor.
+  const popup = isOpen && createPortal(
+    <div
+      ref={popupRef}
+      style={{
+        position: 'fixed',
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        zIndex: 9999,
+      }}
+      className="bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-slate-300/40 overflow-hidden"
+    >
+      <div className="p-3 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar etapa..."
+            className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]/40 transition-colors"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={toggleTodas}
+          className="mt-2 w-full text-left text-xs font-medium text-[#1717AF] hover:text-[#1717AF]/80 transition-colors px-1"
+        >
+          {todasVisiblesSeleccionadas ? 'Deseleccionar todas' : 'Seleccionar todas'}
+        </button>
+      </div>
+
+      <div className="max-h-[320px] overflow-y-auto py-1" style={{ overflowAnchor: 'none' }}>
+        {gruposConEtapas.length === 0 ? (
+          <div className="px-4 py-6 text-center text-xs text-slate-400">
+            No se encontraron etapas
+          </div>
+        ) : (
+          gruposConEtapas.map(grupo => (
+            <div key={grupo.id} className="px-2 py-1">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {grupo.nombre}
+              </div>
+              {grupo.etapas.map(etapa => {
+                const isChecked = pendingEtapas.includes(etapa.id);
+                const count = porEtapa[etapa.id] || 0;
+                return (
+                  <button
+                    key={etapa.id}
+                    type="button"
+                    onClick={() => togglePending(etapa.id)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <span
+                      className={`flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 ${
+                        isChecked
+                          ? 'bg-[#1717AF] border-[#1717AF] text-white'
+                          : 'bg-white border-slate-300 text-transparent'
+                      }`}
+                    >
+                      <Check size={11} strokeWidth={3} />
+                    </span>
+                    <span className="text-sm text-slate-700 flex-1 truncate">
+                      {etapa.label}
+                    </span>
+                    <span className="text-xs text-slate-400 flex-shrink-0">
+                      ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-100 bg-slate-50">
+        <button
+          onClick={handleCancelar}
+          className="flex-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+          type="button"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleConsultar}
+          className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-[#1717AF] rounded-lg hover:bg-[#1717AF]/90 transition-colors"
+          type="button"
+        >
+          Consultar
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
       <button
+        ref={triggerRef}
         onClick={() => setIsOpen(o => !o)}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 border whitespace-nowrap ${
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 border whitespace-nowrap ${
           activeEtapas.length > 0
             ? 'bg-[#1717AF]/10 text-[#1717AF] border-[#1717AF]/30 hover:bg-[#1717AF]/15'
             : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -405,96 +531,8 @@ const FunnelDropdown = ({ etapas = [], grupos = [], porEtapa = {}, activeEtapas 
         <span>{buttonLabel}</span>
         <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-
-      {isOpen && (
-        <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-[calc(100vw-2rem)] sm:w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-slate-300/40 z-50 overflow-hidden">
-          <div className="p-3 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar etapa..."
-                className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF]/40 transition-colors"
-              />
-            </div>
-            <button
-              onClick={toggleTodas}
-              className="mt-2 w-full text-left text-xs font-medium text-[#1717AF] hover:text-[#1717AF]/80 transition-colors px-1"
-              type="button"
-            >
-              {todasVisiblesSeleccionadas ? 'Deseleccionar todas' : 'Seleccionar todas'}
-            </button>
-          </div>
-
-          <div className="max-h-[320px] overflow-y-auto py-1">
-            {gruposConEtapas.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-slate-400">
-                No se encontraron etapas
-              </div>
-            ) : (
-              gruposConEtapas.map(grupo => (
-                <div key={grupo.id} className="px-2 py-1">
-                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    {grupo.nombre}
-                  </div>
-                  {grupo.etapas.map(etapa => {
-                    const isChecked = pendingEtapas.includes(etapa.id);
-                    const count = porEtapa[etapa.id] || 0;
-                    return (
-                      <label
-                        key={etapa.id}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                      >
-                        <span
-                          className={`flex items-center justify-center w-4 h-4 rounded border transition-all flex-shrink-0 ${
-                            isChecked
-                              ? 'bg-[#1717AF] border-[#1717AF] text-white'
-                              : 'bg-white border-slate-300'
-                          }`}
-                        >
-                          {isChecked && <Check size={11} strokeWidth={3} />}
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => togglePending(etapa.id)}
-                          className="sr-only"
-                        />
-                        <span className="text-sm text-slate-700 flex-1 truncate">
-                          {etapa.label}
-                        </span>
-                        <span className="text-xs text-slate-400 flex-shrink-0">
-                          ({count})
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-100 bg-slate-50">
-            <button
-              onClick={handleCancelar}
-              className="flex-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-              type="button"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleConsultar}
-              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-[#1717AF] rounded-lg hover:bg-[#1717AF]/90 transition-colors"
-              type="button"
-            >
-              Consultar
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+      {popup}
+    </>
   );
 };
 
