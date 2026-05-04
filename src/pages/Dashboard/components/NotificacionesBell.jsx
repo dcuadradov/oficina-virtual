@@ -593,8 +593,9 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                       </button>
                       {/* Tooltip */}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                        <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
-                          <span>{cat.conteo} {cat.conteo === 1 ? 'nueva' : 'nuevas'} y {visto} {visto === 1 ? 'vista' : 'vistas'}</span>
+                        <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg text-center">
+                          <div>{cat.conteo} {cat.conteo === 1 ? 'nueva' : 'nuevas'} y {visto} {visto === 1 ? 'vista' : 'vistas'}</div>
+                          <div className="text-slate-300 font-normal mt-0.5">{cat.nombre}</div>
                           <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
                         </div>
                       </div>
