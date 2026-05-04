@@ -94,6 +94,21 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   const [categorias, setCategorias] = useState([]);
   const [selectedCategoria, setSelectedCategoria] = useState(null);
 
+  // Filtro por estado: 'todas' | 'pendientes' | 'revisadas'
+  // - pendientes: estado_lectura IN ('nuevo', 'visto')
+  // - revisadas:  estado_lectura = 'abierto'
+  const [stateFilter, setStateFilter] = useState('todas');
+
+  // Conteos del filtro de estado dentro de la categoría actual.
+  // Se refrescan al abrir, cambiar categoría o ejecutar un bulk.
+  const [conteoEstado, setConteoEstado] = useState({ pendientes: 0, revisadas: 0 });
+
+  // Selección para bulk action. Solo aplica cuando stateFilter !== 'todas'.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  // Flag de "seleccionar todas las del estado actual" (incluye no cargadas).
+  const [selectAllOfState, setSelectAllOfState] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // Acumula IDs de notificaciones 'nuevo' que se mostraron, para marcar solo esas al cerrar
   const notificacionesMostradasRef = useRef(new Set());
 
@@ -159,7 +174,7 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     }
   }, [userEmail]);
 
-  const fetchNotificaciones = useCallback(async (pageNum = 0, append = false, configIds = null) => {
+  const fetchNotificaciones = useCallback(async (pageNum = 0, append = false, configIds = null, estado = 'todas') => {
     if (!userEmail) return;
     
     setLoading(true);
@@ -172,6 +187,12 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       
       if (configIds && configIds.length > 0) {
         query = query.in('config_id', configIds);
+      }
+
+      if (estado === 'pendientes') {
+        query = query.in('estado_lectura', ['nuevo', 'visto']);
+      } else if (estado === 'revisadas') {
+        query = query.eq('estado_lectura', 'abierto');
       }
       
       query = query.range(pageNum * NOTIFICACIONES_PER_PAGE, (pageNum + 1) * NOTIFICACIONES_PER_PAGE - 1);
@@ -196,6 +217,36 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       console.error('Error fetching notificaciones:', error);
     } finally {
       setLoading(false);
+    }
+  }, [userEmail]);
+
+  // Conteos por estado para los tabs y el "Seleccionar todas (X)".
+  // Se ejecutan dos counts (pendientes y revisadas) respetando la categoría
+  // actual. Los counts se hacen en una sola request cada uno con head:true.
+  const fetchConteoEstado = useCallback(async (configIds = null) => {
+    if (!userEmail) return { pendientes: 0, revisadas: 0 };
+
+    const buildQuery = () => {
+      let q = supabase
+        .from('notificaciones')
+        .select('id', { count: 'exact', head: true })
+        .eq('comercial_email', userEmail);
+      if (configIds && configIds.length) q = q.in('config_id', configIds);
+      return q;
+    };
+
+    try {
+      const [pRes, rRes] = await Promise.all([
+        buildQuery().in('estado_lectura', ['nuevo', 'visto']),
+        buildQuery().eq('estado_lectura', 'abierto'),
+      ]);
+      return {
+        pendientes: pRes.count || 0,
+        revisadas: rRes.count || 0,
+      };
+    } catch (e) {
+      console.error('Error fetching conteo estado:', e);
+      return { pendientes: 0, revisadas: 0 };
     }
   }, [userEmail]);
 
@@ -229,7 +280,105 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     const nextPage = page + 1;
     setPage(nextPage);
     const currentCat = categorias.find(c => c.nombre === selectedCategoria);
-    fetchNotificaciones(nextPage, true, currentCat?.configIds || null);
+    fetchNotificaciones(nextPage, true, currentCat?.configIds || null, stateFilter);
+  };
+
+  const limpiarSeleccion = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectAllOfState(false);
+  }, []);
+
+  const toggleSeleccion = (id) => {
+    setSelectAllOfState(false);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOfState = () => {
+    setSelectedIds(new Set());
+    setSelectAllOfState(prev => !prev);
+  };
+
+  const handleStateFilterChange = (newFilter) => {
+    if (newFilter === stateFilter) return;
+    setStateFilter(newFilter);
+    limpiarSeleccion();
+    setPage(0);
+    const cat = categorias.find(c => c.nombre === selectedCategoria);
+    fetchNotificaciones(0, false, cat?.configIds || null, newFilter);
+  };
+
+  // Bulk: cambia el estado de las notificaciones seleccionadas.
+  // - desde Pendientes → marca como 'abierto' (revisadas)
+  // - desde Revisadas  → marca como 'visto'   (pendientes)
+  const ejecutarBulkAction = async () => {
+    if (stateFilter === 'todas') return;
+    if (!selectAllOfState && selectedIds.size === 0) return;
+    if (!userEmail) return;
+
+    const targetState = stateFilter === 'pendientes' ? 'abierto' : 'visto';
+    const ahora = new Date().toISOString();
+    const updateData = targetState === 'abierto'
+      ? { estado_lectura: 'abierto', abierto_at: ahora }
+      : { estado_lectura: 'visto', visto_at: ahora };
+
+    setBulkLoading(true);
+    try {
+      const cat = categorias.find(c => c.nombre === selectedCategoria);
+      if (selectAllOfState) {
+        let q = supabase
+          .from('notificaciones')
+          .update(updateData)
+          .eq('comercial_email', userEmail);
+        if (stateFilter === 'pendientes') {
+          q = q.in('estado_lectura', ['nuevo', 'visto']);
+        } else {
+          q = q.eq('estado_lectura', 'abierto');
+        }
+        if (cat?.configIds?.length) q = q.in('config_id', cat.configIds);
+        const { error } = await q;
+        if (error) throw error;
+        // Si el bulk movió todas las pendientes a 'abierto', el set
+        // de "mostradas como nuevas" ya no aplica.
+        if (stateFilter === 'pendientes') {
+          notificacionesMostradasRef.current = new Set();
+        }
+      } else {
+        const ids = Array.from(selectedIds);
+        const { error } = await supabase
+          .from('notificaciones')
+          .update(updateData)
+          .in('id', ids);
+        if (error) throw error;
+        // Las que pasaron a 'abierto' o 'visto' ya no son 'nuevas',
+        // así que limpiar del set de mostradas pendientes.
+        ids.forEach(id => notificacionesMostradasRef.current.delete(id));
+      }
+
+      limpiarSeleccion();
+      setPage(0);
+      // Refresh lista, conteos por categoría y conteo del filtro de estado.
+      await Promise.all([
+        fetchNotificaciones(0, false, cat?.configIds || null, stateFilter),
+        (async () => {
+          const newCounts = await fetchConteoEstado(cat?.configIds || null);
+          setConteoEstado(newCounts);
+        })(),
+        (async () => {
+          const refreshed = await fetchConteosCategorias(categorias);
+          setCategorias(refreshed);
+        })(),
+        fetchContador(),
+      ]);
+    } catch (error) {
+      console.error('Error en bulk action:', error);
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   const marcarComoVisto = useCallback(async () => {
@@ -239,14 +388,17 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     if (ids.length === 0) return;
 
     try {
+      // Solo bajar a 'visto' las que aún están en 'nuevo'. Esto evita
+      // degradar notificaciones que pasaron a 'abierto' por click o bulk.
       await supabase
         .from('notificaciones')
         .update({ estado_lectura: 'visto', visto_at: new Date().toISOString() })
-        .in('id', ids);
+        .in('id', ids)
+        .eq('estado_lectura', 'nuevo');
 
       setNotificaciones(prev =>
         prev.map(n =>
-          ids.includes(n.id)
+          ids.includes(n.id) && n.estado_lectura === 'nuevo'
             ? { ...n, estado_lectura: 'visto', visto_at: new Date().toISOString() }
             : n
         )
@@ -260,6 +412,12 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   }, [userEmail, fetchContador]);
 
   const handleNotificacionClick = async (notificacion) => {
+    // En filtros de estado el click toggla la selección (no abre el lead).
+    if (stateFilter !== 'todas') {
+      toggleSeleccion(notificacion.id);
+      return;
+    }
+
     if (notificacion.estado_lectura !== 'abierto') {
       try {
         await supabase
@@ -299,7 +457,10 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
     
     if (!isOpen) {
       notificacionesMostradasRef.current = new Set();
-      
+      // Reset filtro de estado y selección al re-abrir el dropdown.
+      setStateFilter('todas');
+      limpiarSeleccion();
+
       const cats = await fetchCategorias();
       const catsWithCounts = await fetchConteosCategorias(cats);
       setCategorias(catsWithCounts);
@@ -309,18 +470,23 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       setSelectedCategoria(selected?.nombre || null);
       
       setPage(0);
-      fetchNotificaciones(0, false, selected?.configIds || null);
+      fetchNotificaciones(0, false, selected?.configIds || null, 'todas');
+      const counts = await fetchConteoEstado(selected?.configIds || null);
+      setConteoEstado(counts);
     } else {
       marcarComoVisto();
     }
     setIsOpen(!isOpen);
   };
 
-  const handleCategoriaClick = (cat) => {
+  const handleCategoriaClick = async (cat) => {
     if (cat.nombre === selectedCategoria) return;
     setSelectedCategoria(cat.nombre);
+    limpiarSeleccion();
     setPage(0);
-    fetchNotificaciones(0, false, cat.configIds);
+    fetchNotificaciones(0, false, cat.configIds, stateFilter);
+    const counts = await fetchConteoEstado(cat.configIds);
+    setConteoEstado(counts);
   };
 
   useEffect(() => {
@@ -378,8 +544,8 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed sm:absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-16 sm:top-full mt-2 w-[calc(100vw-32px)] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50"
-          style={{ maxHeight: '540px' }}
+          className="fixed sm:absolute left-1/2 sm:left-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-16 sm:top-full mt-2 w-[calc(100vw-32px)] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 flex flex-col"
+          style={{ maxHeight: 'min(640px, calc(100vh - 100px))' }}
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
@@ -439,10 +605,66 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
             </div>
           )}
 
+          {/* Tabs por estado */}
+          <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center gap-1">
+            {[
+              { id: 'todas',       label: 'Todas',      count: null },
+              { id: 'pendientes',  label: 'Pendientes', count: conteoEstado.pendientes },
+              { id: 'revisadas',   label: 'Revisadas',  count: conteoEstado.revisadas },
+            ].map(t => {
+              const active = stateFilter === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => handleStateFilterChange(t.id)}
+                  className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-[#1717AF] text-white shadow-sm shadow-[#1717AF]/20'
+                      : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  {t.label}
+                  {t.count !== null && (
+                    <span className={`ml-1 ${active ? 'text-white/80' : 'text-slate-400'}`}>
+                      ({t.count})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Toolbar de selección (solo en filtros de estado) */}
+          {stateFilter !== 'todas' && (
+            <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={toggleSelectAllOfState}
+                className="flex items-center gap-2 text-xs font-medium text-slate-700 hover:text-[#1717AF] transition-colors"
+              >
+                <span className={`flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 transition-colors ${
+                  selectAllOfState
+                    ? 'bg-[#1717AF] border-[#1717AF] text-white'
+                    : 'bg-white border-slate-300 text-transparent'
+                }`}>
+                  <CheckCheck size={11} strokeWidth={3} />
+                </span>
+                Seleccionar todas ({stateFilter === 'pendientes' ? conteoEstado.pendientes : conteoEstado.revisadas})
+              </button>
+              {(selectAllOfState || selectedIds.size > 0) && (
+                <span className="text-[11px] text-slate-500">
+                  {selectAllOfState
+                    ? `Todas (${stateFilter === 'pendientes' ? conteoEstado.pendientes : conteoEstado.revisadas})`
+                    : `${selectedIds.size} seleccionada${selectedIds.size === 1 ? '' : 's'}`}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Lista de notificaciones */}
           <div 
-            className="overflow-y-auto"
-            style={{ maxHeight: '380px' }}
+            className="overflow-y-auto flex-1 min-h-0"
             onScroll={(e) => {
               const { scrollTop, scrollHeight, clientHeight } = e.target;
               if (scrollHeight - scrollTop <= clientHeight + 50 && hasMore && !loading) {
@@ -462,20 +684,33 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                   const esNuevo = notif.estado_lectura === 'nuevo';
                   const esVisto = notif.estado_lectura === 'visto';
                   const esAbierto = notif.estado_lectura === 'abierto';
+                  const modoSeleccion = stateFilter !== 'todas';
+                  const isChecked = selectAllOfState || selectedIds.has(notif.id);
 
                   return (
                     <div
                       key={notif.id}
                       onClick={() => handleNotificacionClick(notif)}
                       className={`px-5 py-4 border-b border-slate-100 cursor-pointer transition-all duration-200 ${
-                        esNuevo 
-                          ? 'bg-blue-50/80 hover:bg-blue-100/80 border-l-4 border-l-[#1717AF]' 
-                          : esVisto 
-                            ? 'bg-sky-50/60 hover:bg-sky-100/60 border-l-4 border-l-sky-300'
-                            : 'bg-white hover:bg-slate-50'
+                        modoSeleccion && isChecked
+                          ? 'bg-[#1717AF]/5 hover:bg-[#1717AF]/10'
+                          : esNuevo 
+                            ? 'bg-blue-50/80 hover:bg-blue-100/80 border-l-4 border-l-[#1717AF]' 
+                            : esVisto 
+                              ? 'bg-sky-50/60 hover:bg-sky-100/60 border-l-4 border-l-sky-300'
+                              : 'bg-white hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 items-start">
+                        {modoSeleccion && (
+                          <span className={`mt-1 flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 transition-colors ${
+                            isChecked
+                              ? 'bg-[#1717AF] border-[#1717AF] text-white'
+                              : 'bg-white border-slate-300 text-transparent'
+                          }`}>
+                            <CheckCheck size={11} strokeWidth={3} />
+                          </span>
+                        )}
                         <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
                           esNuevo 
                             ? 'bg-[#1717AF] text-white' 
@@ -533,6 +768,31 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
               </>
             )}
           </div>
+
+          {/* Barra de acciones bulk */}
+          {stateFilter !== 'todas' && (selectAllOfState || selectedIds.size > 0) && (
+            <div className="px-4 py-2.5 border-t border-slate-100 bg-white flex items-center gap-2">
+              <button
+                type="button"
+                onClick={limpiarSeleccion}
+                disabled={bulkLoading}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ejecutarBulkAction}
+                disabled={bulkLoading}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-[#1717AF] rounded-lg hover:bg-[#1717AF]/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {bulkLoading && (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                )}
+                Marcar como {stateFilter === 'pendientes' ? 'revisadas' : 'pendientes'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
