@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 import Slot01_LeadsCreadosMes from './slots/Slot01_LeadsCreadosMes';
 import Slot02_FuentesLeads from './slots/Slot02_FuentesLeads';
+import Slot03_AsignacionLeads from './slots/Slot03_AsignacionLeads';
 import { MESES_LARGOS } from './data/leadsHistoricos';
 
 // Inicio de los meses disponibles en el dropdown del informe.
@@ -117,6 +118,12 @@ export default function Informe({ monthConfigs }) {
 
       {/* Slot 2 */}
       <Slot02_FuentesLeads
+        selectedMes={selectedMes}
+        monthConfigs={monthConfigs}
+      />
+
+      {/* Slot 3 */}
+      <Slot03_AsignacionLeads
         selectedMes={selectedMes}
         monthConfigs={monthConfigs}
       />
