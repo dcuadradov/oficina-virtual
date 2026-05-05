@@ -3,6 +3,8 @@ import { Calendar, ChevronDown } from 'lucide-react';
 import Slot01_LeadsCreadosMes from './slots/Slot01_LeadsCreadosMes';
 import Slot02_FuentesLeads from './slots/Slot02_FuentesLeads';
 import Slot03_AsignacionLeads from './slots/Slot03_AsignacionLeads';
+import Slot04_LeadsPorPais from './slots/Slot04_LeadsPorPais';
+import Slot05_LeadsPorOcupacion from './slots/Slot05_LeadsPorOcupacion';
 import { MESES_LARGOS } from './data/leadsHistoricos';
 
 // Inicio de los meses disponibles en el dropdown del informe.
@@ -124,6 +126,18 @@ export default function Informe({ monthConfigs }) {
 
       {/* Slot 3 */}
       <Slot03_AsignacionLeads
+        selectedMes={selectedMes}
+        monthConfigs={monthConfigs}
+      />
+
+      {/* Slot 4 */}
+      <Slot04_LeadsPorPais
+        selectedMes={selectedMes}
+        monthConfigs={monthConfigs}
+      />
+
+      {/* Slot 5 */}
+      <Slot05_LeadsPorOcupacion
         selectedMes={selectedMes}
         monthConfigs={monthConfigs}
       />
