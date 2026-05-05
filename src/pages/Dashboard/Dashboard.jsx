@@ -13,7 +13,8 @@ import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
 import MetricasPerformance from './components/MetricasPerformance';
-import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3 } from 'lucide-react';
+import Informe from './components/Informe/Informe';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2 } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -1228,6 +1229,19 @@ export default function Dashboard() {
                 <BarChart3 size={18} />
                 Métricas
               </button>
+              {puedeVerTodos && (
+                <button
+                  onClick={() => setActiveView('informe')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'informe'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <FileBarChart2 size={18} />
+                  Informe
+                </button>
+              )}
             </div>
 
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
@@ -1537,6 +1551,8 @@ export default function Dashboard() {
                   />
                 )}
               </>
+            ) : activeView === 'informe' && puedeVerTodos ? (
+              <Informe monthConfigs={monthConfigs} />
             ) : null}
           </div>
         )}
