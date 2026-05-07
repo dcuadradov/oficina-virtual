@@ -1318,7 +1318,7 @@ export default function Dashboard() {
                 <button
                       onClick={() => {
                         setActiveFilter('todos');
-                        setActiveEtapa(null);
+                        setActiveEtapas([]);
                         setSelectedComercial(null);
                         setSelectedMes(null);
                         setSelectedPeriodo(null);
