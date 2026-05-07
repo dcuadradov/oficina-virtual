@@ -5,6 +5,8 @@ import Slot02_FuentesLeads from './slots/Slot02_FuentesLeads';
 import Slot03_AsignacionLeads from './slots/Slot03_AsignacionLeads';
 import Slot04_LeadsPorPais from './slots/Slot04_LeadsPorPais';
 import Slot05_LeadsPorOcupacion from './slots/Slot05_LeadsPorOcupacion';
+import Slot06_MatriculasMes from './slots/Slot06_MatriculasMes';
+import Slot07_MatriculasPorOcupacion from './slots/Slot07_MatriculasPorOcupacion';
 import { MESES_LARGOS } from './data/leadsHistoricos';
 
 // Inicio de los meses disponibles en el dropdown del informe.
@@ -138,6 +140,18 @@ export default function Informe({ monthConfigs }) {
 
       {/* Slot 5 */}
       <Slot05_LeadsPorOcupacion
+        selectedMes={selectedMes}
+        monthConfigs={monthConfigs}
+      />
+
+      {/* Slot 6 */}
+      <Slot06_MatriculasMes
+        selectedMes={selectedMes}
+        monthConfigs={monthConfigs}
+      />
+
+      {/* Slot 7 */}
+      <Slot07_MatriculasPorOcupacion
         selectedMes={selectedMes}
         monthConfigs={monthConfigs}
       />
