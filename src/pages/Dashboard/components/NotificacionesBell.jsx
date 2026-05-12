@@ -412,12 +412,6 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
   }, [userEmail, fetchContador]);
 
   const handleNotificacionClick = async (notificacion) => {
-    // En filtros de estado el click toggla la selección (no abre el lead).
-    if (stateFilter !== 'todas') {
-      toggleSeleccion(notificacion.id);
-      return;
-    }
-
     if (notificacion.estado_lectura !== 'abierto') {
       try {
         await supabase
@@ -704,13 +698,21 @@ export default function NotificacionesBell({ userEmail, onOpenLead }) {
                     >
                       <div className="flex gap-3 items-start">
                         {modoSeleccion && (
-                          <span className={`mt-1 flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 transition-colors ${
-                            isChecked
-                              ? 'bg-[#1717AF] border-[#1717AF] text-white'
-                              : 'bg-white border-slate-300 text-transparent'
-                          }`}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSeleccion(notif.id);
+                            }}
+                            className={`mt-1 flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 transition-colors cursor-pointer hover:border-[#1717AF] ${
+                              isChecked
+                                ? 'bg-[#1717AF] border-[#1717AF] text-white'
+                                : 'bg-white border-slate-300 text-transparent'
+                            }`}
+                            aria-label={isChecked ? 'Deseleccionar notificación' : 'Seleccionar notificación'}
+                          >
                             <CheckCheck size={11} strokeWidth={3} />
-                          </span>
+                          </button>
                         )}
                         <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
                           esNuevo 
