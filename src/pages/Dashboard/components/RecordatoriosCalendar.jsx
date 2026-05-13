@@ -62,7 +62,9 @@ export default function RecordatoriosCalendar({ selectedComercial, userEmail, on
     const fetchRecordatorios = async () => {
       setLoading(true);
       try {
-        // Join con leads para traer etapa_funnel y datos básicos
+        // Join con leads trayendo todos los campos para que el sidebar reciba
+        // el mismo objeto que recibe desde LeadsTable (etapa, botón a la
+        // conversación, etc. dependen de campos completos del lead).
         let query = supabase
           .from('recordatorios')
           .select(`
@@ -71,16 +73,7 @@ export default function RecordatoriosCalendar({ selectedComercial, userEmail, on
             observacion,
             estado,
             lead_id,
-            leads:lead_id (
-              card_id,
-              nombre,
-              comercial_email,
-              etapa_funnel,
-              fase_id_pipefy,
-              telefono,
-              email,
-              estado_gestion
-            )
+            leads:lead_id (*)
           `)
           .in('estado', ['Programado', 'Vencido'])
           .not('fecha_programada', 'is', null);
