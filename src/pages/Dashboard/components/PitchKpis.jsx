@@ -215,6 +215,23 @@ export default function PitchKpis({
 
   const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
+  // Personas únicas (PX) por card_id. Un lead con varios pitches cuenta 1 vez.
+  // - efectividad: únicos entre TODOS los pitches del periodo (T)
+  // - asistencia:  únicos entre los pitches asistidos (attended !== 'No')
+  const pxEfectividad = useMemo(
+    () => new Set(pitches.map(p => p.card_id)).size,
+    [pitches]
+  );
+  const pxAsistencia = useMemo(() => {
+    const ids = new Set();
+    for (const p of T2pitches) {
+      if (p.resultado_attended !== 'No' && p.resultado_pitch_result) {
+        ids.add(p.card_id);
+      }
+    }
+    return ids.size;
+  }, [T2pitches]);
+
   // Mapa de PITCH_STATES por id (para reutilizar colores/labels del calendario)
   const stateById = useMemo(() => {
     const m = {};
@@ -227,7 +244,7 @@ export default function PitchKpis({
       id: 'efectividad',
       title: 'Efectividad comercial',
       value: pct(T, leadsCount),
-      sub: `${T} pitches / ${leadsCount} leads`,
+      sub: `${T} Agendados / ${pxEfectividad} PX / ${leadsCount} leads`,
       icon: Target,
       tone: 'primary',
     },
@@ -235,7 +252,7 @@ export default function PitchKpis({
       id: 'asistencia',
       title: 'Asistencia',
       value: pct(counts.asistieron, T2),
-      sub: `${counts.asistieron} / ${T2}`,
+      sub: `${counts.asistieron} Pitches / ${pxAsistencia} PX / ${T2} Agendados`,
       icon: UserCheck,
       tone: 'primary',
     },
@@ -341,7 +358,11 @@ function KpiCard({ card, loading, highlight }) {
           </>
         )}
       </div>
-      <div className="text-[11px] text-slate-400 mt-1 truncate">
+      <div
+        className={`text-slate-400 mt-1 ${
+          highlight ? 'text-[10px] leading-tight' : 'text-[11px] truncate'
+        }`}
+      >
         {loading ? '\u00a0' : card.sub}
       </div>
       {card.extra && !loading && (
