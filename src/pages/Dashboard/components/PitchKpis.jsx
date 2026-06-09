@@ -216,21 +216,16 @@ export default function PitchKpis({
   const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
   // Personas únicas (PX) por card_id. Un lead con varios pitches cuenta 1 vez.
-  // - efectividad: únicos entre TODOS los pitches del periodo (T)
-  // - asistencia:  únicos entre los pitches asistidos (attended !== 'No')
+  // - efectividad: únicos entre TODOS los pitches del periodo (T = "Agendados")
+  // - asistencia:  únicos entre el universo con resultado (T2 = "Agendados")
   const pxEfectividad = useMemo(
     () => new Set(pitches.map(p => p.card_id)).size,
     [pitches]
   );
-  const pxAsistencia = useMemo(() => {
-    const ids = new Set();
-    for (const p of T2pitches) {
-      if (p.resultado_attended !== 'No' && p.resultado_pitch_result) {
-        ids.add(p.card_id);
-      }
-    }
-    return ids.size;
-  }, [T2pitches]);
+  const pxAsistencia = useMemo(
+    () => new Set(T2pitches.map(p => p.card_id)).size,
+    [T2pitches]
+  );
 
   // Mapa de PITCH_STATES por id (para reutilizar colores/labels del calendario)
   const stateById = useMemo(() => {
