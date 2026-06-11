@@ -58,14 +58,21 @@ export default function PitchDimFilters({
   tagFilter = [],
   value,
   onChange,
+  // Modo controlado: si se pasan filas (e.g. universo de Análisis basado en
+  // pitches_resultados), el componente NO consulta la vista y calcula las
+  // opciones facetadas sobre estas filas.
+  externalRows = null,
 }) {
-  const [rows, setRows] = useState([]);
+  const [internalRows, setInternalRows] = useState([]);
+  const rows = externalRows !== null ? externalRows : internalRows;
   const [openKey, setOpenKey] = useState(null);
   const [pending, setPending] = useState([]); // selección staged del dropdown abierto
   const [search, setSearch] = useState('');
 
   // Carga los pitches en scope (misma lógica que PitchKpis/PitchCalendar).
+  // En modo controlado (externalRows) se omite por completo.
   useEffect(() => {
+    if (externalRows !== null) return;
     if (!rangeStart || !rangeEnd) return;
     let cancelled = false;
     const load = async () => {
@@ -89,16 +96,17 @@ export default function PitchDimFilters({
           if (tagFilter.length > 0 && !tagFilter.includes(p.label)) return false;
           return true;
         });
-        setRows(filtered);
+        setInternalRows(filtered);
       } catch (e) {
         console.error('Error cargando filtros de análisis de Pitch:', e);
-        if (!cancelled) setRows([]);
+        if (!cancelled) setInternalRows([]);
       }
     };
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    externalRows,
     rangeStart?.getTime(),
     rangeEnd?.getTime(),
     selectedComercial,
