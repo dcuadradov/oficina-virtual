@@ -8,6 +8,7 @@ import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
 import PitchKpis, { PITCH_TAG_PRESETS } from './components/PitchKpis';
 import PitchDimFilters, { emptyPitchDims } from './components/PitchDimFilters';
+import PitchAnalisis from './components/PitchAnalisis';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -1512,13 +1513,23 @@ export default function Dashboard() {
                     dimFilters={pitchDims}
                   />
                 ) : (
-                  /* Análisis: placeholder por ahora (las visualizaciones vienen después) */
-                  <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
-                    <div className="text-sm font-medium text-slate-600">Análisis de Pitch</div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      Próximamente. Usa los filtros de arriba para empezar a segmentar.
-                    </div>
-                  </div>
+                  (() => {
+                    const { viewMode, rangeStart, rangeEnd } = resolvePitchRange({
+                      selectedDia, selectedPeriodo, selectedMes, monthConfigs,
+                    });
+                    return (
+                      <PitchAnalisis
+                        rangeStart={rangeStart}
+                        rangeEnd={rangeEnd}
+                        viewMode={viewMode}
+                        selectedComercial={selectedComercial}
+                        userEmail={userEmail}
+                        puedeVerTodos={puedeVerTodos}
+                        tagFilter={pitchKpiTags}
+                        dimFilters={pitchDims}
+                      />
+                    );
+                  })()
                 )}
               </>
             ) : activeView === 'metricas' ? (
