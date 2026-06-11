@@ -463,6 +463,20 @@ const PITCH_FIELD_NAME_TO_COLUMN = {
 const getPitchColumnForField = (field) =>
   PITCH_FIELD_NAME_TO_COLUMN[normalizePitchFieldName(field?.nombre)] || null;
 
+// Campo especial (hardcodeado, no vive en fields_formulario_creacion_leads):
+// "Especifica por qué no se matriculó". Sus opciones salen de config_categorias
+// y su valor se guarda dentro de los values del form bajo esta clave sintética.
+const MOTIVO_FIELD_KEY = '__motivo_no_matricula';
+// Valores de pitch_result que, por sí solos, muestran el campo de motivo.
+// "Reprobado" NO está aquí a propósito: se muestra vía pitch_stage (el usuario
+// primero elige la etapa y recién ahí aparece el motivo). "Matrícula" nunca.
+const PITCH_RESULT_REQUIERE_MOTIVO = [
+  'Pago pendiente',
+  'Posible matrícula',
+  'Interés futuro',
+  'No matrícula',
+];
+
 const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'pitch' | 'resumen-ia'
@@ -628,6 +642,13 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const [editingPitchValues, setEditingPitchValues] = useState({}); // { fieldId: value }
   const [editingPitchSelectOpenId, setEditingPitchSelectOpenId] = useState(null);
   const [savingEditPitchId, setSavingEditPitchId] = useState(null);
+  // UI del dropdown del campo "Especifica por qué no se matriculó" (motivo).
+  // El valor seleccionado vive dentro de pitchFormValues/editingPitchValues
+  // bajo MOTIVO_FIELD_KEY; estos estados controlan apertura y búsqueda.
+  const [motivoNewOpen, setMotivoNewOpen] = useState(false);
+  const [motivoNewBusqueda, setMotivoNewBusqueda] = useState('');
+  const [motivoEditOpen, setMotivoEditOpen] = useState(false);
+  const [motivoEditBusqueda, setMotivoEditBusqueda] = useState('');
   
   // Estados para TICI (Recordatorios automáticos)
   const [subTabTici, setSubTabTici] = useState('programado'); // 'programado' | 'historial'
@@ -920,6 +941,10 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     setEditingPitchValues({});
     setEditingPitchSelectOpenId(null);
     setPitchCompletionInfo(null);
+    setMotivoNewOpen(false);
+    setMotivoNewBusqueda('');
+    setMotivoEditOpen(false);
+    setMotivoEditBusqueda('');
   }, [lead?.card_id]);
 
   // Determina si un campo del Pitch debe mostrarse según su dependencia
@@ -943,6 +968,38 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     return parentValue === dep.valor;
   };
 
+  // Lee el valor de los values del form para la columna lógica indicada
+  // (p. ej. 'pitch_result' o 'pitch_stage'), resolviendo el field por su nombre.
+  const getPitchValueByColumn = (values, col) => {
+    const field = pitchFields.find(f => getPitchColumnForField(f) === col);
+    if (!field) return '';
+    return values?.[field.id] ?? '';
+  };
+
+  // ¿Debe mostrarse el campo "Especifica por qué no se matriculó"?
+  // OR de dos reglas independientes:
+  //   1) pitch_result ∈ PITCH_RESULT_REQUIERE_MOTIVO
+  //   2) pitch_stage tiene cualquier valor (≠ vacío) → cubre "Reprobado"
+  const shouldShowMotivoField = (values) => {
+    const resultado = getPitchValueByColumn(values, 'pitch_result');
+    // Con "Matrícula" nunca se muestra el motivo (el lead sí se matriculó).
+    if (resultado === 'Matrícula') return false;
+    const etapa = getPitchValueByColumn(values, 'pitch_stage');
+    const porResultado = PITCH_RESULT_REQUIERE_MOTIVO.includes(resultado);
+    const porEtapa = etapa !== undefined && etapa !== null && etapa !== '';
+    return porResultado || porEtapa;
+  };
+
+  // Resuelve la fila de config_categorias seleccionada (guardada por id) →
+  // { categoria, categoria_padre }. Devuelve null si no hay selección válida.
+  const getMotivoCategoria = (values) => {
+    const id = values?.[MOTIVO_FIELD_KEY];
+    if (!id) return null;
+    const row = categorias.find(c => String(c.id) === String(id));
+    if (!row) return null;
+    return { categoria: row.categoria, categoria_padre: row.categoria_padre ?? null };
+  };
+
   // Convierte una fila guardada (con columnas attended, pitch_stage, ...) al
   // formato { [field.id]: value } que esperan helpers de render/dependencia
   const resultadoToValues = (resultado) => {
@@ -951,6 +1008,12 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const col = getPitchColumnForField(field);
       if (col) values[field.id] = resultado?.[col] ?? '';
     });
+    // Precargar el motivo: mapear el texto guardado (motivo_no_matricula) de
+    // vuelta al id de config_categorias para que el dropdown quede seleccionado.
+    if (resultado?.motivo_no_matricula) {
+      const row = categorias.find(c => c.categoria === resultado.motivo_no_matricula);
+      if (row) values[MOTIVO_FIELD_KEY] = row.id;
+    }
     return values;
   };
 
@@ -966,12 +1029,26 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const v = values[field.id];
       payload[col] = (!visible || v === undefined || v === '') ? null : v;
     });
+    // Campo especial motivo: si es visible y hay selección, guardar categoria y
+    // categoria_padre; si no, ambas columnas quedan null.
+    if (shouldShowMotivoField(values)) {
+      const motivo = getMotivoCategoria(values);
+      payload.motivo_no_matricula = motivo?.categoria ?? null;
+      payload.motivo_no_matricula_categoria = motivo?.categoria_padre ?? null;
+    } else {
+      payload.motivo_no_matricula = null;
+      payload.motivo_no_matricula_categoria = null;
+    }
     return payload;
   };
 
   // Validación: requiere al menos un valor en alguno de los campos visibles
   // (respetando dependencias) para no crear filas completamente vacías.
+  // Además, si el campo motivo es visible, es OBLIGATORIO.
   const isPitchFormValid = () => {
+    if (shouldShowMotivoField(pitchFormValues) && !pitchFormValues[MOTIVO_FIELD_KEY]) {
+      return false;
+    }
     return pitchFields.some(field => {
       if (!shouldShowPitchField(field, pitchFormValues)) return false;
       const v = pitchFormValues[field.id];
@@ -995,6 +1072,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           }
         });
       }
+      // Si el motivo dejó de ser visible, limpiar su selección.
+      if (!shouldShowMotivoField(next)) next[MOTIVO_FIELD_KEY] = '';
       return next;
     });
   };
@@ -1013,8 +1092,17 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           }
         });
       }
+      if (!shouldShowMotivoField(next)) next[MOTIVO_FIELD_KEY] = '';
       return next;
     });
+  };
+
+  // Setter directo del valor del motivo (no toca los demás campos).
+  const setMotivoNewValue = (id) => {
+    setPitchFormValues(prev => ({ ...prev, [MOTIVO_FIELD_KEY]: id }));
+  };
+  const setMotivoEditValue = (id) => {
+    setEditingPitchValues(prev => ({ ...prev, [MOTIVO_FIELD_KEY]: id }));
   };
 
   // Mapping de combinación (attended | pitch_result) → fase_id_pipefy destino
@@ -1054,6 +1142,59 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     return null;
   };
 
+  // Crea un comentario (origen 'Pitch') en `comentarios` y lo envía al webhook
+  // de Respond, igual que un seguimiento normal. Se usa cuando el comercial
+  // registra el motivo de por qué el lead no se matriculó durante el Pitch.
+  const crearComentarioDesdePitch = async (motivo) => {
+    if (!lead?.card_id || !motivo?.categoria) return;
+    const texto = 'El usuario no se matriculó durante el Pitch';
+    const nuevoComentario = {
+      lead_id: lead.card_id,
+      texto,
+      autor_email: userEmail || 'unknown',
+      origen: 'Pitch',
+      fase: lead.fase_nombre_pipefy || null,
+      etapa_funnel: lead.etapa_funnel || null,
+      categoria: motivo.categoria,
+      categoria_padre: motivo.categoria_padre ?? null,
+    };
+    try {
+      const { data, error } = await supabase
+        .from('comentarios')
+        .insert([nuevoComentario])
+        .select()
+        .single();
+      if (error) throw error;
+
+      try {
+        await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.id,
+            lead_id: lead.card_id,
+            texto,
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Pitch',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: motivo.categoria,
+            categoria_padre: motivo.categoria_padre ?? null,
+            created_at: data.created_at,
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null,
+          }),
+        });
+      } catch (whErr) {
+        console.error('[Pitch] Error webhook comentario:', whErr);
+      }
+    } catch (e) {
+      console.error('[Pitch] Error creando comentario desde Pitch:', e);
+    }
+  };
+
   // Crear nuevo resultado de pitch.
   // Flujo (loader activo durante TODO):
   //   1) Insert en pitches_resultados (estado='registrado').
@@ -1085,6 +1226,15 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .from('pitches_resultados')
         .insert(insertPayload);
       if (insertErr) throw insertErr;
+
+      // Si se registró un motivo de "no matrícula", dejarlo también como
+      // comentario en Seguimiento (origen 'Pitch') + webhook a Respond.
+      const motivoCreado = shouldShowMotivoField(pitchFormValues)
+        ? getMotivoCategoria(pitchFormValues)
+        : null;
+      if (motivoCreado) {
+        await crearComentarioDesdePitch(motivoCreado);
+      }
 
       const { error: updateErr } = await supabase
         .from('leads')
@@ -1174,27 +1324,50 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const col = getPitchColumnForField(field);
       initialValues[field.id] = col ? (resultado[col] || '') : '';
     });
+    // Precargar el motivo (mapear texto guardado → id de config_categorias)
+    if (resultado.motivo_no_matricula) {
+      const row = categorias.find(c => c.categoria === resultado.motivo_no_matricula);
+      if (row) initialValues[MOTIVO_FIELD_KEY] = row.id;
+    }
     setEditingPitchValues(initialValues);
     setEditingPitchId(resultado.id);
     setEditingPitchSelectOpenId(null);
+    setMotivoEditOpen(false);
+    setMotivoEditBusqueda('');
   };
 
   const handleCancelEditPitch = () => {
     setEditingPitchId(null);
     setEditingPitchValues({});
     setEditingPitchSelectOpenId(null);
+    setMotivoEditOpen(false);
+    setMotivoEditBusqueda('');
   };
 
   const handleSaveEditPitch = async () => {
     if (!editingPitchId || savingEditPitchId) return;
     setSavingEditPitchId(editingPitchId);
     try {
+      // Motivo original (antes de editar) para detectar si cambió.
+      const original = pitchResultados.find(r => r.id === editingPitchId);
+      const motivoOriginal = original?.motivo_no_matricula || null;
+
       const payload = buildPitchPayload(editingPitchValues);
       const { error } = await supabase
         .from('pitches_resultados')
         .update(payload)
         .eq('id', editingPitchId);
       if (error) throw error;
+
+      // Solo si el motivo cambió (y el nuevo tiene valor) creamos otro
+      // comentario; si quedó igual, no duplicamos.
+      const motivoNuevo = shouldShowMotivoField(editingPitchValues)
+        ? getMotivoCategoria(editingPitchValues)
+        : null;
+      if (motivoNuevo?.categoria && motivoNuevo.categoria !== motivoOriginal) {
+        await crearComentarioDesdePitch(motivoNuevo);
+      }
+
       handleCancelEditPitch();
       await fetchPitchResultados();
     } catch (e) {
@@ -1654,6 +1827,18 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  // Cerrar dropdowns del motivo (creación/edición) al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.motivo-dropdown')) {
+        setMotivoNewOpen(false);
+        setMotivoEditOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   // Focus en input de búsqueda cuando se abre dropdown de categoría
   useEffect(() => {
     if (categoriaDropdownOpen) {
@@ -1932,7 +2117,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         setLoadingCategorias(true);
         const { data, error } = await supabase
           .from('config_categorias')
-          .select('id, categoria, posicion')
+          .select('id, categoria, categoria_padre, posicion')
           .eq('modulo', 'comercial')
           .eq('estado', true)
           .order('posicion', { ascending: true });
@@ -1950,17 +2135,20 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       } catch (error) {
         console.error('Error cargando categorías:', error);
         // Fallback: solo "Otro"
-        setCategorias([{ id: 'default', categoria: 'Otro' }]);
+        setCategorias([{ id: 'default', categoria: 'Otro', categoria_padre: null }]);
         setCategoriaSeleccionada('Otro');
       } finally {
         setLoadingCategorias(false);
       }
     };
     
-    if (isOpen && (activeTab === 'seguimiento' || activeTab === 'recordatorio')) {
+    // Se cargan también en el sub-tab Pitch porque el campo "Especifica por qué
+    // no se matriculó" reutiliza estas mismas categorías de config_categorias.
+    const enPitch = activeTab === 'info' && subActiveTab === 'pitch';
+    if (isOpen && (activeTab === 'seguimiento' || activeTab === 'recordatorio' || enPitch)) {
       cargarCategorias();
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, subActiveTab]);
 
   // Cargar URL de booking del usuario
   const fetchBookingUrl = useCallback(async () => {
@@ -3677,6 +3865,78 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       );
                     };
 
+                    // Campo especial "Especifica por qué no se matriculó":
+                    // select con buscador predictivo sobre config_categorias.
+                    const renderMotivoField = ({ selectedId, setValue, open, setOpen, busqueda, setBusqueda }) => {
+                      const seleccion = categorias.find(c => String(c.id) === String(selectedId));
+                      const filtradas = categorias.filter(c =>
+                        c.categoria.toLowerCase().includes((busqueda || '').toLowerCase())
+                      );
+                      return (
+                        <div className="relative motivo-dropdown">
+                          <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                            Especifica por qué no se matriculó
+                            <span className="text-rose-500 ml-1">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => { setOpen(!open); setBusqueda(''); }}
+                            disabled={loadingCategorias}
+                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-white border rounded-xl text-left transition-colors ${
+                              open ? 'border-[#1717AF]/40 ring-1 ring-[#1717AF]/20' : 'border-slate-200 hover:border-slate-300'
+                            } ${seleccion ? 'text-slate-700' : 'text-slate-400'}`}
+                          >
+                            <span className="truncate">
+                              {loadingCategorias ? 'Cargando...' : (seleccion?.categoria || 'Seleccionar...')}
+                            </span>
+                            <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                          </button>
+                          {open && (
+                            <div className="absolute z-40 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                              <div className="p-2 border-b border-slate-100">
+                                <div className="relative">
+                                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={busqueda}
+                                    onChange={(e) => setBusqueda(e.target.value)}
+                                    placeholder="Buscar categoría..."
+                                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-44 overflow-y-auto">
+                                {filtradas.length > 0 ? (
+                                  filtradas.map(cat => (
+                                    <button
+                                      key={cat.id}
+                                      type="button"
+                                      onClick={() => { setValue(cat.id); setOpen(false); setBusqueda(''); }}
+                                      className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                                        String(cat.id) === String(selectedId)
+                                          ? 'bg-[#1717AF] text-white font-medium'
+                                          : 'text-slate-600 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {cat.categoria}
+                                      {cat.categoria_padre && (
+                                        <span className={`block text-[10px] ${String(cat.id) === String(selectedId) ? 'text-white/70' : 'text-slate-400'}`}>
+                                          {cat.categoria_padre}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    };
+
                     // Tarjetas: ordenamos por pitch_numero asc (más antiguo primero)
                     // y luego invertimos para mostrar más reciente arriba. Si la fila
                     // no tiene pitch_numero (datos viejos), caemos al orden cronológico.
@@ -3810,6 +4070,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       setOpenSelectId: setPitchSelectOpenId,
                                       keyPrefix: 'new',
                                     }))}
+                                  {shouldShowMotivoField(pitchFormValues) && renderMotivoField({
+                                    selectedId: pitchFormValues[MOTIVO_FIELD_KEY],
+                                    setValue: setMotivoNewValue,
+                                    open: motivoNewOpen,
+                                    setOpen: setMotivoNewOpen,
+                                    busqueda: motivoNewBusqueda,
+                                    setBusqueda: setMotivoNewBusqueda,
+                                  })}
                                 </div>
 
                                 <div className="flex justify-end mt-4">
@@ -3972,6 +4240,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                             setOpenSelectId: setEditingPitchSelectOpenId,
                                             keyPrefix: `edit-${resultado.id}`,
                                           }))}
+                                        {shouldShowMotivoField(editingPitchValues) && renderMotivoField({
+                                          selectedId: editingPitchValues[MOTIVO_FIELD_KEY],
+                                          setValue: setMotivoEditValue,
+                                          open: motivoEditOpen,
+                                          setOpen: setMotivoEditOpen,
+                                          busqueda: motivoEditBusqueda,
+                                          setBusqueda: setMotivoEditBusqueda,
+                                        })}
                                       </div>
                                     ) : (
                                       (() => {
@@ -3993,6 +4269,21 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                                 </div>
                                               );
                                             })}
+                                            {resultado.motivo_no_matricula && (
+                                              <div className="p-2.5 bg-slate-50 rounded-xl sm:col-span-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-0.5">
+                                                  Especifica por qué no se matriculó
+                                                </p>
+                                                <p className="text-sm leading-snug text-slate-700">
+                                                  {resultado.motivo_no_matricula}
+                                                  {resultado.motivo_no_matricula_categoria && (
+                                                    <span className="block text-[11px] text-slate-400">
+                                                      {resultado.motivo_no_matricula_categoria}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })()
