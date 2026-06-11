@@ -460,8 +460,27 @@ const PITCH_FIELD_NAME_TO_COLUMN = {
   'asistio al pitch': 'attended',
 };
 
-const getPitchColumnForField = (field) =>
-  PITCH_FIELD_NAME_TO_COLUMN[normalizePitchFieldName(field?.nombre)] || null;
+// Columnas adicionales de pitches_resultados que pueden venir de campos
+// dinámicos agregados desde la config (fields_formulario_creacion_leads) y que
+// se resuelven por campo_origen ("tabla,columna"). Se limita a columnas que
+// existen en pitches_resultados para no romper el insert/update.
+const PITCH_EXTRA_COLUMNS = ['motivo_matricula'];
+
+// Columnas que, además de guardarse en pitches_resultados, se reflejan en la
+// tabla leads (el lead conserva el último valor registrado en el pitch).
+const PITCH_COLUMNS_SYNC_LEADS = ['motivo_matricula'];
+
+const getPitchColumnForField = (field) => {
+  const mapped = PITCH_FIELD_NAME_TO_COLUMN[normalizePitchFieldName(field?.nombre)];
+  if (mapped) return mapped;
+  // Campo dinámico agregado por config: la columna sale de campo_origen.
+  if (field?.campo_origen) {
+    const parts = String(field.campo_origen).split(',').map(s => s.trim());
+    const col = parts[1] || parts[0];
+    if (col && PITCH_EXTRA_COLUMNS.includes(col)) return col;
+  }
+  return null;
+};
 
 // Campo especial (hardcodeado, no vive en fields_formulario_creacion_leads):
 // "Especifica por qué no se matriculó". Sus opciones salen de config_categorias
@@ -1249,9 +1268,15 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         await crearComentarioDesdePitch(motivoCreado);
       }
 
+      // Update de leads: contador de seguimientos + columnas que se reflejan
+      // en el lead (p. ej. motivo_matricula = último valor del pitch).
+      const leadUpdate = { pitch_seguimientos: nuevoSeguimientos };
+      PITCH_COLUMNS_SYNC_LEADS.forEach(col => {
+        if (col in pitchPayload) leadUpdate[col] = pitchPayload[col];
+      });
       const { error: updateErr } = await supabase
         .from('leads')
-        .update({ pitch_seguimientos: nuevoSeguimientos })
+        .update(leadUpdate)
         .eq('card_id', lead.card_id);
       if (updateErr) throw updateErr;
 
@@ -1371,6 +1396,15 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .update(payload)
         .eq('id', editingPitchId);
       if (error) throw error;
+
+      // Reflejar en leads las columnas sincronizadas (p. ej. motivo_matricula).
+      const leadSync = {};
+      PITCH_COLUMNS_SYNC_LEADS.forEach(col => {
+        if (col in payload) leadSync[col] = payload[col];
+      });
+      if (Object.keys(leadSync).length > 0) {
+        await supabase.from('leads').update(leadSync).eq('card_id', lead.card_id);
+      }
 
       // Solo si el motivo cambió (y el nuevo tiene valor) creamos otro
       // comentario; si quedó igual, no duplicamos.
