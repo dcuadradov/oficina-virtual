@@ -477,6 +477,19 @@ const PITCH_RESULT_REQUIERE_MOTIVO = [
   'No matrícula',
 ];
 
+// Ordena categorías agrupándolas por categoria_padre (alfabético) y, dentro
+// de cada grupo, por categoria (alfabético). Así quedan contiguas por grupo.
+const sortCategorias = (arr) =>
+  [...(arr || [])].sort((a, b) => {
+    const padre = (a.categoria_padre || '').localeCompare(
+      b.categoria_padre || '', 'es', { sensitivity: 'base' }
+    );
+    if (padre !== 0) return padre;
+    return (a.categoria || '').localeCompare(
+      b.categoria || '', 'es', { sensitivity: 'base' }
+    );
+  });
+
 const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'pitch' | 'resumen-ia'
@@ -2117,7 +2130,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         setLoadingCategorias(true);
         const { data, error } = await supabase
           .from('config_categorias')
-          .select('id, categoria, categoria_padre, posicion')
+          .select('id, categoria, categoria_padre, formulario_pitch, posicion')
           .eq('modulo', 'comercial')
           .eq('estado', true)
           .order('posicion', { ascending: true });
@@ -2135,7 +2148,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       } catch (error) {
         console.error('Error cargando categorías:', error);
         // Fallback: solo "Otro"
-        setCategorias([{ id: 'default', categoria: 'Otro', categoria_padre: null }]);
+        setCategorias([{ id: 'default', categoria: 'Otro', categoria_padre: null, formulario_pitch: false }]);
         setCategoriaSeleccionada('Otro');
       } finally {
         setLoadingCategorias(false);
@@ -3869,7 +3882,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     // select con buscador predictivo sobre config_categorias.
                     const renderMotivoField = ({ selectedId, setValue, open, setOpen, busqueda, setBusqueda }) => {
                       const seleccion = categorias.find(c => String(c.id) === String(selectedId));
-                      const filtradas = categorias.filter(c =>
+                      // Solo opciones marcadas para el formulario de Pitch, ordenadas por grupo.
+                      const base = sortCategorias(categorias.filter(c => c.formulario_pitch === true));
+                      const filtradas = base.filter(c =>
                         c.categoria.toLowerCase().includes((busqueda || '').toLowerCase())
                       );
                       return (
@@ -4500,7 +4515,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                         {/* Lista de opciones */}
                         <div className="max-h-40 overflow-y-auto">
                           {(() => {
-                            const filtradas = categorias.filter(cat => 
+                            const filtradas = sortCategorias(categorias).filter(cat => 
                               cat.categoria.toLowerCase().includes(categoriaBusqueda.toLowerCase())
                             );
                             
@@ -4524,6 +4539,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                 }`}
                               >
                                 {cat.categoria}
+                                {cat.categoria_padre && (
+                                  <span className="block text-[10px] text-slate-400">
+                                    {cat.categoria_padre}
+                                  </span>
+                                )}
                               </button>
                             ));
                           })()}
@@ -5016,7 +5036,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                           {/* Lista de opciones */}
                           <div className="max-h-40 overflow-y-auto">
                             {(() => {
-                              const filtradas = categorias.filter(cat => 
+                              const filtradas = sortCategorias(categorias).filter(cat => 
                                 cat.categoria.toLowerCase().includes(categoriaBusqueda.toLowerCase())
                               );
                               
@@ -5040,6 +5060,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                   }`}
                                 >
                                   {cat.categoria}
+                                  {cat.categoria_padre && (
+                                    <span className="block text-[10px] text-slate-400">
+                                      {cat.categoria_padre}
+                                    </span>
+                                  )}
                                 </button>
                               ));
                             })()}
