@@ -173,6 +173,9 @@ const DashboardFilters = ({
   //   [{ id, label, tags: string[] | 'all' }]
   // Cuando se proveen, reemplazan el toggle "Seleccionar todos".
   tagPresets = null,
+  // Filtros extra que se renderizan al final de la 2ª fila, fluyendo en el
+  // mismo contenedor que los demás filtros (e.g. dimensiones de Mis Pitch).
+  children = null,
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -1801,6 +1804,8 @@ const DashboardFilters = ({
           )}
         </div>
       )}
+      {/* Filtros extra (fluyen en la misma fila que los demás filtros) */}
+      {children}
       </div>
       
       {/* Toast de notificación */}
