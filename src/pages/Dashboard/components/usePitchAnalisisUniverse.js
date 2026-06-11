@@ -20,7 +20,7 @@ export const ANALISIS_SUBTABS = [
     id: 'matricula',
     label: 'Matrícula',
     results: ['Matrícula'],
-    levels: [],
+    levels: ['matricula'],
   },
 ];
 
