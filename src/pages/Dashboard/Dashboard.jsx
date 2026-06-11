@@ -1535,7 +1535,7 @@ export default function Dashboard() {
                         : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
-                    Análisis
+                    Análisis Post - Pitch
                   </button>
                 </div>
 

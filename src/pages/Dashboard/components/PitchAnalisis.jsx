@@ -231,7 +231,12 @@ export default function PitchAnalisis({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           {/* Panel de motivos (scrollable) */}
           <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-            <h3 className="text-sm font-bold text-slate-800 mb-3">Motivos</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-baseline gap-2">
+              Motivos
+              <span className="text-xs font-medium text-slate-400">
+                {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'}
+              </span>
+            </h3>
             <div className="overflow-y-auto pr-1" style={{ maxHeight: '460px' }}>
               {levels.map((lv, idx) => {
                 const list = listFor(idx);
