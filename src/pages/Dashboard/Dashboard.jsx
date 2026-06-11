@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import DashboardStats from './components/DashboardStats';
@@ -7,8 +7,9 @@ import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
 import PitchKpis, { PITCH_TAG_PRESETS } from './components/PitchKpis';
-import PitchDimFilters, { emptyPitchDims } from './components/PitchDimFilters';
+import PitchDimFilters, { emptyPitchDims, rowMatchesDims } from './components/PitchDimFilters';
 import PitchAnalisis from './components/PitchAnalisis';
+import { usePitchAnalisisUniverse } from './components/usePitchAnalisisUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -112,6 +113,55 @@ export default function Dashboard() {
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
+
+  // ===== Análisis de Mis Pitch =====
+  // Sub-tab activo dentro de "Análisis" (No fueron matrícula / Reprobados / Matrícula).
+  const [pitchAnalisisTab, setPitchAnalisisTab] = useState('no_matricula');
+  const pitchRange = useMemo(
+    () => resolvePitchRange({ selectedDia, selectedPeriodo, selectedMes, monthConfigs }),
+    [selectedDia, selectedPeriodo, selectedMes, monthConfigs]
+  );
+  const analisisEnabled = activeView === 'pitch' && pitchSubTab === 'analisis';
+  // Universo del sub-tab (pitches_resultados + leads), acotado SOLO por periodo.
+  const { rows: analisisPool, loading: analisisLoading } = usePitchAnalisisUniverse({
+    enabled: analisisEnabled,
+    subTab: pitchAnalisisTab,
+    rangeStart: pitchRange.rangeStart,
+    rangeEnd: pitchRange.rangeEnd,
+  });
+  // Filtros facetados sobre el universo del sub-tab: cada filtro ofrece solo
+  // opciones presentes, considerando las selecciones aplicadas de los OTROS
+  // filtros (comercial, tags, dimensiones). Así los filtros y las gráficas
+  // comparten exactamente el mismo universo (no hay "5 vs 20").
+  const matchComercialA = (r) => !selectedComercial || r.comercial_email === selectedComercial;
+  const matchTagsA = (r) => pitchKpiTags.length === 0 || pitchKpiTags.includes(r.label);
+  const matchDimsA = (r) => rowMatchesDims(r, pitchDims);
+
+  const comercialesAnalisis = useMemo(() => {
+    if (!analisisEnabled) return comerciales;
+    const present = new Set(analisisPool.filter(r => matchTagsA(r) && matchDimsA(r)).map(r => r.comercial_email));
+    return comerciales.filter(c => present.has(c.email));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analisisEnabled, analisisPool, comerciales, pitchKpiTags.join('|'), JSON.stringify(pitchDims)]);
+
+  const tagsAnalisis = useMemo(() => {
+    if (!analisisEnabled) return tagsDisponibles;
+    const present = new Set(analisisPool.filter(r => matchComercialA(r) && matchDimsA(r)).map(r => r.label).filter(Boolean));
+    return tagsDisponibles.filter(t => present.has(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analisisEnabled, analisisPool, tagsDisponibles, selectedComercial, JSON.stringify(pitchDims)]);
+
+  const analisisDimRows = useMemo(() => {
+    if (!analisisEnabled) return null;
+    return analisisPool.filter(r => matchComercialA(r) && matchTagsA(r));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analisisEnabled, analisisPool, selectedComercial, pitchKpiTags.join('|')]);
+
+  const analisisChartRows = useMemo(() => {
+    if (!analisisEnabled) return [];
+    return analisisPool.filter(r => matchComercialA(r) && matchTagsA(r) && matchDimsA(r));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analisisEnabled, analisisPool, selectedComercial, pitchKpiTags.join('|'), JSON.stringify(pitchDims)]);
 
   // Función para abrir el sidebar en el tab de seguimiento
   const handleOpenSeguimiento = (lead) => {
@@ -1411,7 +1461,7 @@ export default function Dashboard() {
                     Los handlers handle*Change garantizan exclusión mutua entre tiempo.
                     El filtro de tags usa pitchKpiTags (estado propio de Mis Pitch). */}
                 <DashboardFilters
-                  comerciales={comerciales}
+                  comerciales={pitchSubTab === 'analisis' ? comercialesAnalisis : comerciales}
                   selectedComercial={selectedComercial}
                   onComercialChange={handleComercialChange}
                   selectedMes={selectedMes}
@@ -1422,7 +1472,7 @@ export default function Dashboard() {
                   onDiaChange={handleDiaChange}
                   selectedTag={pitchKpiTags}
                   onTagChange={setPitchKpiTags}
-                  tags={tagsDisponibles}
+                  tags={pitchSubTab === 'analisis' ? tagsAnalisis : tagsDisponibles}
                   tagsStaged={true}
                   tagPresets={PITCH_TAG_PRESETS}
                   showFuenteFilter={false}
@@ -1435,44 +1485,35 @@ export default function Dashboard() {
                   puedeVerTodos={puedeVerTodos}
                 >
                   {/* Filtros de análisis (profesión/género/edad/ciudad/país):
-                      fluyen en la misma fila que los demás filtros y aplican a
-                      KPIs + calendario. */}
-                  {(() => {
-                    const { rangeStart, rangeEnd } = resolvePitchRange({
-                      selectedDia, selectedPeriodo, selectedMes, monthConfigs,
-                    });
-                    return (
-                      <PitchDimFilters
-                        rangeStart={rangeStart}
-                        rangeEnd={rangeEnd}
-                        selectedComercial={selectedComercial}
-                        userEmail={userEmail}
-                        puedeVerTodos={puedeVerTodos}
-                        tagFilter={pitchKpiTags}
-                        value={pitchDims}
-                        onChange={setPitchDims}
-                      />
-                    );
-                  })()}
+                      fluyen en la misma fila que los demás filtros. En "Agenda"
+                      se alimentan de la vista del calendario; en "Análisis" se
+                      alimentan del universo del sub-tab (pitches_resultados). */}
+                  <PitchDimFilters
+                    rangeStart={pitchRange.rangeStart}
+                    rangeEnd={pitchRange.rangeEnd}
+                    selectedComercial={selectedComercial}
+                    userEmail={userEmail}
+                    puedeVerTodos={puedeVerTodos}
+                    tagFilter={pitchKpiTags}
+                    value={pitchDims}
+                    onChange={setPitchDims}
+                    externalRows={analisisDimRows}
+                  />
                 </DashboardFilters>
 
-                {/* KPIs (10 cards 5x2): siempre visibles, como resumen sobre los tabs */}
-                {(() => {
-                  const { rangeStart, rangeEnd } = resolvePitchRange({
-                    selectedDia, selectedPeriodo, selectedMes, monthConfigs,
-                  });
-                  return (
-                    <PitchKpis
-                      rangeStart={rangeStart}
-                      rangeEnd={rangeEnd}
-                      selectedComercial={selectedComercial}
-                      userEmail={userEmail}
-                      puedeVerTodos={puedeVerTodos}
-                      selectedTags={pitchKpiTags}
-                      dimFilters={pitchDims}
-                    />
-                  );
-                })()}
+                {/* KPIs (10 cards 5x2): solo en "Agenda" (en "Análisis" se ocultan,
+                    porque filtrarlos por un solo pitch_result los dejaría en 0%/100%). */}
+                {pitchSubTab === 'agenda' && (
+                  <PitchKpis
+                    rangeStart={pitchRange.rangeStart}
+                    rangeEnd={pitchRange.rangeEnd}
+                    selectedComercial={selectedComercial}
+                    userEmail={userEmail}
+                    puedeVerTodos={puedeVerTodos}
+                    selectedTags={pitchKpiTags}
+                    dimFilters={pitchDims}
+                  />
+                )}
 
                 {/* Sub-tabs de Mis Pitch: Agenda (default) | Análisis (debajo de los KPIs) */}
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit mt-4 mb-4">
@@ -1513,23 +1554,15 @@ export default function Dashboard() {
                     dimFilters={pitchDims}
                   />
                 ) : (
-                  (() => {
-                    const { viewMode, rangeStart, rangeEnd } = resolvePitchRange({
-                      selectedDia, selectedPeriodo, selectedMes, monthConfigs,
-                    });
-                    return (
-                      <PitchAnalisis
-                        rangeStart={rangeStart}
-                        rangeEnd={rangeEnd}
-                        viewMode={viewMode}
-                        selectedComercial={selectedComercial}
-                        userEmail={userEmail}
-                        puedeVerTodos={puedeVerTodos}
-                        tagFilter={pitchKpiTags}
-                        dimFilters={pitchDims}
-                      />
-                    );
-                  })()
+                  <PitchAnalisis
+                    subTab={pitchAnalisisTab}
+                    onSubTabChange={setPitchAnalisisTab}
+                    rows={analisisChartRows}
+                    loading={analisisLoading}
+                    viewMode={pitchRange.viewMode}
+                    rangeStart={pitchRange.rangeStart}
+                    rangeEnd={pitchRange.rangeEnd}
+                  />
                 )}
               </>
             ) : activeView === 'metricas' ? (

@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../../../supabaseClient';
 import { Loader2, Check } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { rowMatchesDims } from './PitchDimFilters';
 import { DAY_LABELS } from '../../../utils/pitchRange';
+import { ANALISIS_SUBTABS, getSubTabConfig } from './usePitchAnalisisUniverse';
 
-// Universo "No fueron matrícula": resultados con estos valores de pitch_result.
-const NO_MATRICULA_RESULTS = ['Interés futuro', 'Posible matrícula', 'No matrícula', 'Pago pendiente'];
-
-// Sentinelas para valores nulos (se muestran como "Sin categoría / Sin motivo").
 const SIN = '__SIN__';
-const LABEL_SIN_CAT = 'Sin categoría';
-const LABEL_SIN_SUB = 'Sin motivo';
 
-// Paleta para torta y líneas de tendencia.
+// Metadatos de cada nivel jerárquico del panel "Motivos".
+const LEVEL_META = {
+  etapa:        { label: 'Etapa',         accessor: 'stage', sinLabel: 'Sin etapa' },
+  categoria:    { label: 'Categoría',     accessor: 'cat',   sinLabel: 'Sin categoría' },
+  subcategoria: { label: 'Sub categoría', accessor: 'sub',   sinLabel: 'Sin motivo' },
+};
+
+// Paleta para torta y líneas de tendencia (y los punticos del panel).
 const PALETTE = [
   '#1717AF', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6',
   '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
@@ -24,21 +24,7 @@ const PALETTE = [
 ];
 
 const norm = (v) => (v === null || v === undefined || String(v).trim() === '' ? SIN : String(v).trim());
-
 const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return d; };
-
-// Parsea "YYYY-MM-DD HH:MM" sin conversión de zona horaria.
-const parseDT = (s) => {
-  if (!s) return null;
-  const m = s.match(/(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
-  if (!m) return null;
-  const [, y, mo, d, h, mi] = m;
-  return {
-    dateLocal: new Date(parseInt(y), parseInt(mo) - 1, parseInt(d)),
-    hour: h !== undefined ? parseInt(h) : 0,
-    minute: mi !== undefined ? parseInt(mi) : 0,
-  };
-};
 
 const fmtHour = (h) => {
   const ampm = h >= 12 ? 'pm' : 'am';
@@ -46,192 +32,111 @@ const fmtHour = (h) => {
   return `${hh}${ampm}`;
 };
 
-const SUB_TABS = [
-  { id: 'no_matricula', label: 'No fueron matrícula' },
-  { id: 'reprobados', label: 'Reprobados' },
-  { id: 'matricula', label: 'Matrícula' },
-];
-
 /**
- * Tab "Análisis" de Mis Pitch. Por ahora implementa "No fueron matrícula":
- * panel de motivos (Categoría / Sub categoría, excluyentes) + torta + tendencia.
- * Respeta el scope global (periodo, comercial, tags y filtros de dimensión).
+ * Tab "Análisis" de Mis Pitch (presentacional). Recibe el universo ya filtrado
+ * por comercial/tags/dimensiones (`rows`) y dibuja el panel de motivos
+ * (niveles excluyentes con cascada) + torta + tendencia.
  */
 export default function PitchAnalisis({
+  subTab = 'no_matricula',
+  onSubTabChange,
+  rows = [],
+  loading = false,
+  viewMode = 'period',
   rangeStart,
   rangeEnd,
-  viewMode = 'period',
-  selectedComercial,
-  userEmail,
-  puedeVerTodos = false,
-  tagFilter = [],
-  dimFilters = null,
 }) {
-  const [subTab, setSubTab] = useState('no_matricula');
-  const [rows, setRows] = useState([]);       // [{ card_id, cat, sub, parsed }]
-  const [loading, setLoading] = useState(true);
+  const config = getSubTabConfig(subTab);
+  const levels = config.levels;
 
-  // Nivel activo (excluyente) que manda en las gráficas.
-  const [activeLevel, setActiveLevel] = useState('categoria'); // 'categoria' | 'subcategoria'
-  const [selectedCats, setSelectedCats] = useState([]);
-  const [selectedSubs, setSelectedSubs] = useState([]);
+  // Nivel activo + selecciones por nivel. Se reinician al cambiar de sub-tab.
+  const [activeLevel, setActiveLevel] = useState(levels[0] || null);
+  const [selected, setSelected] = useState({});
 
-  // ----- Carga: pitches_resultados (universo no-matrícula) + leads (scope) -----
   useEffect(() => {
-    if (!rangeStart || !rangeEnd || subTab !== 'no_matricula') return;
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        // Rango servidor con padding ±1-2 días; el filtro fino es client-side.
-        const lo = addDays(rangeStart, -1); lo.setHours(0, 0, 0, 0);
-        const hi = addDays(rangeEnd, 2); hi.setHours(0, 0, 0, 0);
-        const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 00:00:00`;
-
-        const { data: prData, error: prErr } = await supabase
-          .from('pitches_resultados')
-          .select('card_id, pitch_result, motivo_no_matricula, motivo_no_matricula_categoria, fecha_pitch')
-          .in('pitch_result', NO_MATRICULA_RESULTS)
-          .gte('fecha_pitch', iso(lo))
-          .lt('fecha_pitch', iso(hi));
-        if (prErr) throw prErr;
-        if (cancelled) return;
-
-        const pitches = prData || [];
-        const cardIds = [...new Set(pitches.map(p => p.card_id))];
-        let leadMap = {};
-        if (cardIds.length > 0) {
-          const { data: leadsData, error: leadsErr } = await supabase
-            .from('leads')
-            .select('card_id, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
-            .in('card_id', cardIds);
-          if (leadsErr) throw leadsErr;
-          (leadsData || []).forEach(l => { leadMap[l.card_id] = l; });
-        }
-        if (cancelled) return;
-
-        const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
-        const end = new Date(rangeEnd); end.setHours(23, 59, 59, 999);
-
-        const built = [];
-        for (const p of pitches) {
-          const lead = leadMap[p.card_id];
-          if (!lead) continue;
-          // Scope: comercial
-          if (selectedComercial) {
-            if (lead.comercial_email !== selectedComercial) continue;
-          } else if (!puedeVerTodos && userEmail) {
-            if (lead.comercial_email !== userEmail) continue;
-          }
-          // Scope: tags
-          if (tagFilter.length > 0 && !tagFilter.includes(lead.label)) continue;
-          // Scope: dimensiones
-          if (!rowMatchesDims(lead, dimFilters)) continue;
-          // Scope: rango fino por fecha del pitch
-          const parsed = parseDT(p.fecha_pitch);
-          if (!parsed) continue;
-          if (parsed.dateLocal < start || parsed.dateLocal > end) continue;
-
-          built.push({
-            card_id: p.card_id,
-            cat: norm(p.motivo_no_matricula_categoria),
-            sub: norm(p.motivo_no_matricula),
-            parsed,
-          });
-        }
-        setRows(built);
-      } catch (e) {
-        console.error('[Análisis] Error cargando no-matrícula:', e);
-        if (!cancelled) setRows([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
+    setActiveLevel(levels[0] || null);
+    setSelected({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    subTab,
-    rangeStart?.getTime(),
-    rangeEnd?.getTime(),
-    selectedComercial,
-    userEmail,
-    puedeVerTodos,
-    tagFilter.join('|'),
-    JSON.stringify(dimFilters),
-  ]);
+  }, [subTab]);
 
-  // Total de personas (leads únicos) del universo en scope → denominador del %.
-  const totalLeads = useMemo(
-    () => new Set(rows.map(r => r.card_id)).size,
-    [rows]
-  );
+  // Total de leads únicos del universo del sub-tab → denominador del %.
+  const totalLeads = useMemo(() => new Set(rows.map(r => r.card_id)).size, [rows]);
 
-  // Lista de Categorías: todas (para poder seleccionar), con conteo de leads.
-  const catList = useMemo(() => {
-    const map = new Map();
-    rows.forEach(r => {
-      if (!map.has(r.cat)) map.set(r.cat, new Set());
-      map.get(r.cat).add(r.card_id);
-    });
-    return [...map.entries()]
-      .map(([value, set]) => ({ value, count: set.size }))
-      .sort((a, b) => b.count - a.count);
-  }, [rows]);
-
-  // Filas base para Sub categoría: cross-filter por categorías seleccionadas.
-  const rowsForSub = useMemo(() => {
-    if (selectedCats.length === 0) return rows;
-    return rows.filter(r => selectedCats.includes(r.cat));
-  }, [rows, selectedCats]);
-
-  // Lista de Sub categorías (respeta el cross-filter de Categoría).
-  const subList = useMemo(() => {
-    const map = new Map();
-    rowsForSub.forEach(r => {
-      if (!map.has(r.sub)) map.set(r.sub, new Set());
-      map.get(r.sub).add(r.card_id);
-    });
-    return [...map.entries()]
-      .map(([value, set]) => ({ value, count: set.size }))
-      .sort((a, b) => b.count - a.count);
-  }, [rowsForSub]);
-
-  // Prune de subs seleccionados que ya no existen tras cambiar el cross-filter.
-  useEffect(() => {
-    setSelectedSubs(prev => prev.filter(s => subList.some(x => x.value === s)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subList.map(s => s.value).join('|')]);
-
-  const labelFor = (level, value) => {
-    if (value !== SIN) return value;
-    return level === 'categoria' ? LABEL_SIN_CAT : LABEL_SIN_SUB;
+  // Filas que cumplen las selecciones de los niveles superiores a `levelIdx`.
+  const scopedRows = (levelIdx) => {
+    let r = rows;
+    for (let j = 0; j < levelIdx; j++) {
+      const lv = levels[j];
+      const acc = LEVEL_META[lv].accessor;
+      const sel = selected[lv] || [];
+      if (sel.length > 0) r = r.filter(x => sel.includes(norm(x[acc])));
+    }
+    return r;
   };
 
-  // ----- Datos para las gráficas según nivel activo + selección -----
-  const { chartRows, chartValues, chartLevel } = useMemo(() => {
-    if (activeLevel === 'subcategoria') {
-      const values = selectedSubs.length > 0 ? selectedSubs : subList.map(s => s.value);
-      const base = rowsForSub.filter(r => values.includes(r.sub));
-      return { chartRows: base.map(r => ({ ...r, value: r.sub })), chartValues: values, chartLevel: 'subcategoria' };
-    }
-    const values = selectedCats.length > 0 ? selectedCats : catList.map(c => c.value);
-    const base = rows.filter(r => values.includes(r.cat));
-    return { chartRows: base.map(r => ({ ...r, value: r.cat })), chartValues: values, chartLevel: 'categoria' };
-  }, [activeLevel, selectedSubs, selectedCats, subList, catList, rows, rowsForSub]);
+  // Lista de un nivel: valores distintos con conteo de leads únicos (cascada).
+  const listFor = (levelIdx) => {
+    const lv = levels[levelIdx];
+    const acc = LEVEL_META[lv].accessor;
+    const base = scopedRows(levelIdx);
+    const map = new Map();
+    base.forEach(r => {
+      const v = norm(r[acc]);
+      if (!map.has(v)) map.set(v, new Set());
+      map.get(v).add(r.card_id);
+    });
+    return [...map.entries()]
+      .map(([value, set]) => ({ value, count: set.size }))
+      .sort((a, b) => b.count - a.count);
+  };
 
-  // Conteo de leads únicos por valor (para la torta).
+  const labelFor = (lv, value) => (value === SIN ? LEVEL_META[lv].sinLabel : value);
+
+  const toggle = (lv, value) => {
+    setActiveLevel(lv);
+    setSelected(prev => {
+      const cur = prev[lv] || [];
+      const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+      const result = { ...prev, [lv]: next };
+      // Al cambiar selección de un nivel, limpio las selecciones de los de abajo
+      // (la cascada vuelve a empezar desde aquí).
+      const idx = levels.indexOf(lv);
+      for (let j = idx + 1; j < levels.length; j++) result[levels[j]] = [];
+      return result;
+    });
+  };
+
+  // Datos de la gráfica según el nivel activo (respeta la cascada).
+  const { chartLevel, chartAcc, chartValues, chartRows, colorMap, activeList } = useMemo(() => {
+    if (!activeLevel) {
+      return { chartLevel: null, chartAcc: null, chartValues: [], chartRows: [], colorMap: new Map(), activeList: [] };
+    }
+    const idx = levels.indexOf(activeLevel);
+    const acc = LEVEL_META[activeLevel].accessor;
+    const list = listFor(idx);
+    const cmap = new Map(list.map((it, i) => [it.value, PALETTE[i % PALETTE.length]]));
+    const sel = selected[activeLevel] || [];
+    const values = sel.length > 0 ? sel : list.map(it => it.value);
+    const base = scopedRows(idx).filter(r => values.includes(norm(r[acc])));
+    return { chartLevel: activeLevel, chartAcc: acc, chartValues: values, chartRows: base, colorMap: cmap, activeList: list };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLevel, selected, rows, levels]);
+
+  // Torta: leads únicos por valor.
   const pieData = useMemo(() => {
     const map = new Map();
     chartValues.forEach(v => map.set(v, new Set()));
-    chartRows.forEach(r => { if (map.has(r.value)) map.get(r.value).add(r.card_id); });
+    chartRows.forEach(r => {
+      const v = norm(r[chartAcc]);
+      if (map.has(v)) map.get(v).add(r.card_id);
+    });
     return chartValues
       .map(v => ({ name: labelFor(chartLevel, v), rawValue: v, value: map.get(v)?.size || 0 }))
       .filter(d => d.value > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartRows, chartValues, chartLevel]);
+  }, [chartRows, chartValues, chartAcc, chartLevel]);
 
-  // Buckets de tiempo según el modo de vista.
+  // Buckets de tiempo según el modo de vista (mes 2d/15, semana 7, día 2h/12).
   const buckets = useMemo(() => {
     const list = [];
     if (!rangeStart || !rangeEnd) return list;
@@ -247,11 +152,7 @@ export default function PitchAnalisis({
       while (cursor <= end && guard < 200) {
         const bStart = new Date(cursor);
         const bEnd = addDays(cursor, 2);
-        list.push({
-          key: `d${bStart.getTime()}`,
-          label: `${bStart.getDate()}`,
-          test: (p) => p.dateLocal >= bStart && p.dateLocal < bEnd,
-        });
+        list.push({ key: `d${bStart.getTime()}`, label: `${bStart.getDate()}`, test: (p) => p.dateLocal >= bStart && p.dateLocal < bEnd });
         cursor = addDays(cursor, 2);
         guard++;
       }
@@ -262,11 +163,7 @@ export default function PitchAnalisis({
       let guard = 0;
       while (cursor <= end && guard < 40) {
         const d0 = new Date(cursor);
-        list.push({
-          key: `d${d0.getTime()}`,
-          label: `${DAY_LABELS[d0.getDay()]} ${d0.getDate()}`,
-          test: (p) => p.dateLocal.getTime() === d0.getTime(),
-        });
+        list.push({ key: `d${d0.getTime()}`, label: `${DAY_LABELS[d0.getDay()]} ${d0.getDate()}`, test: (p) => p.dateLocal.getTime() === d0.getTime() });
         cursor = addDays(cursor, 1);
         guard++;
       }
@@ -275,48 +172,34 @@ export default function PitchAnalisis({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, rangeStart?.getTime(), rangeEnd?.getTime()]);
 
-  // Datos de tendencia: una serie por valor del nivel activo, leads únicos/bucket.
+  // Tendencia: una serie por valor del nivel activo, leads únicos por bucket.
   const trendData = useMemo(() => {
     return buckets.map(b => {
       const obj = { label: b.label };
       chartValues.forEach(v => {
         const set = new Set();
         chartRows.forEach(r => {
-          if (r.value === v && b.test(r.parsed)) set.add(r.card_id);
+          if (norm(r[chartAcc]) === v && b.test(r.parsed)) set.add(r.card_id);
         });
         obj[labelFor(chartLevel, v)] = set.size;
       });
       return obj;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buckets, chartRows, chartValues, chartLevel]);
-
-  const colorFor = (rawValue, idx) => PALETTE[idx % PALETTE.length];
-
-  const toggleCat = (value) => {
-    setActiveLevel('categoria');
-    setSelectedCats(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-  };
-  const toggleSub = (value) => {
-    setActiveLevel('subcategoria');
-    setSelectedSubs(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-  };
+  }, [buckets, chartRows, chartValues, chartAcc, chartLevel]);
 
   const pct = (n) => (totalLeads > 0 ? Math.round((n / totalLeads) * 100) : 0);
 
-  // ----- Render -----
   return (
     <div>
       {/* Sub-tabs del Análisis */}
       <div className="flex items-center gap-1 border-b border-slate-200 mb-4">
-        {SUB_TABS.map(t => (
+        {ANALISIS_SUBTABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setSubTab(t.id)}
+            onClick={() => onSubTabChange?.(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
-              subTab === t.id
-                ? 'border-[#1717AF] text-[#1717AF]'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+              subTab === t.id ? 'border-[#1717AF] text-[#1717AF]' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             {t.label}
@@ -324,9 +207,9 @@ export default function PitchAnalisis({
         ))}
       </div>
 
-      {subTab !== 'no_matricula' ? (
+      {levels.length === 0 ? (
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
-          <div className="text-sm font-medium text-slate-600">{SUB_TABS.find(t => t.id === subTab)?.label}</div>
+          <div className="text-sm font-medium text-slate-600">{config.label}</div>
           <div className="text-xs text-slate-400 mt-1">Próximamente.</div>
         </div>
       ) : loading ? (
@@ -336,74 +219,58 @@ export default function PitchAnalisis({
       ) : rows.length === 0 ? (
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
           <div className="text-sm font-medium text-slate-600">Sin datos en este periodo</div>
-          <div className="text-xs text-slate-400 mt-1">No hay pitches "no matrícula" con los filtros actuales.</div>
+          <div className="text-xs text-slate-400 mt-1">No hay pitches en este sub-tab con los filtros actuales.</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Panel de motivos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          {/* Panel de motivos (scrollable) */}
           <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-            <h3 className="text-sm font-bold text-slate-800 mb-4">Motivos</h3>
-
-            {/* Nivel: Categoría */}
-            <LevelHeader
-              label="Categoría"
-              active={activeLevel === 'categoria'}
-              onClick={() => setActiveLevel('categoria')}
-            />
-            <div className="mt-1 mb-4">
-              {catList.map(item => (
-                <ItemRow
-                  key={item.value}
-                  label={labelFor('categoria', item.value)}
-                  count={item.count}
-                  pct={pct(item.count)}
-                  checked={selectedCats.includes(item.value)}
-                  dim={item.value === SIN}
-                  onClick={() => toggleCat(item.value)}
-                />
-              ))}
-            </div>
-
-            {/* Nivel: Sub categoría */}
-            <LevelHeader
-              label="Sub categoría"
-              active={activeLevel === 'subcategoria'}
-              onClick={() => setActiveLevel('subcategoria')}
-            />
-            <div className="mt-1">
-              {subList.map(item => (
-                <ItemRow
-                  key={item.value}
-                  label={labelFor('subcategoria', item.value)}
-                  count={item.count}
-                  pct={pct(item.count)}
-                  checked={selectedSubs.includes(item.value)}
-                  dim={item.value === SIN}
-                  onClick={() => toggleSub(item.value)}
-                />
-              ))}
+            <h3 className="text-sm font-bold text-slate-800 mb-3">Motivos</h3>
+            <div className="overflow-y-auto pr-1" style={{ maxHeight: '460px' }}>
+              {levels.map((lv, idx) => {
+                const list = listFor(idx);
+                const isActive = activeLevel === lv;
+                return (
+                  <div key={lv} className={idx > 0 ? 'mt-4' : ''}>
+                    <LevelHeader label={LEVEL_META[lv].label} active={isActive} onClick={() => setActiveLevel(lv)} />
+                    <div className="mt-1">
+                      {list.length === 0 ? (
+                        <p className="px-1 py-2 text-xs text-slate-400">Sin opciones</p>
+                      ) : list.map(item => (
+                        <ItemRow
+                          key={item.value}
+                          label={labelFor(lv, item.value)}
+                          count={item.count}
+                          pct={pct(item.count)}
+                          checked={(selected[lv] || []).includes(item.value)}
+                          dim={item.value === SIN}
+                          color={isActive ? colorMap.get(item.value) : null}
+                          onClick={() => toggle(lv, item.value)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Gráficas */}
           <div className="lg:col-span-2 flex flex-col gap-4">
-            {/* Torta */}
             <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-              <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Proyección</h3>
+              <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Participación</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={45}>
-                      {pieData.map((d, i) => <Cell key={d.rawValue} fill={colorFor(d.rawValue, i)} />)}
+                      {pieData.map((d) => <Cell key={d.rawValue} fill={colorMap.get(d.rawValue) || '#cbd5e1'} />)}
                     </Pie>
                     <Tooltip formatter={(v, n) => [`${v} ${v === 1 ? 'persona' : 'personas'} (${pct(v)}%)`, n]} />
-                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Tendencia */}
             <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
               <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Tendencia</h3>
               <div className="h-64">
@@ -413,13 +280,12 @@ export default function PitchAnalisis({
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                     <Tooltip />
-                    <Legend />
-                    {pieData.map((d, i) => (
+                    {pieData.map((d) => (
                       <Line
                         key={d.rawValue}
                         type="monotone"
                         dataKey={d.name}
-                        stroke={colorFor(d.rawValue, i)}
+                        stroke={colorMap.get(d.rawValue) || '#cbd5e1'}
                         strokeWidth={2}
                         dot={false}
                       />
@@ -440,9 +306,7 @@ function LevelHeader({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2 pb-1 border-b transition-colors ${
-        active ? 'border-[#1717AF]' : 'border-slate-200'
-      }`}
+      className={`w-full flex items-center gap-2 pb-1 border-b transition-colors ${active ? 'border-[#1717AF]' : 'border-slate-200'}`}
     >
       <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
         active ? 'bg-[#1717AF] border-[#1717AF]' : 'border-slate-300'
@@ -454,18 +318,19 @@ function LevelHeader({ label, active, onClick }) {
   );
 }
 
-// Fila de item con checkbox + conteo + %.
-function ItemRow({ label, count, pct, checked, dim, onClick }) {
+// Fila de item con checkbox + puntico de color (nivel activo) + conteo + %.
+function ItemRow({ label, count, pct, checked, dim, color, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-1 py-1.5 rounded-lg text-left transition-colors hover:bg-slate-50`}
+      className="w-full flex items-center gap-2.5 px-1 py-1.5 rounded-lg text-left transition-colors hover:bg-slate-50"
     >
       <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
         checked ? 'bg-[#1717AF] border-[#1717AF]' : 'border-slate-300'
       }`}>
         {checked && <Check size={10} className="text-white" />}
       </div>
+      {color && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />}
       <span className={`flex-1 text-sm truncate ${dim ? 'italic text-slate-400' : 'text-slate-600'}`}>{label}</span>
       <span className="text-xs text-slate-500 tabular-nums flex-shrink-0">{count} · {pct}%</span>
     </button>
