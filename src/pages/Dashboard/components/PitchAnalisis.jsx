@@ -11,9 +11,10 @@ const SIN = '__SIN__';
 
 // Metadatos de cada nivel jerárquico del panel "Motivos".
 const LEVEL_META = {
-  etapa:        { label: 'Etapa',         accessor: 'stage', sinLabel: 'Sin etapa' },
-  categoria:    { label: 'Categoría',     accessor: 'cat',   sinLabel: 'Sin categoría' },
-  subcategoria: { label: 'Sub categoría', accessor: 'sub',   sinLabel: 'Sin motivo' },
+  etapa:        { label: 'Etapa',         accessor: 'stage',     sinLabel: 'Sin etapa' },
+  categoria:    { label: 'Categoría',     accessor: 'cat',       sinLabel: 'Sin categoría' },
+  subcategoria: { label: 'Sub categoría', accessor: 'sub',       sinLabel: 'Sin motivo' },
+  matricula:    { label: 'Motivo',        accessor: 'matricula', sinLabel: 'Sin motivo' },
 };
 
 // Paleta para torta y líneas de tendencia (y los punticos del panel).
@@ -58,6 +59,11 @@ export default function PitchAnalisis({
     setSelected({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subTab]);
+
+  // Nivel activo "seguro": si el estado quedó en un nivel que no existe en el
+  // sub-tab actual (transición entre tabs antes de que corra el efecto), cae al
+  // primer nivel disponible. Evita leer LEVEL_META[undefined] y crashear.
+  const safeActive = activeLevel && levels.includes(activeLevel) ? activeLevel : (levels[0] || null);
 
   // Total de leads únicos del universo del sub-tab → denominador del %.
   const totalLeads = useMemo(() => new Set(rows.map(r => r.card_id)).size, [rows]);
@@ -107,20 +113,20 @@ export default function PitchAnalisis({
   };
 
   // Datos de la gráfica según el nivel activo (respeta la cascada).
-  const { chartLevel, chartAcc, chartValues, chartRows, colorMap, activeList } = useMemo(() => {
-    if (!activeLevel) {
-      return { chartLevel: null, chartAcc: null, chartValues: [], chartRows: [], colorMap: new Map(), activeList: [] };
+  const { chartLevel, chartAcc, chartValues, chartRows, colorMap } = useMemo(() => {
+    if (!safeActive) {
+      return { chartLevel: null, chartAcc: null, chartValues: [], chartRows: [], colorMap: new Map() };
     }
-    const idx = levels.indexOf(activeLevel);
-    const acc = LEVEL_META[activeLevel].accessor;
+    const idx = levels.indexOf(safeActive);
+    const acc = LEVEL_META[safeActive].accessor;
     const list = listFor(idx);
     const cmap = new Map(list.map((it, i) => [it.value, PALETTE[i % PALETTE.length]]));
-    const sel = selected[activeLevel] || [];
+    const sel = selected[safeActive] || [];
     const values = sel.length > 0 ? sel : list.map(it => it.value);
     const base = scopedRows(idx).filter(r => values.includes(norm(r[acc])));
-    return { chartLevel: activeLevel, chartAcc: acc, chartValues: values, chartRows: base, colorMap: cmap, activeList: list };
+    return { chartLevel: safeActive, chartAcc: acc, chartValues: values, chartRows: base, colorMap: cmap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLevel, selected, rows, levels]);
+  }, [safeActive, selected, rows, levels]);
 
   // Torta: leads únicos por valor.
   const pieData = useMemo(() => {
@@ -229,10 +235,12 @@ export default function PitchAnalisis({
             <div className="overflow-y-auto pr-1" style={{ maxHeight: '460px' }}>
               {levels.map((lv, idx) => {
                 const list = listFor(idx);
-                const isActive = activeLevel === lv;
+                const isActive = safeActive === lv;
                 return (
                   <div key={lv} className={idx > 0 ? 'mt-4' : ''}>
-                    <LevelHeader label={LEVEL_META[lv].label} active={isActive} onClick={() => setActiveLevel(lv)} />
+                    {levels.length > 1 && (
+                      <LevelHeader label={LEVEL_META[lv].label} active={isActive} onClick={() => setActiveLevel(lv)} />
+                    )}
                     <div className="mt-1">
                       {list.length === 0 ? (
                         <p className="px-1 py-2 text-xs text-slate-400">Sin opciones</p>
