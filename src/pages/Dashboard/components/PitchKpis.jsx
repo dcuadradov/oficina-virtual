@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { Loader2, Target, UserCheck } from 'lucide-react';
 import { PITCH_STATES } from '../../../constants/pitchColors';
+import { rowMatchesDims, PITCH_DIMS } from './PitchDimFilters';
 
 // Presets de selección rápida para el filtro de tags en Mis Pitch.
 // Se renderizan como chips arriba del dropdown del filtro.
@@ -61,6 +62,10 @@ export default function PitchKpis({
   userEmail,
   puedeVerTodos = false,
   selectedTags = [],
+  // Filtros de análisis (profesión/género/edad/ciudad/país). Se aplican tanto
+  // al set de pitches (numerador) como a leads creados y matrículas reales
+  // (denominadores), para mantener la coherencia de las métricas.
+  dimFilters = null,
 }) {
   const [pitches, setPitches] = useState([]);
   const [leadsCount, setLeadsCount] = useState(0);
@@ -92,6 +97,13 @@ export default function PitchKpis({
         const fechaInicio = fmtUtc(start);
         const fechaFin = fmtUtc(end);
 
+        // ¿Hay filtros de análisis activos? Cuando los hay, los denominadores
+        // (leads creados y matrículas reales) se filtran por dimensión del
+        // lead, por lo que en vez de un count(head) traemos las filas con las
+        // columnas de dimensión y contamos en cliente con el mismo criterio.
+        const dimsActive = !!dimFilters && PITCH_DIMS.some(d => (dimFilters[d.key] || []).length > 0);
+        const DIM_COLS = 'card_id, ocupacion, sexo, edad, ciudad, pais';
+
         // 1) Pitches en el periodo (vista vw_pitches_calendario)
         let pq = supabase.from('vw_pitches_calendario').select('*');
         if (selectedComercial) pq = pq.eq('comercial_email', selectedComercial);
@@ -101,7 +113,7 @@ export default function PitchKpis({
         // Si selectedTags está vacío, no se restringe por label (= todos).
         let lq = supabase
           .from('leads')
-          .select('card_id', { count: 'exact', head: true })
+          .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
           .gte('created_at', fechaInicio)
           .lt('created_at', fechaFin);
         if (selectedTags.length > 0) lq = lq.in('label', selectedTags);
@@ -113,7 +125,7 @@ export default function PitchKpis({
         // etapa_funnel y updated_at, aplicando comercial y tags.
         let mq = supabase
           .from('leads')
-          .select('card_id', { count: 'exact', head: true })
+          .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
           .eq('etapa_funnel', 'Matrícula')
           .gte('updated_at', fechaInicio)
           .lt('updated_at', fechaFin);
@@ -130,6 +142,7 @@ export default function PitchKpis({
         // Filtrar pitches por:
         // - rango de fecha (mismo criterio sin TZ que el calendario)
         // - label (tag) IN selectedTags si hay selección; vacío = sin filtro.
+        // - dimensiones de análisis (profesión/género/edad/ciudad/país).
         const filtered = (pRes.data || []).filter(p => {
           if (!p.fecha_pitch_calendario) return false;
           const m = p.fecha_pitch_calendario.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -138,12 +151,21 @@ export default function PitchKpis({
           const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
           if (dt < start || dt >= end) return false;
           if (selectedTags.length > 0 && !selectedTags.includes(p.label)) return false;
+          if (!rowMatchesDims(p, dimFilters)) return false;
           return true;
         });
 
         setPitches(filtered);
-        setLeadsCount(lRes.count || 0);
-        setMatriculaReal(mRes.count || 0);
+        setLeadsCount(
+          dimsActive
+            ? (lRes.data || []).filter(r => rowMatchesDims(r, dimFilters)).length
+            : (lRes.count || 0)
+        );
+        setMatriculaReal(
+          dimsActive
+            ? (mRes.data || []).filter(r => rowMatchesDims(r, dimFilters)).length
+            : (mRes.count || 0)
+        );
       } catch (err) {
         console.error('Error cargando KPIs de Pitch:', err);
       } finally {
@@ -161,6 +183,7 @@ export default function PitchKpis({
     userEmail,
     puedeVerTodos,
     selectedTags.join('|'),
+    JSON.stringify(dimFilters),
   ]);
 
   // T = todos los pitches en el periodo (numerador de Efectividad)

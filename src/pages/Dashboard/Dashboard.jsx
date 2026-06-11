@@ -7,6 +7,7 @@ import LeadsTable from './components/LeadsTable';
 import LeadSidebar from './components/LeadSidebar';
 import PitchCalendar from './components/PitchCalendar';
 import PitchKpis, { PITCH_TAG_PRESETS } from './components/PitchKpis';
+import PitchDimFilters, { emptyPitchDims } from './components/PitchDimFilters';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -100,6 +101,12 @@ export default function Dashboard() {
   // Tags para Mis Pitch. Inicia vacío = sin filtro (equivalente a "Todos").
   // Si el usuario marca tags, KPIs y calendario se restringen a esa lista.
   const [pitchKpiTags, setPitchKpiTags] = useState([]);
+
+  // Sub-tab de Mis Pitch: 'agenda' (default, KPIs + calendario) | 'analisis'.
+  const [pitchSubTab, setPitchSubTab] = useState('agenda');
+  // Filtros de análisis (profesión/género/edad/ciudad/país). Vacío = sin filtro.
+  // Se muestran en ambos sub-tabs y filtran KPIs + calendario.
+  const [pitchDims, setPitchDims] = useState(emptyPitchDims());
 
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
@@ -1425,9 +1432,30 @@ export default function Dashboard() {
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}
                   puedeVerTodos={puedeVerTodos}
-                />
+                >
+                  {/* Filtros de análisis (profesión/género/edad/ciudad/país):
+                      fluyen en la misma fila que los demás filtros y aplican a
+                      KPIs + calendario. */}
+                  {(() => {
+                    const { rangeStart, rangeEnd } = resolvePitchRange({
+                      selectedDia, selectedPeriodo, selectedMes, monthConfigs,
+                    });
+                    return (
+                      <PitchDimFilters
+                        rangeStart={rangeStart}
+                        rangeEnd={rangeEnd}
+                        selectedComercial={selectedComercial}
+                        userEmail={userEmail}
+                        puedeVerTodos={puedeVerTodos}
+                        tagFilter={pitchKpiTags}
+                        value={pitchDims}
+                        onChange={setPitchDims}
+                      />
+                    );
+                  })()}
+                </DashboardFilters>
 
-                {/* KPIs (10 cards 5x2): efectividad, asistencia y distribución por etapa */}
+                {/* KPIs (10 cards 5x2): siempre visibles, como resumen sobre los tabs */}
                 {(() => {
                   const { rangeStart, rangeEnd } = resolvePitchRange({
                     selectedDia, selectedPeriodo, selectedMes, monthConfigs,
@@ -1440,22 +1468,58 @@ export default function Dashboard() {
                       userEmail={userEmail}
                       puedeVerTodos={puedeVerTodos}
                       selectedTags={pitchKpiTags}
+                      dimFilters={pitchDims}
                     />
                   );
                 })()}
 
-                {/* Calendario de Pitches */}
-                <PitchCalendar
-                  selectedComercial={selectedComercial}
-                  userEmail={userEmail}
-                  onOpenLead={handleOpenSidebar}
-                  puedeVerTodos={puedeVerTodos}
-                  selectedMes={selectedMes}
-                  selectedPeriodo={selectedPeriodo}
-                  selectedDia={selectedDia}
-                  monthConfigs={monthConfigs}
-                  tagFilter={pitchKpiTags}
-                />
+                {/* Sub-tabs de Mis Pitch: Agenda (default) | Análisis (debajo de los KPIs) */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit mt-4 mb-4">
+                  <button
+                    onClick={() => setPitchSubTab('agenda')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      pitchSubTab === 'agenda'
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Agenda
+                  </button>
+                  <button
+                    onClick={() => setPitchSubTab('analisis')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      pitchSubTab === 'analisis'
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Análisis
+                  </button>
+                </div>
+
+                {pitchSubTab === 'agenda' ? (
+                  /* Calendario de Pitches */
+                  <PitchCalendar
+                    selectedComercial={selectedComercial}
+                    userEmail={userEmail}
+                    onOpenLead={handleOpenSidebar}
+                    puedeVerTodos={puedeVerTodos}
+                    selectedMes={selectedMes}
+                    selectedPeriodo={selectedPeriodo}
+                    selectedDia={selectedDia}
+                    monthConfigs={monthConfigs}
+                    tagFilter={pitchKpiTags}
+                    dimFilters={pitchDims}
+                  />
+                ) : (
+                  /* Análisis: placeholder por ahora (las visualizaciones vienen después) */
+                  <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
+                    <div className="text-sm font-medium text-slate-600">Análisis de Pitch</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      Próximamente. Usa los filtros de arriba para empezar a segmentar.
+                    </div>
+                  </div>
+                )}
               </>
             ) : activeView === 'metricas' ? (
               <>

@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient';
 import { Loader2 } from 'lucide-react';
 import { PITCH_STATES, getPitchState, getPitchCardClasses } from '../../../constants/pitchColors';
 import { resolvePitchRange, MONTH_LABELS, DAY_LABELS } from '../../../utils/pitchRange';
+import { rowMatchesDims } from './PitchDimFilters';
 
 // Suma N días a una Date (sin mutar la original)
 const addDays = (date, n) => {
@@ -23,6 +24,8 @@ export default function PitchCalendar({
   // Lista de labels (tags) por la cual filtrar los pitches del calendario.
   // Vacío => sin filtro de tag (mostrar todos).
   tagFilter = [],
+  // Filtros de análisis (profesión/género/edad/ciudad/país). Vacío => sin filtro.
+  dimFilters = null,
 }) {
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,7 @@ export default function PitchCalendar({
           const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
           if (dt < start || dt > end) return false;
           if (tagFilter.length > 0 && !tagFilter.includes(p.label)) return false;
+          if (!rowMatchesDims(p, dimFilters)) return false;
           return true;
         });
         setPitches(filtered);
@@ -132,7 +136,7 @@ export default function PitchCalendar({
     // Nota: usamos tagFilter.join('|') para reaccionar a cambios de contenido
     // sin re-fetch innecesario por re-renders con la misma lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, tagFilter.join('|')]);
+  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, tagFilter.join('|'), JSON.stringify(dimFilters)]);
 
   // Auto-scroll a las 7 AM cuando termina de cargar (solo en vistas con grid horario)
   useEffect(() => {
