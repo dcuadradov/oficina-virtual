@@ -1346,7 +1346,11 @@ const DashboardFilters = ({
                 Todas las categorías
               </button>
               <div className="h-px bg-slate-100 my-1" />
-              {categorias.map((cat) => (
+              {[...categorias].sort((a, b) => {
+                const padre = (a.categoria_padre || '').localeCompare(b.categoria_padre || '', 'es', { sensitivity: 'base' });
+                if (padre !== 0) return padre;
+                return (a.categoria || '').localeCompare(b.categoria || '', 'es', { sensitivity: 'base' });
+              }).map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => {
@@ -1360,6 +1364,9 @@ const DashboardFilters = ({
                   }`}
                 >
                   {cat.categoria}
+                  {cat.categoria_padre && (
+                    <span className="text-slate-400"> ({cat.categoria_padre})</span>
+                  )}
                 </button>
               ))}
             </div>
