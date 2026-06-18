@@ -464,7 +464,7 @@ const PITCH_FIELD_NAME_TO_COLUMN = {
 // dinámicos agregados desde la config (fields_formulario_creacion_leads) y que
 // se resuelven por campo_origen ("tabla,columna"). Se limita a columnas que
 // existen en pitches_resultados para no romper el insert/update.
-const PITCH_EXTRA_COLUMNS = ['motivo_matricula'];
+const PITCH_EXTRA_COLUMNS = ['motivo_matricula', 'calificacion_setter'];
 
 // Columnas que, además de guardarse en pitches_resultados, se reflejan en la
 // tabla leads (el lead conserva el último valor registrado en el pitch).
@@ -473,6 +473,9 @@ const PITCH_COLUMNS_SYNC_LEADS = ['motivo_matricula'];
 const getPitchColumnForField = (field) => {
   const mapped = PITCH_FIELD_NAME_TO_COLUMN[normalizePitchFieldName(field?.nombre)];
   if (mapped) return mapped;
+  // Campo "¿El lead estuvo bien calificado por el Setter?": se persiste en la
+  // columna calificacion_setter (independiente de su campo_origen en config).
+  if (isSetterCalificadoPitchField(field)) return 'calificacion_setter';
   // Campo dinámico agregado por config: la columna sale de campo_origen.
   if (field?.campo_origen) {
     const parts = String(field.campo_origen).split(',').map(s => s.trim());
@@ -1020,9 +1023,13 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   // Usa los valores LOCALES (form nuevo o edición), no los de leads, salvo en
   // dependencias explícitas sobre columnas de leads.
   const shouldShowPitchField = (field, values) => {
-    // Regla fija: calificación del Setter solo si leads.setter === TRUE.
+    // Regla fija: calificación del Setter solo si:
+    //   1) leads.setter === TRUE, y
+    //   2) "¿Asistió al Pitch?" === 'Si'.
     if (isSetterCalificadoPitchField(field)) {
-      return isTruthyLeadFlag(getLeadPropertyValue('setter', lead, localLeadData));
+      const setterTrue = isTruthyLeadFlag(getLeadPropertyValue('setter', lead, localLeadData));
+      const asistio = getPitchValueByColumn(values, 'attended') === 'Si';
+      return setterTrue && asistio;
     }
 
     if (!field?.depende_de) return true;
