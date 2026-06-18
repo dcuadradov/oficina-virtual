@@ -1258,7 +1258,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
 
   // Mapping de combinación (attended | pitch_result) → fase_id_pipefy destino
   // que el lead tomará tras registrar el resultado del pitch. Si attended='No'
-  // siempre cae en "Pitch perdido" (340855086) sin importar rescheduled.
+  // el destino es 340855086, tanto si reprogramó como si no (la diferencia es
+  // que, si NO reprogramó, además se reasigna el lead al setter antes de seguir).
   const FASE_DESTINO_BY_PITCH = {
     'Si|Matrícula':         '339756299',
     'Si|Pago pendiente':    '340643642',
@@ -1270,7 +1271,12 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const FASE_DESTINO_NO_ASISTIO = '340855086';
 
   const determinarFaseDestinoPitch = (payload) => {
-    if (payload.attended === 'No') return FASE_DESTINO_NO_ASISTIO;
+    // Cuando no asistió, "¿Reprogramó?" es obligatorio. Ambas respuestas
+    // (Si/No) mueven a 340855086; si NO reprogramó, además se reasigna el lead
+    // al setter (eso lo maneja handleCrearResultadoPitch, no este ruteo).
+    if (payload.rescheduled === 'Si' || payload.rescheduled === 'No') {
+      return FASE_DESTINO_NO_ASISTIO;
+    }
     const key = `${payload.attended}|${payload.pitch_result}`;
     return FASE_DESTINO_BY_PITCH[key] || null;
   };
@@ -1291,6 +1297,78 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       await new Promise(r => setTimeout(r, 1500));
     }
     return null;
+  };
+
+  // Reasigna el lead al setter (mismo webhook que la reasignación manual del
+  // sidebar). Se usa cuando el lead NO asistió al Pitch y NO reprogramó: el
+  // setter que lo agendó debe volver a agendarlo. Hace SOLO el webhook; si
+  // falla lanza error para abortar todo el flujo del Pitch (no se guarda nada).
+  // Devuelve { setterEmail, setterNombre } para reutilizar en el resto del flujo.
+  const reasignarLeadAlSetterPitch = async () => {
+    const setterEmail = getLeadPropertyValue('setter_email', lead, localLeadData);
+    if (!setterEmail) {
+      throw new Error('El lead no tiene setter_email; no se puede reasignar al setter.');
+    }
+    const comercialAnteriorEmail = comercialEmailActual || lead?.comercial_email || null;
+
+    // Nombres desde usuarios (por email) para anterior y nuevo (setter).
+    const emails = [comercialAnteriorEmail, setterEmail].filter(Boolean);
+    const { data: usuariosData } = await supabase
+      .from('usuarios')
+      .select('email, nombre')
+      .in('email', emails);
+    const nombrePorEmail = (em) =>
+      usuariosData?.find(u => u.email === em)?.nombre || em?.split('@')[0] || null;
+
+    const response = await fetch('https://api.mdenglish.us/webhook/reasignar-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        card_id: lead.card_id,
+        lead_nombre: lead.nombre,
+        comercial_anterior_email: comercialAnteriorEmail,
+        comercial_anterior_nombre: nombrePorEmail(comercialAnteriorEmail),
+        comercial_nuevo_email: setterEmail,
+        comercial_nuevo_nombre: nombrePorEmail(setterEmail),
+        usuario_que_reasigna: userEmail,
+        respond_io_url: lead.respond_io_url || null,
+      }),
+    });
+    if (!response.ok) throw new Error('Webhook reasignar-lead respondió con error');
+    return { setterEmail, setterNombre: nombrePorEmail(setterEmail) };
+  };
+
+  // Crea la notificación "Se te ha reasignado un nuevo lead" para el setter,
+  // igual que la reasignación manual. No lanza error si falla (best-effort).
+  const crearNotificacionReasignacionPitch = async (comercialNuevoEmail) => {
+    try {
+      const { data: configNotif } = await supabase
+        .from('config_notificaciones')
+        .select('id, descripcion_template')
+        .eq('tipo', 'Se te ha reasignado un nuevo lead')
+        .eq('activo', true)
+        .single();
+      if (!configNotif) return;
+      const descripcionFinal = (configNotif.descripcion_template || '')
+        .replace('{{nombre}}', lead.nombre || 'Lead')
+        .replace('{{reasignado_por}}', userName || userEmail);
+      const { error: notifError } = await supabase
+        .from('notificaciones')
+        .insert({
+          config_id: configNotif.id,
+          card_id: lead.card_id,
+          comercial_email: comercialNuevoEmail,
+          nombre_lead: lead.nombre,
+          descripcion: descripcionFinal,
+          datos_extra: {
+            comercial_anterior: comercialEmailActual || lead?.comercial_email || null,
+            reasignado_por: userEmail,
+          },
+        });
+      if (notifError) console.error('[Pitch] Error creando notificación de reasignación:', notifError);
+    } catch (notifErr) {
+      console.error('[Pitch] Error creando notificación de reasignación:', notifErr);
+    }
   };
 
   // Crea un comentario (origen 'Pitch') en `comentarios` y lo envía al webhook
@@ -1432,6 +1510,16 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const pitchNumero = Math.max(intentosActual, nuevoSeguimientos);
 
       const pitchPayload = buildPitchPayload(pitchFormValues);
+
+      // No asistió + NO reprogramó → reasignar el lead al setter ANTES de
+      // guardar nada. Si el webhook de reasignación falla, abortamos todo (el
+      // throw cae en el catch y no se crea el resultado del pitch).
+      const debeReasignarAlSetter = pitchPayload.rescheduled === 'No';
+      let reasignacionInfo = null;
+      if (debeReasignarAlSetter) {
+        reasignacionInfo = await reasignarLeadAlSetterPitch();
+      }
+
       const insertPayload = {
         card_id: lead.card_id,
         fecha_pitch: lead.fecha_pitch ?? null,
@@ -1467,11 +1555,24 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       PITCH_COLUMNS_SYNC_LEADS.forEach(col => {
         if (col in pitchPayload) leadUpdate[col] = pitchPayload[col];
       });
+      // Reasignación al setter: además del webhook, replicamos lo que hace la
+      // reasignación manual sobre la fila del lead.
+      if (debeReasignarAlSetter && reasignacionInfo) {
+        leadUpdate.comercial_email = reasignacionInfo.setterEmail;
+        leadUpdate.estado_gestion = 'sin_gestionar';
+        leadUpdate.revisado = false;
+        leadUpdate.fecha_asignacion = new Date().toISOString();
+      }
       const { error: updateErr } = await supabase
         .from('leads')
         .update(leadUpdate)
         .eq('card_id', lead.card_id);
       if (updateErr) throw updateErr;
+
+      // Notificación al nuevo comercial (setter), igual que la reasignación manual.
+      if (debeReasignarAlSetter && reasignacionInfo) {
+        await crearNotificacionReasignacionPitch(reasignacionInfo.setterEmail);
+      }
 
       const faseDestinoId = determinarFaseDestinoPitch(pitchPayload);
 
@@ -1516,6 +1617,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         : null;
 
       // Update final unificado (form + tarjetas + datos del lead).
+      const reasignOverlay = (debeReasignarAlSetter && reasignacionInfo)
+        ? { comercial_email: reasignacionInfo.setterEmail }
+        : {};
       if (updated) {
         setLocalLeadData(prev => ({
           ...prev,
@@ -1524,11 +1628,13 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           fase_id_pipefy: updated.fase_id_pipefy,
           fase_nombre_pipefy: updated.fase_nombre_pipefy,
           etapa_funnel: updated.etapa_funnel,
+          ...reasignOverlay,
         }));
         setFaseLocal(updated.fase_nombre_pipefy);
         onRefreshData?.();
       } else {
-        setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos }));
+        setLocalLeadData(prev => ({ ...prev, pitch_seguimientos: nuevoSeguimientos, ...reasignOverlay }));
+        if (debeReasignarAlSetter && reasignacionInfo) onRefreshData?.();
       }
       setPitchFormValues({});
       setPitchSelectOpenId(null);
