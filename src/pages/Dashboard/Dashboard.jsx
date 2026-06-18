@@ -113,6 +113,25 @@ export default function Dashboard() {
   const userName = localStorage.getItem('user_name') || 'Comercial';
   const userEmail = localStorage.getItem('user_email');
   const puedeVerTodos = localStorage.getItem('user_puede_ver_todos') === 'true';
+  // Rol setter: la visibilidad de fases NO usa la regla de etapa_funnel,
+  // sino la columna config_fases.setter (true = visible). Además, solo ve "Gestión".
+  const esSetter = (localStorage.getItem('user_rol') || '').toLowerCase() === 'setter';
+  // Fases (fase_id_pipefy) permitidas para el setter (config_fases.setter = true).
+  // null = aún no cargado (no consultar leads todavía); [] = cargado sin fases.
+  const [fasesSetter, setFasesSetter] = useState(null);
+
+  // Regla de visibilidad de fases aplicada a las queries de `leads`:
+  //   - Setter → solo las fases marcadas en config_fases.setter (por fase_id_pipefy).
+  //   - Resto  → regla histórica por etapa_funnel (≠ 'No mostrar').
+  // Si el filtro EMDI también restringe por fase_id_pipefy, PostgREST combina
+  // ambos `.in()` con AND → intersección natural, así que no hace falta más.
+  const aplicarVisibilidadFases = useCallback(
+    (q) =>
+      esSetter
+        ? q.in('fase_id_pipefy', fasesSetter || [])
+        : q.or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
+    [esSetter, fasesSetter]
+  );
 
   // ===== Análisis de Mis Pitch =====
   // Sub-tab activo dentro de "Análisis" (No fueron matrícula / Reprobados / Matrícula).
@@ -479,14 +498,35 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Carga las fases (fase_id_pipefy) permitidas para el setter.
+  const fetchFasesSetter = useCallback(async () => {
+    if (!esSetter) return;
+    try {
+      const { data, error } = await supabase
+        .from('config_fases')
+        .select('fase_id_pipefy')
+        .eq('setter', true)
+        .not('fase_id_pipefy', 'is', null);
+      if (error) throw error;
+      setFasesSetter((data || []).map(d => String(d.fase_id_pipefy)).filter(Boolean));
+    } catch (error) {
+      console.error('Error cargando fases del setter:', error.message);
+      setFasesSetter([]); // cargado pero vacío → el setter no ve leads
+    }
+  }, [esSetter]);
+
   // Función para cargar etapas del funnel desde config_fases
   const fetchEtapasFunnel = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('config_fases')
         .select('etapa_funnel_agrupada, orden_funnel, grupo_funnel, nombre_grupo_funnel, orden_grupo_funnel')
         .not('etapa_funnel_agrupada', 'is', null)
         .neq('etapa_funnel_agrupada', 'No mostrar');
+      // Setter: solo los chips de fases marcadas con setter = true.
+      if (esSetter) query = query.eq('setter', true);
+
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -533,7 +573,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando etapas del funnel:', error.message);
     }
-  }, []);
+  }, [esSetter]);
 
   // Helper para obtener etiquetas cortas
   const getShortLabel = (etapa) => {
@@ -631,15 +671,17 @@ export default function Dashboard() {
   const fetchVentanasAbiertas = useCallback(async () => {
     const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
     if (!targetEmail && !puedeVerTodos) return;
+    if (esSetter && fasesSetter === null) return; // aún no cargan las fases del setter
 
     try {
       // Calcular hace 24 horas
       const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      let query = supabase
-        .from('leads')
-        .select('card_id', { count: 'exact', head: true })
-        .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
+      let query = aplicarVisibilidadFases(
+        supabase
+          .from('leads')
+          .select('card_id', { count: 'exact', head: true })
+      )
         .not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
         .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
 
@@ -657,7 +699,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error calculando ventanas abiertas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial]);
+  }, [userEmail, puedeVerTodos, selectedComercial, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Función para calcular nuevos leads (notificaciones con contador_nuevos_leads = true y estado_lectura = 'nuevo')
   const fetchNuevosLeads = useCallback(async () => {
@@ -696,6 +738,7 @@ export default function Dashboard() {
   const fetchStats = useCallback(async () => {
     const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
     if (!targetEmail && !puedeVerTodos) return;
+    if (esSetter && fasesSetter === null) return; // aún no cargan las fases del setter
 
     try {
       const { fechaInicio, fechaFin } = parseDateFilters();
@@ -717,10 +760,11 @@ export default function Dashboard() {
       const nowISO = new Date().toISOString();
 
       while (keepFetching) {
-        let statsQuery = supabase
-          .from('leads')
-          .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
-          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
+        let statsQuery = aplicarVisibilidadFases(
+          supabase
+            .from('leads')
+            .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
+        );
 
         if (puedeVerTodos && selectedComercial) {
           statsQuery = statsQuery.eq('comercial_email', selectedComercial);
@@ -823,7 +867,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -832,6 +876,7 @@ export default function Dashboard() {
       console.error("No hay email de usuario");
       return;
     }
+    if (esSetter && fasesSetter === null) return; // aún no cargan las fases del setter
 
     try {
       if (!silent) setLoading(true);
@@ -861,8 +906,9 @@ export default function Dashboard() {
       }
 
       const buildQuery = (selectCols = '*') => {
-        let q = supabase.from('leads').select(selectCols, { count: 'exact' })
-          .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null');
+        let q = aplicarVisibilidadFases(
+          supabase.from('leads').select(selectCols, { count: 'exact' })
+        );
         if (puedeVerTodos && selectedComercial) {
           q = q.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos) {
@@ -994,7 +1040,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -1005,6 +1051,7 @@ export default function Dashboard() {
       fetchFuentes();
       fetchReferidos();
       fetchColoresFases();
+      fetchFasesSetter();
       fetchEtapasFunnel();
       fetchMonthConfigs();
       fetchStats();
@@ -1013,6 +1060,19 @@ export default function Dashboard() {
       fetchLeads(false, 0);
     }
   }, [userEmail]);
+
+  // Setter: los fetches iniciales de leads dependen de fasesSetter, que carga
+  // async. Cuando llega (null → array), disparamos la carga real (el primer
+  // intento del efecto de arriba salió temprano por el guard y dejó loading=true).
+  useEffect(() => {
+    if (userEmail && esSetter && fasesSetter !== null) {
+      fetchStats();
+      fetchVentanasAbiertas();
+      fetchNuevosLeads();
+      fetchLeads(false, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fasesSetter]);
 
   // Efecto para abrir sidebar cuando hay cardId en la URL
   useEffect(() => {
@@ -1055,7 +1115,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento]);
+  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento, fasesSetter]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1262,31 +1322,35 @@ export default function Dashboard() {
                 <Table size={18} />
                 Gestión
               </button>
-              <button
-                onClick={() => setActiveView('pitch')}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
-                  activeView === 'pitch'
-                    ? 'bg-white text-[#1717AF] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <CalendarDays size={18} />
-                Mis Pitch
-              </button>
-              <button
-                onClick={() => {
-                  setActiveView('metricas');
-                  if (!puedeVerTodos) setMetricasSubTab('performance');
-                }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
-                  activeView === 'metricas'
-                    ? 'bg-white text-[#1717AF] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <BarChart3 size={18} />
-                Métricas
-              </button>
+              {!esSetter && (
+                <button
+                  onClick={() => setActiveView('pitch')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'pitch'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <CalendarDays size={18} />
+                  Mis Pitch
+                </button>
+              )}
+              {!esSetter && (
+                <button
+                  onClick={() => {
+                    setActiveView('metricas');
+                    if (!puedeVerTodos) setMetricasSubTab('performance');
+                  }}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'metricas'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <BarChart3 size={18} />
+                  Métricas
+                </button>
+              )}
               {puedeVerTodos && (
                 <button
                   onClick={() => setActiveView('informe')}
