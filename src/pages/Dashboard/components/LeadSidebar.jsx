@@ -482,10 +482,44 @@ const getPitchColumnForField = (field) => {
   return null;
 };
 
+// Campo "¿El lead estuvo bien calificado por el Setter?" — visible solo si
+// leads.setter === TRUE (fallback si depende_de no está configurado en BD).
+const isSetterCalificadoPitchField = (field) => {
+  const n = normalizePitchFieldName(field?.nombre);
+  return n.includes('calificado por el setter') || n.includes('bien calificado por el setter');
+};
+
+const getLeadPropertyValue = (prop, leadRow, localRow) => {
+  const raw = localRow?.[prop] ?? leadRow?.[prop];
+  if (raw === null || raw === undefined) return '';
+  return String(raw).trim();
+};
+
+const isTruthyLeadFlag = (value) => String(value).trim().toUpperCase() === 'TRUE';
+
 // Campo especial (hardcodeado, no vive en fields_formulario_creacion_leads):
 // "Especifica por qué no se matriculó". Sus opciones salen de config_categorias
 // y su valor se guarda dentro de los values del form bajo esta clave sintética.
 const MOTIVO_FIELD_KEY = '__motivo_no_matricula';
+// Claves sintéticas adicionales del bloque de motivo (viven en los values del
+// form para resetearse junto con todo lo demás).
+const MOTIVO_DETALLE_KEY = '__motivo_detalle';   // detalle (Seguimiento) / observación (Recordatorio)
+const MOTIVO_TIPO_KEY = '__motivo_tipo';         // 'seguimiento' | 'recordatorio'
+const MOTIVO_FECHA_KEY = '__motivo_fecha';       // 'YYYY-MM-DD' (solo Recordatorio)
+const MOTIVO_HORA_KEY = '__motivo_hora';         // '01'..'12'
+const MOTIVO_MINUTO_KEY = '__motivo_minuto';     // '00'..'59'
+const MOTIVO_PERIODO_KEY = '__motivo_periodo';   // 'AM' | 'PM'
+
+// Limpia (mutando) todas las claves sintéticas del motivo en un objeto values.
+const clearMotivoKeys = (obj) => {
+  obj[MOTIVO_FIELD_KEY] = '';
+  obj[MOTIVO_DETALLE_KEY] = '';
+  obj[MOTIVO_TIPO_KEY] = 'seguimiento';
+  obj[MOTIVO_FECHA_KEY] = '';
+  obj[MOTIVO_HORA_KEY] = '';
+  obj[MOTIVO_MINUTO_KEY] = '';
+  obj[MOTIVO_PERIODO_KEY] = '';
+};
 // Valores de pitch_result que, por sí solos, muestran el campo de motivo.
 // "Reprobado" NO está aquí a propósito: se muestra vía pitch_stage (el usuario
 // primero elige la etapa y recién ahí aparece el motivo). "Matrícula" nunca.
@@ -980,11 +1014,28 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   }, [lead?.card_id]);
 
   // Determina si un campo del Pitch debe mostrarse según su dependencia
-  // (depende_de). Usa los valores LOCALES (form nuevo o edición), no los de leads.
+  // (depende_de). Soporta:
+  //   - Campo del form: "Nombre campo padre | valor"
+  //   - Propiedad del lead: "leads.setter | TRUE"
+  // Usa los valores LOCALES (form nuevo o edición), no los de leads, salvo en
+  // dependencias explícitas sobre columnas de leads.
   const shouldShowPitchField = (field, values) => {
+    // Regla fija: calificación del Setter solo si leads.setter === TRUE.
+    if (isSetterCalificadoPitchField(field)) {
+      return isTruthyLeadFlag(getLeadPropertyValue('setter', lead, localLeadData));
+    }
+
     if (!field?.depende_de) return true;
     const dep = parseDependeDeField(field.depende_de);
     if (!dep) return true;
+
+    // Dependencia sobre columna de leads (ej. leads.setter | TRUE).
+    if (dep.fieldName.toLowerCase().startsWith('leads.')) {
+      const prop = dep.fieldName.slice(6).trim();
+      const actual = getLeadPropertyValue(prop, lead, localLeadData).toUpperCase();
+      if (dep.valor === null) return actual !== '';
+      return actual === String(dep.valor).trim().toUpperCase();
+    }
 
     const parentField = pitchFields.find(f => f.nombre === dep.fieldName);
     if (!parentField) return true;
@@ -1032,6 +1083,30 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     return { categoria: row.categoria, categoria_padre: row.categoria_padre ?? null };
   };
 
+  // Tipo de gestión elegido en el bloque de motivo (default: seguimiento).
+  const getMotivoTipo = (values) => values?.[MOTIVO_TIPO_KEY] || 'seguimiento';
+
+  // Convierte hora/minuto/AM-PM (claves sintéticas) a formato 24h.
+  const parseMotivoHora = (values) => {
+    let hora24 = parseInt(values?.[MOTIVO_HORA_KEY] || '9', 10);
+    const periodo = values?.[MOTIVO_PERIODO_KEY] || 'AM';
+    if (periodo === 'PM' && hora24 !== 12) hora24 += 12;
+    else if (periodo === 'AM' && hora24 === 12) hora24 = 0;
+    const minutos = parseInt(values?.[MOTIVO_MINUTO_KEY] || '0', 10);
+    return { hora24, minutos };
+  };
+
+  // Construye el Date (fecha + hora) del recordatorio a partir de los values.
+  const buildMotivoFecha = (values) => {
+    const fechaStr = values?.[MOTIVO_FECHA_KEY];
+    if (!fechaStr) return null;
+    const fecha = new Date(`${fechaStr}T00:00:00`);
+    if (isNaN(fecha.getTime())) return null;
+    const { hora24, minutos } = parseMotivoHora(values);
+    fecha.setHours(hora24, minutos, 0, 0);
+    return fecha;
+  };
+
   // Convierte una fila guardada (con columnas attended, pitch_stage, ...) al
   // formato { [field.id]: value } que esperan helpers de render/dependencia
   const resultadoToValues = (resultado) => {
@@ -1046,6 +1121,10 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const row = categorias.find(c => c.categoria === resultado.motivo_no_matricula);
       if (row) values[MOTIVO_FIELD_KEY] = row.id;
     }
+    // Precargar el detalle del motivo y forzar tipo 'seguimiento' (en edición
+    // no se muestra el radio: editar siempre genera un comentario).
+    values[MOTIVO_DETALLE_KEY] = resultado?.detalle_motivo_no_matricula || '';
+    values[MOTIVO_TIPO_KEY] = 'seguimiento';
     return values;
   };
 
@@ -1061,32 +1140,64 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const v = values[field.id];
       payload[col] = (!visible || v === undefined || v === '') ? null : v;
     });
-    // Campo especial motivo: si es visible y hay selección, guardar categoria y
-    // categoria_padre; si no, ambas columnas quedan null.
+    // Campo especial motivo: si es visible y hay selección, guardar categoria,
+    // categoria_padre y el detalle/observación; si no, las columnas quedan null.
     if (shouldShowMotivoField(values)) {
       const motivo = getMotivoCategoria(values);
       payload.motivo_no_matricula = motivo?.categoria ?? null;
       payload.motivo_no_matricula_categoria = motivo?.categoria_padre ?? null;
+      payload.detalle_motivo_no_matricula = (values[MOTIVO_DETALLE_KEY] || '').trim() || null;
     } else {
       payload.motivo_no_matricula = null;
       payload.motivo_no_matricula_categoria = null;
+      payload.detalle_motivo_no_matricula = null;
     }
     return payload;
   };
 
-  // Validación: requiere al menos un valor en alguno de los campos visibles
-  // (respetando dependencias) para no crear filas completamente vacías.
-  // Además, si el campo motivo es visible, es OBLIGATORIO.
-  const isPitchFormValid = () => {
-    if (shouldShowMotivoField(pitchFormValues) && !pitchFormValues[MOTIVO_FIELD_KEY]) {
-      return false;
+  // Validación del formulario Pitch (crear y editar comparten lógica).
+  // Reglas:
+  //   1) Todo campo dinámico VISIBLE marcado como obligatorio debe tener valor.
+  //   2) Si el bloque de motivo es visible: categoría y detalle son obligatorios.
+  //      Además, en modo crear con tipo 'recordatorio', la fecha/hora deben ser
+  //      válidas (al menos 10 min en el futuro si es hoy).
+  //   3) En modo crear, debe haber al menos un valor (evita filas vacías).
+  const isPitchValuesValid = (values, isEdit = false) => {
+    for (const field of pitchFields) {
+      if (!shouldShowPitchField(field, values)) continue;
+      if (field.obligatorio) {
+        const v = values[field.id];
+        if (v === undefined || v === null || v === '') return false;
+      }
     }
-    return pitchFields.some(field => {
-      if (!shouldShowPitchField(field, pitchFormValues)) return false;
-      const v = pitchFormValues[field.id];
-      return v !== undefined && v !== null && v !== '';
-    });
+
+    if (shouldShowMotivoField(values)) {
+      if (!values[MOTIVO_FIELD_KEY]) return false;
+      const detalle = (values[MOTIVO_DETALLE_KEY] || '').trim();
+      if (!detalle) return false;
+      if (!isEdit && getMotivoTipo(values) === 'recordatorio') {
+        const fechaStr = values[MOTIVO_FECHA_KEY];
+        if (!fechaStr) return false;
+        const fechaBase = new Date(`${fechaStr}T00:00:00`);
+        if (isNaN(fechaBase.getTime())) return false;
+        const { hora24, minutos } = parseMotivoHora(values);
+        if (!isTimeValid(fechaBase, hora24, minutos)) return false;
+      }
+    }
+
+    if (!isEdit) {
+      const algunValor = pitchFields.some(field => {
+        if (!shouldShowPitchField(field, values)) return false;
+        const v = values[field.id];
+        return v !== undefined && v !== null && v !== '';
+      });
+      if (!algunValor) return false;
+    }
+
+    return true;
   };
+
+  const isPitchFormValid = () => isPitchValuesValid(pitchFormValues, false);
 
   // Setter del form nuevo que limpia los hijos cuando cambia el padre,
   // para que no queden valores huérfanos de campos que ya no se ven.
@@ -1104,8 +1215,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           }
         });
       }
-      // Si el motivo dejó de ser visible, limpiar su selección.
-      if (!shouldShowMotivoField(next)) next[MOTIVO_FIELD_KEY] = '';
+      // Si el motivo dejó de ser visible, limpiar todas sus claves sintéticas.
+      if (!shouldShowMotivoField(next)) clearMotivoKeys(next);
       return next;
     });
   };
@@ -1124,17 +1235,18 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           }
         });
       }
-      if (!shouldShowMotivoField(next)) next[MOTIVO_FIELD_KEY] = '';
+      if (!shouldShowMotivoField(next)) clearMotivoKeys(next);
       return next;
     });
   };
 
-  // Setter directo del valor del motivo (no toca los demás campos).
-  const setMotivoNewValue = (id) => {
-    setPitchFormValues(prev => ({ ...prev, [MOTIVO_FIELD_KEY]: id }));
+  // Setter directo de cualquier clave sintética del motivo (categoría, detalle,
+  // tipo, fecha/hora). No toca los campos dinámicos del formulario.
+  const setMotivoNewValue = (key, val) => {
+    setPitchFormValues(prev => ({ ...prev, [key]: val }));
   };
-  const setMotivoEditValue = (id) => {
-    setEditingPitchValues(prev => ({ ...prev, [MOTIVO_FIELD_KEY]: id }));
+  const setMotivoEditValue = (key, val) => {
+    setEditingPitchValues(prev => ({ ...prev, [key]: val }));
   };
 
   // Mapping de combinación (attended | pitch_result) → fase_id_pipefy destino
@@ -1177,9 +1289,10 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   // Crea un comentario (origen 'Pitch') en `comentarios` y lo envía al webhook
   // de Respond, igual que un seguimiento normal. Se usa cuando el comercial
   // registra el motivo de por qué el lead no se matriculó durante el Pitch.
-  const crearComentarioDesdePitch = async (motivo) => {
+  // El texto es el detalle escrito por el comercial.
+  const crearComentarioDesdePitch = async (motivo, detalle) => {
     if (!lead?.card_id || !motivo?.categoria) return;
-    const texto = 'El usuario no se matriculó durante el Pitch';
+    const texto = (detalle || '').trim() || 'Sin detalle';
     const nuevoComentario = {
       lead_id: lead.card_id,
       texto,
@@ -1227,6 +1340,72 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     }
   };
 
+  // Crea un recordatorio desde el formulario Pitch (espeja el tab Recordatorio):
+  // inserta en `recordatorios` (un trigger en BD crea el comentario), actualiza
+  // el lead y notifica al webhook de Respond. `texto` es la observación.
+  const crearRecordatorioDesdePitch = async (motivo, texto, fechaCompleta) => {
+    if (!lead?.card_id || !motivo?.categoria || !fechaCompleta) return;
+    const observacion = (texto || '').trim() || 'Sin detalle';
+    try {
+      const { error: insertErr } = await supabase
+        .from('recordatorios')
+        .insert([{
+          lead_id: lead.card_id,
+          fecha_programada: fechaCompleta.toISOString(),
+          observacion,
+          creado_por: userEmail,
+          estado: 'Programado',
+          fase: lead.fase_nombre_pipefy || null,
+          etapa_funnel: lead.etapa_funnel || null,
+          categoria: motivo.categoria,
+        }]);
+      if (insertErr) throw insertErr;
+
+      const { count: conteoFaseActual } = await supabase
+        .from('recordatorios')
+        .select('*', { count: 'exact', head: true })
+        .eq('lead_id', lead.card_id)
+        .eq('fase', lead.fase_nombre_pipefy || '');
+
+      await supabase
+        .from('leads')
+        .update({
+          fecha_programada_recordatorio: fechaCompleta.toISOString(),
+          estado_gestion: 'gestionado',
+          conteo_recordatorios: conteoFaseActual || 0,
+          recordatorio_activo: true,
+        })
+        .eq('card_id', lead.card_id);
+
+      try {
+        await fetch('https://api.mdenglish.us/webhook/crear_seguimiento_portal_a_respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: null,
+            lead_id: lead.card_id,
+            texto: observacion,
+            autor_email: userEmail,
+            autor_nombre: userName,
+            origen: 'Recordatorio',
+            fase: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+            categoria: motivo.categoria,
+            created_at: new Date().toISOString(),
+            lead_nombre: lead.nombre,
+            lead_telefono: lead.telefono,
+            respond_io_url: lead.respond_io_url || null,
+            fecha_programada: fechaCompleta.toISOString(),
+          }),
+        });
+      } catch (whErr) {
+        console.error('[Pitch] Error webhook recordatorio:', whErr);
+      }
+    } catch (e) {
+      console.error('[Pitch] Error creando recordatorio desde Pitch:', e);
+    }
+  };
+
   // Crear nuevo resultado de pitch.
   // Flujo (loader activo durante TODO):
   //   1) Insert en pitches_resultados (estado='registrado').
@@ -1259,13 +1438,20 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .insert(insertPayload);
       if (insertErr) throw insertErr;
 
-      // Si se registró un motivo de "no matrícula", dejarlo también como
-      // comentario en Seguimiento (origen 'Pitch') + webhook a Respond.
-      const motivoCreado = shouldShowMotivoField(pitchFormValues)
-        ? getMotivoCategoria(pitchFormValues)
-        : null;
-      if (motivoCreado) {
-        await crearComentarioDesdePitch(motivoCreado);
+      // Si se registró un motivo de "no matrícula", crear la gestión elegida:
+      //   - Seguimiento → comentario (origen 'Pitch') + webhook Respond
+      //   - Recordatorio → recordatorio (el trigger en BD crea el comentario)
+      if (shouldShowMotivoField(pitchFormValues)) {
+        const motivoCreado = getMotivoCategoria(pitchFormValues);
+        if (motivoCreado?.categoria) {
+          const detalle = (pitchFormValues[MOTIVO_DETALLE_KEY] || '').trim();
+          if (getMotivoTipo(pitchFormValues) === 'recordatorio') {
+            const fechaCompleta = buildMotivoFecha(pitchFormValues);
+            await crearRecordatorioDesdePitch(motivoCreado, detalle, fechaCompleta);
+          } else {
+            await crearComentarioDesdePitch(motivoCreado, detalle);
+          }
+        }
       }
 
       // Update de leads: contador de seguimientos + columnas que se reflejan
@@ -1367,6 +1553,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const row = categorias.find(c => c.categoria === resultado.motivo_no_matricula);
       if (row) initialValues[MOTIVO_FIELD_KEY] = row.id;
     }
+    // Precargar detalle y forzar tipo 'seguimiento' (en edición no hay radio).
+    initialValues[MOTIVO_DETALLE_KEY] = resultado.detalle_motivo_no_matricula || '';
+    initialValues[MOTIVO_TIPO_KEY] = 'seguimiento';
     setEditingPitchValues(initialValues);
     setEditingPitchId(resultado.id);
     setEditingPitchSelectOpenId(null);
@@ -1389,6 +1578,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       // Motivo original (antes de editar) para detectar si cambió.
       const original = pitchResultados.find(r => r.id === editingPitchId);
       const motivoOriginal = original?.motivo_no_matricula || null;
+      const detalleOriginal = original?.detalle_motivo_no_matricula || null;
 
       const payload = buildPitchPayload(editingPitchValues);
       const { error } = await supabase
@@ -1406,13 +1596,17 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         await supabase.from('leads').update(leadSync).eq('card_id', lead.card_id);
       }
 
-      // Solo si el motivo cambió (y el nuevo tiene valor) creamos otro
-      // comentario; si quedó igual, no duplicamos.
+      // Editar siempre crea un comentario de Seguimiento, pero solo si cambió
+      // la categoría o el detalle respecto al original (evita duplicados).
       const motivoNuevo = shouldShowMotivoField(editingPitchValues)
         ? getMotivoCategoria(editingPitchValues)
         : null;
-      if (motivoNuevo?.categoria && motivoNuevo.categoria !== motivoOriginal) {
-        await crearComentarioDesdePitch(motivoNuevo);
+      const detalleNuevo = shouldShowMotivoField(editingPitchValues)
+        ? (editingPitchValues[MOTIVO_DETALLE_KEY] || '').trim()
+        : '';
+      if (motivoNuevo?.categoria &&
+          (motivoNuevo.categoria !== motivoOriginal || (detalleNuevo || null) !== detalleOriginal)) {
+        await crearComentarioDesdePitch(motivoNuevo, detalleNuevo);
       }
 
       handleCancelEditPitch();
@@ -2041,12 +2235,13 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const handleEnviarMensaje = async () => {
     if (!lead?.card_id) return;
     if (enviandoMensaje) return;
+    // El detalle del seguimiento es obligatorio.
+    if (!nuevoMensaje.trim()) return;
     
     try {
       setEnviandoMensaje(true);
       
-      // Si no hay texto, usar "Sin detalle"
-      const textoFinal = nuevoMensaje.trim() || 'Sin detalle';
+      const textoFinal = nuevoMensaje.trim();
       
       const nuevoComentario = {
         lead_id: lead.card_id,
@@ -3912,76 +4107,191 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       );
                     };
 
-                    // Campo especial "Especifica por qué no se matriculó":
-                    // select con buscador predictivo sobre config_categorias.
-                    const renderMotivoField = ({ selectedId, setValue, open, setOpen, busqueda, setBusqueda }) => {
+                    // Bloque "Especifica por qué no se matriculó":
+                    //   - Crear: radio Seguimiento | Recordatorio + categoría +
+                    //     detalle (y fecha/hora si es Recordatorio).
+                    //   - Editar: solo categoría + detalle (sin radio; siempre
+                    //     genera un comentario de Seguimiento).
+                    const renderMotivoField = ({ values, setMotivoValue, isEdit, open, setOpen, busqueda, setBusqueda }) => {
+                      const selectedId = values[MOTIVO_FIELD_KEY];
                       const seleccion = categorias.find(c => String(c.id) === String(selectedId));
                       // Solo opciones marcadas para el formulario de Pitch, ordenadas por grupo.
                       const base = sortCategorias(categorias.filter(c => c.formulario_pitch === true));
                       const filtradas = base.filter(c =>
                         c.categoria.toLowerCase().includes((busqueda || '').toLowerCase())
                       );
+                      const tipo = getMotivoTipo(values);
+                      const esRecordatorio = !isEdit && tipo === 'recordatorio';
+
+                      // Rango permitido para la fecha del recordatorio (hoy → +6 meses).
+                      const hoyStr = new Date().toISOString().split('T')[0];
+                      const maxDate = new Date();
+                      maxDate.setMonth(maxDate.getMonth() + 6);
+                      const maxStr = maxDate.toISOString().split('T')[0];
+
                       return (
-                        <div className="relative motivo-dropdown">
-                          <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                        <div className="space-y-3 pt-1">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
                             Especifica por qué no se matriculó
                             <span className="text-rose-500 ml-1">*</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => { setOpen(!open); setBusqueda(''); }}
-                            disabled={loadingCategorias}
-                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-white border rounded-xl text-left transition-colors ${
-                              open ? 'border-[#1717AF]/40 ring-1 ring-[#1717AF]/20' : 'border-slate-200 hover:border-slate-300'
-                            } ${seleccion ? 'text-slate-700' : 'text-slate-400'}`}
-                          >
-                            <span className="truncate">
-                              {loadingCategorias ? 'Cargando...' : (seleccion?.categoria || 'Seleccionar...')}
-                            </span>
-                            <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-                          </button>
-                          {open && (
-                            <div className="absolute z-40 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                              <div className="p-2 border-b border-slate-100">
-                                <div className="relative">
-                                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                  <input
-                                    type="text"
-                                    autoFocus
-                                    value={busqueda}
-                                    onChange={(e) => setBusqueda(e.target.value)}
-                                    placeholder="Buscar categoría..."
-                                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
-                                  />
-                                </div>
+                          </p>
+
+                          {/* Radio Seguimiento | Recordatorio (solo al crear) */}
+                          {!isEdit && (
+                            <div className="flex items-center gap-2">
+                              {[
+                                { id: 'seguimiento', label: 'Seguimiento' },
+                                { id: 'recordatorio', label: 'Recordatorio' },
+                              ].map(opt => (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setMotivoValue(MOTIVO_TIPO_KEY, opt.id)}
+                                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-xl border transition-colors ${
+                                    tipo === opt.id
+                                      ? 'border-[#1717AF] bg-[#1717AF]/5 text-[#1717AF]'
+                                      : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                                    tipo === opt.id ? 'border-[#1717AF]' : 'border-slate-300'
+                                  }`}>
+                                    {tipo === opt.id && <span className="w-1.5 h-1.5 rounded-full bg-[#1717AF]" />}
+                                  </span>
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Fecha + hora (solo Recordatorio al crear) */}
+                          {esRecordatorio && (
+                            <div className="flex items-end gap-2">
+                              <div className="flex-1">
+                                <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                                  Fecha<span className="text-rose-500 ml-1">*</span>
+                                </label>
+                                <input
+                                  type="date"
+                                  min={hoyStr}
+                                  max={maxStr}
+                                  value={values[MOTIVO_FECHA_KEY] || ''}
+                                  onChange={(e) => setMotivoValue(MOTIVO_FECHA_KEY, e.target.value)}
+                                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]/40 transition-colors"
+                                />
                               </div>
-                              <div className="max-h-44 overflow-y-auto">
-                                {filtradas.length > 0 ? (
-                                  filtradas.map(cat => (
-                                    <button
-                                      key={cat.id}
-                                      type="button"
-                                      onClick={() => { setValue(cat.id); setOpen(false); setBusqueda(''); }}
-                                      className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                                        String(cat.id) === String(selectedId)
-                                          ? 'bg-[#1717AF] text-white font-medium'
-                                          : 'text-slate-600 hover:bg-slate-50'
-                                      }`}
-                                    >
-                                      {cat.categoria}
-                                      {cat.categoria_padre && (
-                                        <span className={`block text-[10px] ${String(cat.id) === String(selectedId) ? 'text-white/70' : 'text-slate-400'}`}>
-                                          {cat.categoria_padre}
-                                        </span>
-                                      )}
-                                    </button>
-                                  ))
-                                ) : (
-                                  <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
-                                )}
+                              <div>
+                                <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                                  Hora<span className="text-rose-500 ml-1">*</span>
+                                </label>
+                                <div className="flex items-center gap-1">
+                                  <select
+                                    value={values[MOTIVO_HORA_KEY] || '09'}
+                                    onChange={(e) => setMotivoValue(MOTIVO_HORA_KEY, e.target.value)}
+                                    className="px-2 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                                  >
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                                      <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>
+                                    ))}
+                                  </select>
+                                  <span className="text-slate-400">:</span>
+                                  <select
+                                    value={values[MOTIVO_MINUTO_KEY] || '00'}
+                                    onChange={(e) => setMotivoValue(MOTIVO_MINUTO_KEY, e.target.value)}
+                                    className="px-2 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                                  >
+                                    {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                                      <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={values[MOTIVO_PERIODO_KEY] || 'AM'}
+                                    onChange={(e) => setMotivoValue(MOTIVO_PERIODO_KEY, e.target.value)}
+                                    className="px-1 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                                  >
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
                           )}
+
+                          {/* Categoría (ambos caminos) */}
+                          <div className="relative motivo-dropdown">
+                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                              Categoría<span className="text-rose-500 ml-1">*</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => { setOpen(!open); setBusqueda(''); }}
+                              disabled={loadingCategorias}
+                              className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-white border rounded-xl text-left transition-colors ${
+                                open ? 'border-[#1717AF]/40 ring-1 ring-[#1717AF]/20' : 'border-slate-200 hover:border-slate-300'
+                              } ${seleccion ? 'text-slate-700' : 'text-slate-400'}`}
+                            >
+                              <span className="truncate">
+                                {loadingCategorias ? 'Cargando...' : (seleccion?.categoria || 'Seleccionar...')}
+                              </span>
+                              <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                            </button>
+                            {open && (
+                              <div className="absolute z-40 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                                <div className="p-2 border-b border-slate-100">
+                                  <div className="relative">
+                                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                      type="text"
+                                      autoFocus
+                                      value={busqueda}
+                                      onChange={(e) => setBusqueda(e.target.value)}
+                                      placeholder="Buscar categoría..."
+                                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-44 overflow-y-auto">
+                                  {filtradas.length > 0 ? (
+                                    filtradas.map(cat => (
+                                      <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => { setMotivoValue(MOTIVO_FIELD_KEY, cat.id); setOpen(false); setBusqueda(''); }}
+                                        className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                                          String(cat.id) === String(selectedId)
+                                            ? 'bg-[#1717AF] text-white font-medium'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        {cat.categoria}
+                                        {cat.categoria_padre && (
+                                          <span className={`block text-[10px] ${String(cat.id) === String(selectedId) ? 'text-white/70' : 'text-slate-400'}`}>
+                                            {cat.categoria_padre}
+                                          </span>
+                                        )}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <p className="px-3 py-2 text-xs text-slate-400 text-center">Sin resultados</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Detalle / Observación (obligatorio, ambos caminos) */}
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                              {esRecordatorio ? 'Observación' : 'Detalle'}<span className="text-rose-500 ml-1">*</span>
+                            </label>
+                            <textarea
+                              value={values[MOTIVO_DETALLE_KEY] || ''}
+                              onChange={(e) => setMotivoValue(MOTIVO_DETALLE_KEY, e.target.value)}
+                              placeholder={esRecordatorio ? 'Escribe la observación del recordatorio...' : 'Escribe el detalle del seguimiento...'}
+                              rows={2}
+                              className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]/40 resize-none transition-colors"
+                            />
+                          </div>
                         </div>
                       );
                     };
@@ -3995,6 +4305,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       .reverse();
 
                     const formValid = isPitchFormValid();
+                    const editFormValid = isPitchValuesValid(editingPitchValues, true);
 
                     // Estado del sub-tab Pitch:
                     //  - no_aplica:   el lead no está actualmente en fase Pitch (340566951)
@@ -4120,8 +4431,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       keyPrefix: 'new',
                                     }))}
                                   {shouldShowMotivoField(pitchFormValues) && renderMotivoField({
-                                    selectedId: pitchFormValues[MOTIVO_FIELD_KEY],
-                                    setValue: setMotivoNewValue,
+                                    values: pitchFormValues,
+                                    setMotivoValue: setMotivoNewValue,
+                                    isEdit: false,
                                     open: motivoNewOpen,
                                     setOpen: setMotivoNewOpen,
                                     busqueda: motivoNewBusqueda,
@@ -4263,7 +4575,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                           <button
                                             type="button"
                                             onClick={handleSaveEditPitch}
-                                            disabled={isSavingThis}
+                                            disabled={isSavingThis || !editFormValid}
                                             className="p-1.5 bg-[#1717AF] text-white rounded-lg hover:bg-[#1717AF]/90 transition-colors disabled:opacity-50"
                                             title="Guardar"
                                           >
@@ -4290,8 +4602,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                             keyPrefix: `edit-${resultado.id}`,
                                           }))}
                                         {shouldShowMotivoField(editingPitchValues) && renderMotivoField({
-                                          selectedId: editingPitchValues[MOTIVO_FIELD_KEY],
-                                          setValue: setMotivoEditValue,
+                                          values: editingPitchValues,
+                                          setMotivoValue: setMotivoEditValue,
+                                          isEdit: true,
                                           open: motivoEditOpen,
                                           setOpen: setMotivoEditOpen,
                                           busqueda: motivoEditBusqueda,
@@ -4301,7 +4614,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                     ) : (
                                       (() => {
                                         const cardValues = resultadoToValues(resultado);
-                                        const visibles = pitchFields.filter(field => shouldShowPitchField(field, cardValues));
+                                        const visibles = pitchFields.filter(field => {
+                                          if (shouldShowPitchField(field, cardValues)) return true;
+                                          const col = getPitchColumnForField(field);
+                                          return col && resultado[col];
+                                        });
                                         return (
                                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             {visibles.map(field => {
@@ -4328,6 +4645,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                                   {resultado.motivo_no_matricula_categoria && (
                                                     <span className="block text-[11px] text-slate-400">
                                                       {resultado.motivo_no_matricula_categoria}
+                                                    </span>
+                                                  )}
+                                                  {resultado.detalle_motivo_no_matricula && (
+                                                    <span className="block text-[11px] text-slate-500 mt-1 italic">
+                                                      {resultado.detalle_motivo_no_matricula}
                                                     </span>
                                                   )}
                                                 </p>
@@ -4598,7 +4920,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             handleEnviarMensaje();
                           }
                         }}
-                        placeholder="Escribe el detalle del seguimiento (opcional)..."
+                        placeholder="Escribe el detalle del seguimiento..."
                         rows={1}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none transition-all duration-200"
                         style={{ minHeight: '42px', maxHeight: '120px' }}
@@ -4606,9 +4928,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </div>
                     <button
                       onClick={handleEnviarMensaje}
-                      disabled={enviandoMensaje}
+                      disabled={enviandoMensaje || !nuevoMensaje.trim()}
                       className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                        !enviandoMensaje
+                        !enviandoMensaje && nuevoMensaje.trim()
                           ? 'bg-[#1717AF] text-white hover:bg-[#02214A] shadow-lg shadow-[#1717AF]/20'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       }`}
@@ -4621,7 +4943,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    Enter para enviar • Si no escribes detalle, se guardará "Sin detalle"
+                    Enter para enviar • El detalle es obligatorio
                   </p>
                 </div>
               </div>
