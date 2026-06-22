@@ -1512,9 +1512,12 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const pitchPayload = buildPitchPayload(pitchFormValues);
 
       // No asistió + NO reprogramó → reasignar el lead al setter ANTES de
-      // guardar nada. Si el webhook de reasignación falla, abortamos todo (el
-      // throw cae en el catch y no se crea el resultado del pitch).
-      const debeReasignarAlSetter = pitchPayload.rescheduled === 'No';
+      // guardar nada, PERO solo si el lead tiene setter asignado (setter_email).
+      // Si no hay setter, se omite la reasignación y el lead solo se mueve a la
+      // fase (340855086), igual que el camino normal del no-show. Si el webhook
+      // de reasignación falla, abortamos todo (el throw cae en el catch).
+      const setterEmailLead = getLeadPropertyValue('setter_email', lead, localLeadData);
+      const debeReasignarAlSetter = pitchPayload.rescheduled === 'No' && !!setterEmailLead;
       let reasignacionInfo = null;
       if (debeReasignarAlSetter) {
         reasignacionInfo = await reasignarLeadAlSetterPitch();
