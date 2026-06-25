@@ -57,6 +57,7 @@ export default function PitchDimFilters({
   userEmail,
   puedeVerTodos = false,
   esSetter = false,
+  setterCardIds = undefined,
   tagFilter = [],
   value,
   onChange,
@@ -76,12 +77,13 @@ export default function PitchDimFilters({
   useEffect(() => {
     if (externalRows !== null) return;
     if (!rangeStart || !rangeEnd) return;
+    if (esSetter && setterCardIds === null) return;
     let cancelled = false;
     const load = async () => {
       try {
         let query = applyPitchScopeFilter(
           supabase.from('vw_pitches_calendario').select('*'),
-          { esSetter, userEmail, selectedComercial, puedeVerTodos }
+          { esSetter, userEmail, selectedComercial, puedeVerTodos, setterCardIds }
         );
         const { data, error } = await query;
         if (error) throw error;
@@ -116,6 +118,7 @@ export default function PitchDimFilters({
     userEmail,
     puedeVerTodos,
     esSetter,
+    setterCardIds,
     tagFilter.join('|'),
   ]);
 

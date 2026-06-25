@@ -19,6 +19,7 @@ export default function PitchCalendar({
   onOpenLead,
   puedeVerTodos = false,
   esSetter = false,
+  setterCardIds = undefined,
   selectedMes = null,
   selectedPeriodo = null,
   selectedDia = null,
@@ -100,11 +101,12 @@ export default function PitchCalendar({
   // de negocio (una sola tarjeta por lead/fecha) -----
   useEffect(() => {
     const fetchPitches = async () => {
+      if (esSetter && setterCardIds === null) return;
       setLoading(true);
       try {
         let query = applyPitchScopeFilter(
           supabase.from('vw_pitches_calendario').select('*'),
-          { esSetter, userEmail, selectedComercial, puedeVerTodos }
+          { esSetter, userEmail, selectedComercial, puedeVerTodos, setterCardIds }
         );
         const { data, error } = await query;
         if (error) throw error;
@@ -136,7 +138,7 @@ export default function PitchCalendar({
     // Nota: usamos tagFilter.join('|') para reaccionar a cambios de contenido
     // sin re-fetch innecesario por re-renders con la misma lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, esSetter, tagFilter.join('|'), JSON.stringify(dimFilters)]);
+  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, esSetter, setterCardIds, tagFilter.join('|'), JSON.stringify(dimFilters)]);
 
   // Auto-scroll a las 7 AM cuando termina de cargar (solo en vistas con grid horario)
   useEffect(() => {
