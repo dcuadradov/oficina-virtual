@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../supabaseClient';
 import { ChevronDown, Check, Search, Briefcase, Users, Cake, MapPin, Globe, X } from 'lucide-react';
+import { applyPitchScopeFilter } from '../../../utils/pitchScopeFilter';
 
 // Sentinela para valores nulos/vacíos (se muestra como "Sin X").
 export const SIN_DATO = '__SIN__';
@@ -55,6 +56,7 @@ export default function PitchDimFilters({
   selectedComercial,
   userEmail,
   puedeVerTodos = false,
+  esSetter = false,
   tagFilter = [],
   value,
   onChange,
@@ -77,9 +79,10 @@ export default function PitchDimFilters({
     let cancelled = false;
     const load = async () => {
       try {
-        let query = supabase.from('vw_pitches_calendario').select('*');
-        if (selectedComercial) query = query.eq('comercial_email', selectedComercial);
-        else if (!puedeVerTodos && userEmail) query = query.eq('comercial_email', userEmail);
+        let query = applyPitchScopeFilter(
+          supabase.from('vw_pitches_calendario').select('*'),
+          { esSetter, userEmail, selectedComercial, puedeVerTodos }
+        );
         const { data, error } = await query;
         if (error) throw error;
         if (cancelled) return;
@@ -112,6 +115,7 @@ export default function PitchDimFilters({
     selectedComercial,
     userEmail,
     puedeVerTodos,
+    esSetter,
     tagFilter.join('|'),
   ]);
 

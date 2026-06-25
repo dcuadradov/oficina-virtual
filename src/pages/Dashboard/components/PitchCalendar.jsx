@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { PITCH_STATES, getPitchState, getPitchCardClasses } from '../../../constants/pitchColors';
 import { resolvePitchRange, MONTH_LABELS, DAY_LABELS } from '../../../utils/pitchRange';
 import { rowMatchesDims } from './PitchDimFilters';
+import { applyPitchScopeFilter } from '../../../utils/pitchScopeFilter';
 
 // Suma N días a una Date (sin mutar la original)
 const addDays = (date, n) => {
@@ -17,6 +18,7 @@ export default function PitchCalendar({
   userEmail,
   onOpenLead,
   puedeVerTodos = false,
+  esSetter = false,
   selectedMes = null,
   selectedPeriodo = null,
   selectedDia = null,
@@ -100,12 +102,10 @@ export default function PitchCalendar({
     const fetchPitches = async () => {
       setLoading(true);
       try {
-        let query = supabase.from('vw_pitches_calendario').select('*');
-        if (selectedComercial) {
-          query = query.eq('comercial_email', selectedComercial);
-        } else if (!puedeVerTodos && userEmail) {
-          query = query.eq('comercial_email', userEmail);
-        }
+        let query = applyPitchScopeFilter(
+          supabase.from('vw_pitches_calendario').select('*'),
+          { esSetter, userEmail, selectedComercial, puedeVerTodos }
+        );
         const { data, error } = await query;
         if (error) throw error;
 
@@ -136,7 +136,7 @@ export default function PitchCalendar({
     // Nota: usamos tagFilter.join('|') para reaccionar a cambios de contenido
     // sin re-fetch innecesario por re-renders con la misma lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, tagFilter.join('|'), JSON.stringify(dimFilters)]);
+  }, [rangeStart, rangeEnd, selectedComercial, userEmail, puedeVerTodos, esSetter, tagFilter.join('|'), JSON.stringify(dimFilters)]);
 
   // Auto-scroll a las 7 AM cuando termina de cargar (solo en vistas con grid horario)
   useEffect(() => {

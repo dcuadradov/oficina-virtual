@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient';
 import { Loader2, Target, UserCheck } from 'lucide-react';
 import { PITCH_STATES } from '../../../constants/pitchColors';
 import { rowMatchesDims, PITCH_DIMS } from './PitchDimFilters';
+import { applyPitchScopeFilter } from '../../../utils/pitchScopeFilter';
 
 // Presets de selección rápida para el filtro de tags en Mis Pitch.
 // Se renderizan como chips arriba del dropdown del filtro.
@@ -61,6 +62,7 @@ export default function PitchKpis({
   selectedComercial,
   userEmail,
   puedeVerTodos = false,
+  esSetter = false,
   selectedTags = [],
   // Filtros de análisis (profesión/género/edad/ciudad/país). Se aplican tanto
   // al set de pitches (numerador) como a leads creados y matrículas reales
@@ -104,34 +106,39 @@ export default function PitchKpis({
         const dimsActive = !!dimFilters && PITCH_DIMS.some(d => (dimFilters[d.key] || []).length > 0);
         const DIM_COLS = 'card_id, ocupacion, sexo, edad, ciudad, pais';
 
+        const scope = { esSetter, userEmail, selectedComercial, puedeVerTodos };
+
         // 1) Pitches en el periodo (vista vw_pitches_calendario)
-        let pq = supabase.from('vw_pitches_calendario').select('*');
-        if (selectedComercial) pq = pq.eq('comercial_email', selectedComercial);
-        else if (!puedeVerTodos && userEmail) pq = pq.eq('comercial_email', userEmail);
+        let pq = applyPitchScopeFilter(
+          supabase.from('vw_pitches_calendario').select('*'),
+          scope
+        );
 
         // 2) Leads creados en el periodo con label en selectedTags (si aplica).
         // Si selectedTags está vacío, no se restringe por label (= todos).
-        let lq = supabase
-          .from('leads')
-          .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
-          .gte('created_at', fechaInicio)
-          .lt('created_at', fechaFin);
+        let lq = applyPitchScopeFilter(
+          supabase
+            .from('leads')
+            .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
+            .gte('created_at', fechaInicio)
+            .lt('created_at', fechaFin),
+          scope
+        );
         if (selectedTags.length > 0) lq = lq.in('label', selectedTags);
-        if (selectedComercial) lq = lq.eq('comercial_email', selectedComercial);
-        else if (!puedeVerTodos && userEmail) lq = lq.eq('comercial_email', userEmail);
 
         // 3) Matrículas reales del periodo: réplica del contador de
         // "Gestión > Matrícula" con filtro Actualización. Filtra por
         // etapa_funnel y updated_at, aplicando comercial y tags.
-        let mq = supabase
-          .from('leads')
-          .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
-          .eq('etapa_funnel', 'Matrícula')
-          .gte('updated_at', fechaInicio)
-          .lt('updated_at', fechaFin);
+        let mq = applyPitchScopeFilter(
+          supabase
+            .from('leads')
+            .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
+            .eq('etapa_funnel', 'Matrícula')
+            .gte('updated_at', fechaInicio)
+            .lt('updated_at', fechaFin),
+          scope
+        );
         if (selectedTags.length > 0) mq = mq.in('label', selectedTags);
-        if (selectedComercial) mq = mq.eq('comercial_email', selectedComercial);
-        else if (!puedeVerTodos && userEmail) mq = mq.eq('comercial_email', userEmail);
 
         const [pRes, lRes, mRes] = await Promise.all([pq, lq, mq]);
         if (cancelled) return;
@@ -182,6 +189,7 @@ export default function PitchKpis({
     selectedComercial,
     userEmail,
     puedeVerTodos,
+    esSetter,
     selectedTags.join('|'),
     JSON.stringify(dimFilters),
   ]);
