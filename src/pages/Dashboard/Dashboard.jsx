@@ -119,6 +119,32 @@ export default function Dashboard() {
   // Fases (fase_id_pipefy) permitidas para el setter (config_fases.setter = true).
   // null = aún no cargado (no consultar leads todavía); [] = cargado sin fases.
   const [fasesSetter, setFasesSetter] = useState(null);
+  // card_ids de leads agendados por el setter (leads.setter_email). null = cargando.
+  // La vista vw_pitches_calendario puede no exponer setter_email; filtramos por card_id.
+  const [setterPitchCardIds, setSetterPitchCardIds] = useState(esSetter ? null : undefined);
+
+  useEffect(() => {
+    if (!esSetter || !userEmail) {
+      setSetterPitchCardIds(esSetter ? null : undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('card_id')
+          .eq('setter_email', userEmail);
+        if (cancelled) return;
+        if (error) throw error;
+        setSetterPitchCardIds((data || []).map(r => r.card_id).filter(Boolean));
+      } catch (e) {
+        console.error('Error cargando card_ids del setter para Mis Pitch:', e);
+        if (!cancelled) setSetterPitchCardIds([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [esSetter, userEmail]);
 
   // Regla de visibilidad de fases aplicada a las queries de `leads`:
   //   - Setter → solo las fases marcadas en config_fases.setter (por fase_id_pipefy).
@@ -1559,6 +1585,7 @@ export default function Dashboard() {
                     userEmail={userEmail}
                     puedeVerTodos={puedeVerTodos}
                     esSetter={esSetter}
+                    setterCardIds={setterPitchCardIds}
                     tagFilter={pitchKpiTags}
                     value={pitchDims}
                     onChange={setPitchDims}
@@ -1576,6 +1603,7 @@ export default function Dashboard() {
                     userEmail={userEmail}
                     puedeVerTodos={puedeVerTodos}
                     esSetter={esSetter}
+                    setterCardIds={setterPitchCardIds}
                     selectedTags={pitchKpiTags}
                     dimFilters={pitchDims}
                   />
@@ -1613,6 +1641,7 @@ export default function Dashboard() {
                     onOpenLead={handleOpenSidebar}
                     puedeVerTodos={puedeVerTodos}
                     esSetter={esSetter}
+                    setterCardIds={setterPitchCardIds}
                     selectedMes={selectedMes}
                     selectedPeriodo={selectedPeriodo}
                     selectedDia={selectedDia}

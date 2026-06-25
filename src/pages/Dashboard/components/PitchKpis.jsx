@@ -63,6 +63,7 @@ export default function PitchKpis({
   userEmail,
   puedeVerTodos = false,
   esSetter = false,
+  setterCardIds = undefined,
   selectedTags = [],
   // Filtros de análisis (profesión/género/edad/ciudad/país). Se aplican tanto
   // al set de pitches (numerador) como a leads creados y matrículas reales
@@ -83,6 +84,7 @@ export default function PitchKpis({
     let cancelled = false;
 
     const load = async () => {
+      if (esSetter && setterCardIds === null) return;
       setLoading(true);
       try {
         const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
@@ -106,7 +108,7 @@ export default function PitchKpis({
         const dimsActive = !!dimFilters && PITCH_DIMS.some(d => (dimFilters[d.key] || []).length > 0);
         const DIM_COLS = 'card_id, ocupacion, sexo, edad, ciudad, pais';
 
-        const scope = { esSetter, userEmail, selectedComercial, puedeVerTodos };
+        const scope = { esSetter, userEmail, selectedComercial, puedeVerTodos, setterCardIds };
 
         // 1) Pitches en el periodo (vista vw_pitches_calendario)
         let pq = applyPitchScopeFilter(
@@ -190,6 +192,7 @@ export default function PitchKpis({
     userEmail,
     puedeVerTodos,
     esSetter,
+    setterCardIds,
     selectedTags.join('|'),
     JSON.stringify(dimFilters),
   ]);
