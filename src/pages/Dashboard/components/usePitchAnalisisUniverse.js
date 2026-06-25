@@ -54,7 +54,7 @@ const parseDT = (s) => {
  * Devuelve filas: { card_id, comercial_email, label, ocupacion, sexo, edad,
  * ciudad, pais, cat, sub, stage, matricula, parsed }.
  */
-export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd }) {
+export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd, esSetter = false, userEmail = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -86,10 +86,14 @@ export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd
         const cardIds = [...new Set(pitches.map(p => p.card_id))];
         const leadMap = {};
         if (cardIds.length > 0) {
-          const { data: leadsData, error: leadsErr } = await supabase
+          let leadsQuery = supabase
             .from('leads')
             .select('card_id, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
             .in('card_id', cardIds);
+          // Setter: el universo base solo acota por setter_email (comercial/tags
+          // se filtran aguas abajo en Dashboard, igual que para comerciales).
+          if (esSetter && userEmail) leadsQuery = leadsQuery.eq('setter_email', userEmail);
+          const { data: leadsData, error: leadsErr } = await leadsQuery;
           if (leadsErr) throw leadsErr;
           (leadsData || []).forEach(l => { leadMap[l.card_id] = l; });
         }
@@ -132,7 +136,7 @@ export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, subTab, rangeStart?.getTime(), rangeEnd?.getTime()]);
+  }, [enabled, subTab, rangeStart?.getTime(), rangeEnd?.getTime(), esSetter, userEmail]);
 
   return { rows, loading };
 }

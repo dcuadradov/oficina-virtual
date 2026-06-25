@@ -147,6 +147,8 @@ export default function Dashboard() {
     subTab: pitchAnalisisTab,
     rangeStart: pitchRange.rangeStart,
     rangeEnd: pitchRange.rangeEnd,
+    esSetter,
+    userEmail,
   });
   // Filtros facetados sobre el universo del sub-tab: cada filtro ofrece solo
   // opciones presentes, considerando las selecciones aplicadas de los OTROS
@@ -1322,19 +1324,17 @@ export default function Dashboard() {
                 <Table size={18} />
                 Gestión
               </button>
-              {!esSetter && (
-                <button
-                  onClick={() => setActiveView('pitch')}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
-                    activeView === 'pitch'
-                      ? 'bg-white text-[#1717AF] shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <CalendarDays size={18} />
-                  Mis Pitch
-                </button>
-              )}
+              <button
+                onClick={() => setActiveView('pitch')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                  activeView === 'pitch'
+                    ? 'bg-white text-[#1717AF] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <CalendarDays size={18} />
+                Mis Pitch
+              </button>
               {!esSetter && (
                 <button
                   onClick={() => {
@@ -1558,6 +1558,7 @@ export default function Dashboard() {
                     selectedComercial={selectedComercial}
                     userEmail={userEmail}
                     puedeVerTodos={puedeVerTodos}
+                    esSetter={esSetter}
                     tagFilter={pitchKpiTags}
                     value={pitchDims}
                     onChange={setPitchDims}
@@ -1574,6 +1575,7 @@ export default function Dashboard() {
                     selectedComercial={selectedComercial}
                     userEmail={userEmail}
                     puedeVerTodos={puedeVerTodos}
+                    esSetter={esSetter}
                     selectedTags={pitchKpiTags}
                     dimFilters={pitchDims}
                   />
@@ -1610,6 +1612,7 @@ export default function Dashboard() {
                     userEmail={userEmail}
                     onOpenLead={handleOpenSidebar}
                     puedeVerTodos={puedeVerTodos}
+                    esSetter={esSetter}
                     selectedMes={selectedMes}
                     selectedPeriodo={selectedPeriodo}
                     selectedDia={selectedDia}
