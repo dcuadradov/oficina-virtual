@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
+import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
 
 /**
@@ -1596,28 +1597,42 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .maybeSingle();
       const faseNombreDestino = faseData?.nombre_fase || faseDestinoId;
 
+      const { data: configFaseDestino } = await supabase
+        .from('config_fases')
+        .select('etapa_funnel_agrupada')
+        .eq('fase_id_pipefy', String(faseDestinoId))
+        .maybeSingle();
+
       let webhookOk = true;
+      let faseActualizada = null;
       try {
-        const response = await fetch(
-          'https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              card_id: lead.card_id,
-              fase_destino: faseNombreDestino,
-            }),
-          }
-        );
-        if (!response.ok) throw new Error('Webhook respondió con error');
+        faseActualizada = await actualizarFaseDesdePortal(lead.card_id, faseNombreDestino, {
+          telefono: lead.telefono,
+          faseResuelta: {
+            fase_id_pipefy: String(faseDestinoId),
+            fase_nombre_pipefy: faseNombreDestino,
+            etapa_funnel: configFaseDestino?.etapa_funnel_agrupada || lead.etapa_funnel || null,
+          },
+          faseAnterior: {
+            fase_id_pipefy: lead.fase_id_pipefy ? String(lead.fase_id_pipefy) : null,
+            fase_nombre_pipefy: lead.fase_nombre_pipefy || null,
+            etapa_funnel: lead.etapa_funnel || null,
+          },
+        });
       } catch (whErr) {
-        console.error('[Pitch] Error llamando webhook de fase:', whErr);
+        console.error('[Pitch] Error actualizando fase:', whErr);
         webhookOk = false;
       }
 
       const updated = webhookOk
-        ? await esperarCambioDeFase(lead.card_id, faseDestinoId)
-        : null;
+        ? {
+            fase_id_pipefy: faseActualizada?.fase_id_pipefy ?? String(faseDestinoId),
+            fase_nombre_pipefy: faseActualizada?.fase_nombre_pipefy ?? faseNombreDestino,
+            etapa_funnel: faseActualizada?.etapa_funnel ?? lead.etapa_funnel,
+            pitch_seguimientos: nuevoSeguimientos,
+            pitch_intentos: intentosActual,
+          }
+        : await esperarCambioDeFase(lead.card_id, faseDestinoId);
 
       // Update final unificado (form + tarjetas + datos del lead).
       const reasignOverlay = (debeReasignarAlSetter && reasignacionInfo)
@@ -1910,29 +1925,34 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     setCambiandoFase(true);
     setFaseDropdownOpen(false);
     
-    // Actualización optimista
     const faseAnterior = faseLocal;
     setFaseLocal(nuevaFase);
     
     try {
-      const response = await fetch('https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          card_id: lead.card_id,
-          fase_destino: nuevaFase
-        })
+      const resolved = await actualizarFaseDesdePortal(lead.card_id, nuevaFase, {
+        telefono: lead.telefono,
+        faseAnterior: {
+          fase_id_pipefy: lead.fase_id_pipefy ? String(lead.fase_id_pipefy) : null,
+          fase_nombre_pipefy: lead.fase_nombre_pipefy || null,
+          etapa_funnel: lead.etapa_funnel || null,
+        },
       });
+
+      const faseNombre = resolved?.fase_nombre_pipefy || nuevaFase;
+      setFaseLocal(faseNombre);
+      setLocalLeadData(prev => ({
+        ...prev,
+        fase_id_pipefy: resolved?.fase_id_pipefy ?? prev?.fase_id_pipefy,
+        fase_nombre_pipefy: faseNombre,
+        etapa_funnel: resolved?.etapa_funnel ?? prev?.etapa_funnel,
+      }));
+      onRefreshData?.();
       
-      if (!response.ok) throw new Error('Error en webhook');
-      
-      // Mostrar toast de éxito
-      setToastMessage(`Fase actualizada a "${nuevaFase}"`);
+      setToastMessage(`Fase actualizada a "${faseNombre}"`);
       setTimeout(() => setToastMessage(null), 3000);
       
     } catch (error) {
       console.error('Error cambiando fase:', error);
-      // Revertir si hay error
       setFaseLocal(faseAnterior);
       setToastMessage('Error al cambiar la fase');
       setTimeout(() => setToastMessage(null), 3000);

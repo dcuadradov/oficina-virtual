@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowUpDown, RotateCcw, Flame, Plus, Tag, Sparkles, Loader2, X, MailOpen, Mail, Check, Filter, Search } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
+import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
 
 /**
@@ -219,16 +220,17 @@ const FaseCell = ({ lead, funnelSteps, noRevisado, coloresFases = {} }) => {
     setFaseLocal(nuevaFase);
     
     try {
-      const response = await fetch('https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          card_id: lead.card_id,
-          fase_destino: nuevaFase
-        })
+      const resolved = await actualizarFaseDesdePortal(lead.card_id, nuevaFase, {
+        telefono: lead.telefono,
+        faseAnterior: {
+          fase_id_pipefy: lead.fase_id_pipefy ? String(lead.fase_id_pipefy) : null,
+          fase_nombre_pipefy: lead.fase_nombre_pipefy || null,
+          etapa_funnel: lead.etapa_funnel || null,
+        },
       });
-      
-      if (!response.ok) throw new Error('Error en webhook');
+      if (resolved?.fase_nombre_pipefy) {
+        setFaseLocal(resolved.fase_nombre_pipefy);
+      }
       
       setToast({ type: 'success', message: `Fase actualizada` });
       setTimeout(() => setToast(null), 3000);
