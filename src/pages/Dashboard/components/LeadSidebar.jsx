@@ -1597,12 +1597,6 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .maybeSingle();
       const faseNombreDestino = faseData?.nombre_fase || faseDestinoId;
 
-      const { data: configFaseDestino } = await supabase
-        .from('config_fases')
-        .select('etapa_funnel_agrupada')
-        .eq('fase_id_pipefy', String(faseDestinoId))
-        .maybeSingle();
-
       let webhookOk = true;
       let faseActualizada = null;
       try {
@@ -1611,7 +1605,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           faseResuelta: {
             fase_id_pipefy: String(faseDestinoId),
             fase_nombre_pipefy: faseNombreDestino,
-            etapa_funnel: configFaseDestino?.etapa_funnel_agrupada || lead.etapa_funnel || null,
+            etapa_funnel: lead.etapa_funnel || null,
           },
           faseAnterior: {
             fase_id_pipefy: lead.fase_id_pipefy ? String(lead.fase_id_pipefy) : null,
@@ -1946,7 +1940,6 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         fase_nombre_pipefy: faseNombre,
         etapa_funnel: resolved?.etapa_funnel ?? prev?.etapa_funnel,
       }));
-      onRefreshData?.();
       
       setToastMessage(`Fase actualizada a "${faseNombre}"`);
       setTimeout(() => setToastMessage(null), 3000);

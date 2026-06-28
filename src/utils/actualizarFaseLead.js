@@ -3,24 +3,52 @@ import { supabase } from '../supabaseClient';
 const WEBHOOK_ACTUALIZAR_FASE =
   'https://api.mdenglish.us/webhook/actualizar_fase_desde_el_portal';
 
-async function buscarEnConfigFases(faseId) {
-  const { data } = await supabase
-    .from('config_fases')
-    .select('fase_id_pipefy, etapa_funnel_agrupada')
-    .eq('fase_id_pipefy', faseId)
-    .limit(1)
-    .maybeSingle();
-  return data;
-}
+/** Cache en memoria de config_fases + config_stepper (carga una vez por sesión). */
+let configCache = null;
+let configCachePromise = null;
 
-async function buscarNombreFase(faseId) {
-  const { data } = await supabase
-    .from('config_stepper')
-    .select('nombre_fase')
-    .eq('fase_id_pipefy', faseId)
-    .limit(1)
-    .maybeSingle();
-  return data?.nombre_fase || null;
+async function getConfigCache() {
+  if (configCache) return configCache;
+  if (!configCachePromise) {
+    configCachePromise = Promise.all([
+      supabase
+        .from('config_fases')
+        .select('fase_id_pipefy, etapa_funnel_agrupada, orden_funnel'),
+      supabase
+        .from('config_stepper')
+        .select('fase_id_pipefy, nombre_fase'),
+    ]).then(([fasesRes, stepperRes]) => {
+      const fasesById = new Map();
+      const fasesByEtapa = new Map();
+
+      for (const f of fasesRes.data || []) {
+        if (!f.fase_id_pipefy) continue;
+        const id = String(f.fase_id_pipefy);
+        fasesById.set(id, f);
+        const etapa = f.etapa_funnel_agrupada;
+        if (!etapa) continue;
+        if (!fasesByEtapa.has(etapa)) fasesByEtapa.set(etapa, []);
+        fasesByEtapa.get(etapa).push(f);
+      }
+
+      for (const lista of fasesByEtapa.values()) {
+        lista.sort((a, b) => (a.orden_funnel ?? 99) - (b.orden_funnel ?? 99));
+      }
+
+      const stepperById = new Map();
+      const stepperByName = new Map();
+      for (const s of stepperRes.data || []) {
+        if (!s.fase_id_pipefy) continue;
+        const id = String(s.fase_id_pipefy);
+        stepperById.set(id, s);
+        if (s.nombre_fase) stepperByName.set(s.nombre_fase, s);
+      }
+
+      configCache = { fasesById, fasesByEtapa, stepperById, stepperByName };
+      return configCache;
+    });
+  }
+  return configCachePromise;
 }
 
 /**
@@ -31,45 +59,33 @@ export async function resolverFaseDestino(faseDestino) {
   const destino = btrim(faseDestino);
   if (!destino) return null;
 
-  // 1. Nombre Pipefy en config_stepper → validar en config_fases.
-  const { data: stepperByName } = await supabase
-    .from('config_stepper')
-    .select('fase_id_pipefy, nombre_fase')
-    .eq('nombre_fase', destino)
-    .limit(1)
-    .maybeSingle();
+  const { fasesById, fasesByEtapa, stepperByName, stepperById } =
+    await getConfigCache();
 
-  if (stepperByName?.fase_id_pipefy) {
-    const faseId = String(stepperByName.fase_id_pipefy);
-    const configFase = await buscarEnConfigFases(faseId);
+  const stepperByNameMatch = stepperByName.get(destino);
+  if (stepperByNameMatch?.fase_id_pipefy) {
+    const faseId = String(stepperByNameMatch.fase_id_pipefy);
+    const configFase = fasesById.get(faseId);
     if (configFase) {
       return {
         fase_id_pipefy: faseId,
-        fase_nombre_pipefy: stepperByName.nombre_fase,
+        fase_nombre_pipefy: stepperByNameMatch.nombre_fase,
         etapa_funnel: configFase.etapa_funnel_agrupada || destino,
       };
     }
   }
 
-  // 2. Etapa funnel agrupada (lo que muestra el dropdown del portal).
-  const { data: fasesByEtapa } = await supabase
-    .from('config_fases')
-    .select('fase_id_pipefy, etapa_funnel_agrupada')
-    .eq('etapa_funnel_agrupada', destino)
-    .order('orden_funnel', { ascending: true })
-    .limit(1);
-
-  if (fasesByEtapa?.[0]?.fase_id_pipefy) {
-    const faseId = String(fasesByEtapa[0].fase_id_pipefy);
-    const nombreFase = await buscarNombreFase(faseId);
+  const fasesEtapa = fasesByEtapa.get(destino);
+  if (fasesEtapa?.[0]?.fase_id_pipefy) {
+    const faseId = String(fasesEtapa[0].fase_id_pipefy);
+    const nombreFase = stepperById.get(faseId)?.nombre_fase;
     return {
       fase_id_pipefy: faseId,
       fase_nombre_pipefy: nombreFase || destino,
-      etapa_funnel: fasesByEtapa[0].etapa_funnel_agrupada || destino,
+      etapa_funnel: fasesEtapa[0].etapa_funnel_agrupada || destino,
     };
   }
 
-  // 3. Sin fase_id válido en config_fases → no tocar fase_id_pipefy (evita FK).
   return {
     fase_id_pipefy: null,
     fase_nombre_pipefy: destino,
@@ -83,13 +99,7 @@ function btrim(value) {
 
 async function actualizarFaseEnDb(cardId, campos) {
   const payload = {};
-
-  if (campos.fase_id_pipefy) {
-    const configFase = await buscarEnConfigFases(String(campos.fase_id_pipefy));
-    if (configFase) {
-      payload.fase_id_pipefy = String(campos.fase_id_pipefy);
-    }
-  }
+  if (campos.fase_id_pipefy) payload.fase_id_pipefy = String(campos.fase_id_pipefy);
   if (campos.fase_nombre_pipefy) payload.fase_nombre_pipefy = campos.fase_nombre_pipefy;
   if (campos.etapa_funnel) payload.etapa_funnel = campos.etapa_funnel;
 
@@ -130,7 +140,22 @@ export async function actualizarFaseDesdePortal(
   faseDestino,
   { faseResuelta = null, faseAnterior = null, telefono = null } = {}
 ) {
-  const resolved = faseResuelta || (await resolverFaseDestino(faseDestino));
+  let resolved = faseResuelta;
+  if (!resolved) {
+    resolved = await resolverFaseDestino(faseDestino);
+  } else if (resolved.fase_id_pipefy) {
+    const { fasesById } = await getConfigCache();
+    const faseId = String(resolved.fase_id_pipefy);
+    const configFase = fasesById.get(faseId);
+    if (!configFase) {
+      resolved = { ...resolved, fase_id_pipefy: null };
+    } else if (!resolved.etapa_funnel) {
+      resolved = {
+        ...resolved,
+        etapa_funnel: configFase.etapa_funnel_agrupada || resolved.etapa_funnel,
+      };
+    }
+  }
 
   await actualizarFaseEnDb(cardId, resolved);
 
