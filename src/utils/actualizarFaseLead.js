@@ -115,13 +115,18 @@ async function actualizarFaseEnDb(cardId, campos) {
   if (error) throw error;
 }
 
-async function llamarWebhookFase(cardId, faseDestino, telefono) {
+async function llamarWebhookFase(cardId, faseDestino, telefono, faseAnterior) {
   const body = {
     card_id: cardId,
     fase_destino: faseDestino,
   };
   const tel = btrim(telefono);
   if (tel) body.telefono = tel;
+
+  const faseNombreAnterior = btrim(faseAnterior?.fase_nombre_pipefy);
+  if (faseNombreAnterior) {
+    body.fase_nombre_pipefy_anterior = faseNombreAnterior;
+  }
 
   const response = await fetch(WEBHOOK_ACTUALIZAR_FASE, {
     method: 'POST',
@@ -160,7 +165,7 @@ export async function actualizarFaseDesdePortal(
   await actualizarFaseEnDb(cardId, resolved);
 
   try {
-    await llamarWebhookFase(cardId, faseDestino, telefono);
+    await llamarWebhookFase(cardId, faseDestino, telefono, faseAnterior);
   } catch (err) {
     if (faseAnterior) {
       await actualizarFaseEnDb(cardId, faseAnterior).catch(() => {});
