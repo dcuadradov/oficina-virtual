@@ -744,25 +744,45 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   // Determinar si mostrar banner de pitch agendado
   const mostrarPitchAgendado = lead?.fase_id_pipefy && FASES_PITCH_AGENDADO.includes(String(lead.fase_id_pipefy));
   
-  // Formatear fecha del pitch (sin conversión de zona horaria, soporta formato con T o espacio)
-  const formatFechaPitch = (fechaPitch) => {
-    if (!fechaPitch) return 'fecha por confirmar';
-    // Extraer componentes de la fecha sin conversión de zona horaria
-    // Soporta "2025-12-03T18:00:00" o "2025-12-03 18:00:00+00"
+  // Parsear fecha_pitch sin conversión de zona horaria (hora Colombia en el string).
+  const parseFechaPitchParts = (fechaPitch) => {
+    if (!fechaPitch) return null;
     const match = fechaPitch.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-    if (!match) return 'fecha por confirmar';
-    
+    if (!match) return null;
     const [, year, month, day, hour, minute] = match;
-    const fecha = new Date(year, month - 1, day);
-    
+    return {
+      year,
+      month: parseInt(month, 10),
+      day: parseInt(day, 10),
+      hour: parseInt(hour, 10),
+      minute,
+    };
+  };
+
+  const formatHoraPitchAmPm = (hour, minute) => {
+    const ampm = hour >= 12 ? 'p. m.' : 'a. m.';
+    const h = hour % 12 || 12;
+    return `${h}:${minute} ${ampm}`;
+  };
+
+  const MESES_PITCH = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  // Banner superior: incluye día de la semana.
+  const formatFechaPitch = (fechaPitch) => {
+    const parts = parseFechaPitchParts(fechaPitch);
+    if (!parts) return 'fecha por confirmar';
+
+    const fecha = new Date(parts.year, parts.month - 1, parts.day);
     const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    
-    let h = parseInt(hour);
-    const ampm = h >= 12 ? 'p. m.' : 'a. m.';
-    h = h % 12 || 12;
-    
-    return `${dias[fecha.getDay()]}, ${parseInt(day)} de ${meses[parseInt(month) - 1]}, ${h}:${minute} ${ampm}`;
+
+    return `${dias[fecha.getDay()]}, ${parts.day} de ${MESES_PITCH[parts.month - 1]}, ${formatHoraPitchAmPm(parts.hour, parts.minute)}`;
+  };
+
+  // Tarjeta del tab Pitch: "29 de junio de 2026 a las 3:00 p. m."
+  const formatFechaPitchTarjeta = (fechaPitch) => {
+    const parts = parseFechaPitchParts(fechaPitch);
+    if (!parts) return null;
+    return `${parts.day} de ${MESES_PITCH[parts.month - 1]} de ${parts.year} a las ${formatHoraPitchAmPm(parts.hour, parts.minute)}`;
   };
   
   const recordatoriosContainerRef = useRef(null);
@@ -4454,12 +4474,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       ? 'no_aplica'
                       : (seguimientos < intentos ? 'pendiente' : 'registrado');
 
-                    const fechaPitchTexto = lead?.fecha_pitch
-                      ? new Date(lead.fecha_pitch).toLocaleDateString('es-ES', {
-                          day: 'numeric', month: 'long', year: 'numeric',
-                          hour: 'numeric', minute: '2-digit', hour12: true,
-                        })
-                      : null;
+                    const fechaPitchTexto = formatFechaPitchTarjeta(lead?.fecha_pitch);
 
                     return (
                       <div className="space-y-5">
