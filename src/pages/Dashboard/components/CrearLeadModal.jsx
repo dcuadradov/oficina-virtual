@@ -64,6 +64,7 @@ const PAISES_TELEFONO = [
   { codigo: '54', pais: 'Argentina', bandera: '🇦🇷', longitud: [10, 11], placeholder: '1123456789' },
   { codigo: '56', pais: 'Chile', bandera: '🇨🇱', longitud: [9], placeholder: '912345678' },
   { codigo: '51', pais: 'Perú', bandera: '🇵🇪', longitud: [9], placeholder: '912345678' },
+  { codigo: '971', pais: 'Emiratos Árabes Unidos', bandera: '🇦🇪', longitud: [9], placeholder: '501234567' },
   { codigo: '593', pais: 'Ecuador', bandera: '🇪🇨', longitud: [9, 10], placeholder: '991234567' },
   { codigo: '58', pais: 'Venezuela', bandera: '🇻🇪', longitud: [10], placeholder: '4121234567' },
   { codigo: '507', pais: 'Panamá', bandera: '🇵🇦', longitud: [8], placeholder: '61234567' },
