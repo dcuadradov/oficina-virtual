@@ -22,6 +22,23 @@ import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, Fil
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
 
+// Búsqueda por palabra clave "Cortesía" → leads.tiene_clase_de_cortesia truthy.
+const CORTESIA_SEARCH_KEYWORD = 'cortesia';
+
+function normalizeSearchKeyword(value) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim();
+}
+
+function isOnlyCortesiaSearch(query) {
+  const norm = normalizeSearchKeyword(query);
+  if (!norm.includes(CORTESIA_SEARCH_KEYWORD)) return false;
+  return norm.replace(new RegExp(CORTESIA_SEARCH_KEYWORD, 'g'), '').trim() === '';
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { cardId: urlCardId } = useParams();
@@ -948,10 +965,15 @@ export default function Dashboard() {
         if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
         if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
-          const searchTerm = `%${searchQuery.trim()}%`;
-          q = q.or(
-            `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
-          );
+          if (isOnlyCortesiaSearch(searchQuery)) {
+            // Palabra clave dedicada (no ilike sobre nombre/email). Soporta TRUE texto o boolean.
+            q = q.or('tiene_clase_de_cortesia.eq.TRUE,tiene_clase_de_cortesia.eq.true');
+          } else {
+            const searchTerm = `%${searchQuery.trim()}%`;
+            q = q.or(
+              `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+            );
+          }
         }
         if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
         if (selectedTag.length > 0) q = q.in('label', selectedTag);
