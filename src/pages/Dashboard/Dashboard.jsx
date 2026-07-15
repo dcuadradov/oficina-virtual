@@ -22,7 +22,7 @@ import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, Fil
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
 
-// Búsqueda por palabra clave "Cortesía" → leads.tiene_clase_de_cortesia truthy.
+// Búsqueda por palabra clave "Cortesía" → leads.tiene_clase_de_cortesia = 'Si'.
 const CORTESIA_SEARCH_KEYWORD = 'cortesia';
 
 function normalizeSearchKeyword(value) {
@@ -966,8 +966,7 @@ export default function Dashboard() {
         if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
           if (isOnlyCortesiaSearch(searchQuery)) {
-            // Palabra clave dedicada (no ilike sobre nombre/email). Soporta TRUE texto o boolean.
-            q = q.or('tiene_clase_de_cortesia.eq.TRUE,tiene_clase_de_cortesia.eq.true');
+            q = q.eq('tiene_clase_de_cortesia', 'Si');
           } else {
             const searchTerm = `%${searchQuery.trim()}%`;
             q = q.or(
