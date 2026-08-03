@@ -1,0 +1,510 @@
+{
+  "id": "md-pitch-v1",
+  "title": "Presentación MD English",
+  "start": "s01",
+  "assetBase": "/presentation/Slides",
+  "assetFile": "full",
+  "assetExtensions": [
+    "jpg",
+    "png",
+    "webp"
+  ],
+  "slides": {
+    "s01": {
+      "folder": "01",
+      "label": "Slide 1",
+      "asset": "bg.mp4",
+      "nav": {
+        "type": "next",
+        "next": "s02"
+      }
+    },
+    "s02": {
+      "folder": "02",
+      "label": "Slide 2",
+      "nav": {
+        "type": "next",
+        "next": "s03"
+      },
+      "asset": "full.mp4"
+    },
+    "s03": {
+      "folder": "03",
+      "label": "Slide 3",
+      "nav": {
+        "type": "next",
+        "next": "s04"
+      },
+      "asset": "full.mp4"
+    },
+    "s04": {
+      "folder": "04",
+      "label": "Slide 4 — Historial médico",
+      "asset": "bg.png",
+      "formKey": "historial_medico",
+      "nav": {
+        "type": "next",
+        "next": "s06"
+      }
+    },
+    "s06": {
+      "folder": "06",
+      "label": "Slide 6",
+      "nav": {
+        "type": "next",
+        "next": "s07"
+      }
+    },
+    "s07": {
+      "folder": "07",
+      "label": "Slide 7",
+      "nav": {
+        "type": "next",
+        "next": "s08"
+      }
+    },
+    "s08": {
+      "folder": "08",
+      "label": "Slide 8",
+      "nav": {
+        "type": "next",
+        "next": "s09"
+      },
+      "asset": "full.mp4"
+    },
+    "s09": {
+      "folder": "09",
+      "label": "Slide 9",
+      "nav": {
+        "type": "next",
+        "next": "s10"
+      }
+    },
+    "s10": {
+      "folder": "10",
+      "label": "Slide 10",
+      "nav": {
+        "type": "next",
+        "next": "s11"
+      }
+    },
+    "s11": {
+      "folder": "11",
+      "label": "Slide 11",
+      "nav": {
+        "type": "optional_extra",
+        "next": "s13",
+        "extra": "s12",
+        "extraLabel": "Qué sucede MFC"
+      }
+    },
+    "s12": {
+      "folder": "12",
+      "label": "Slide 12 (comodín — Qué sucede MFC)",
+      "kind": "extra",
+      "nav": {
+        "type": "next",
+        "next": "s13"
+      },
+      "asset": "full.mp4"
+    },
+    "s13": {
+      "folder": "13",
+      "label": "Slide 13",
+      "nav": {
+        "type": "next",
+        "next": "s14"
+      }
+    },
+    "s14": {
+      "folder": "14",
+      "label": "Slide 14",
+      "nav": {
+        "type": "next",
+        "next": "s15"
+      }
+    },
+    "s15": {
+      "folder": "15",
+      "label": "Slide 15",
+      "nav": {
+        "type": "next",
+        "next": "s16"
+      },
+      "asset": "full.mp4"
+    },
+    "s16": {
+      "folder": "16",
+      "label": "Slide 16",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "comodín",
+            "label": "MFC - MEC",
+            "icon": "sparkles",
+            "next": "s17"
+          },
+          {
+            "id": "ejemplos",
+            "label": "Ejemplos",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "ejemplo_a", "label": "Ejemplo a", "next": "s18" },
+                { "id": "ejemplo_b", "label": "Ejemplo b", "next": "s19" },
+                { "id": "ejemplo_c", "label": "Ejemplo c", "next": "s20" },
+                { "id": "ejemplo_d", "label": "Ejemplo d", "next": "s21" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "s17": {
+      "folder": "17",
+      "label": "Slide 17 (comodín — MFC - MEC)",
+      "kind": "extra",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "ejemplos",
+            "label": "Ejemplos",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "ejemplo_a", "label": "Ejemplo a", "next": "s18" },
+                { "id": "ejemplo_b", "label": "Ejemplo b", "next": "s19" },
+                { "id": "ejemplo_c", "label": "Ejemplo c", "next": "s20" },
+                { "id": "ejemplo_d", "label": "Ejemplo d", "next": "s21" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "s18": {
+      "folder": "18",
+      "label": "Slide 18 (ejemplo a)",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          }
+        ]
+      },
+      "asset": "full.mp4"
+    },
+    "s19": {
+      "folder": "19",
+      "label": "Slide 19 (ejemplo b)",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          }
+        ]
+      },
+      "asset": "full.mp4"
+    },
+    "s20": {
+      "folder": "20",
+      "label": "Slide 20 (ejemplo c)",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "s21": {
+      "folder": "21",
+      "label": "Slide 21 (ejemplo d)",
+      "nav": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "s22": {
+      "folder": "24",
+      "label": "Slide 22 (test a — ex slide 24)",
+      "nav": {
+        "type": "next",
+        "next": "s25"
+      },
+      "asset": "full.mp4"
+    },
+    "s23": {
+      "folder": "23",
+      "label": "Slide 23 (test b)",
+      "nav": {
+        "type": "next",
+        "next": "s25"
+      },
+      "asset": "full.mp4"
+    },
+    "s24": {
+      "folder": "22",
+      "label": "Slide 24 (test c — ex slide 22)",
+      "nav": {
+        "type": "next",
+        "next": "s25"
+      },
+      "asset": "full.mp4"
+    },
+    "s25": {
+      "folder": "25",
+      "label": "Slide 25",
+      "nav": {
+        "type": "next",
+        "next": "s26"
+      }
+    },
+    "s26": {
+      "folder": "26",
+      "label": "Slide 26",
+      "nav": {
+        "type": "next",
+        "next": "s27"
+      }
+    },
+    "s27": {
+      "folder": "27",
+      "label": "Slide 27",
+      "nav": {
+        "type": "optional_extra",
+        "next": "s29",
+        "extra": "s28",
+        "extraLabel": "Comparación"
+      }
+    },
+    "s28": {
+      "folder": "28",
+      "label": "Slide 28 (comodín — Comparación)",
+      "kind": "extra",
+      "nav": {
+        "type": "next",
+        "next": "s29"
+      }
+    },
+    "s29": {
+      "folder": "29",
+      "label": "Slide 29 — Confirmación clínica",
+      "asset": "bg.png",
+      "formKey": "confirmacion_clinica",
+      "nav": {
+        "type": "next",
+        "next": "s30"
+      }
+    },
+    "s30": {
+      "folder": "30",
+      "label": "Slide 30",
+      "nav": {
+        "type": "branch",
+        "options": [
+          {
+            "id": "a",
+            "label": "Opción A",
+            "next": "s31"
+          },
+          {
+            "id": "b",
+            "label": "Opción B",
+            "next": "s32"
+          },
+          {
+            "id": "c",
+            "label": "Opción C",
+            "next": "s33"
+          }
+        ]
+      },
+      "asset": "full.mp4"
+    },
+    "s31": {
+      "folder": "31",
+      "label": "Slide 31 (opción A) — Plan de vinculación",
+      "asset": "bg.png",
+      "formKey": "plan_vinculacion",
+      "nav": {
+        "type": "next",
+        "next": "s34"
+      }
+    },
+    "s32": {
+      "folder": "32",
+      "label": "Slide 32 (opción B) — Plan sin alternativas",
+      "asset": "bg.png",
+      "formKey": "plan_vinculacion_sin_opciones",
+      "nav": {
+        "type": "next",
+        "next": "s34"
+      }
+    },
+    "s33": {
+      "folder": "33",
+      "label": "Slide 33 (opción C) — Solo alternativas",
+      "asset": "bg.png",
+      "formKey": "plan_vinculacion_opciones",
+      "nav": {
+        "type": "next",
+        "next": "s34"
+      }
+    },
+    "s34": {
+      "folder": "34",
+      "label": "Slide 34 — Programa de embajadores",
+      "asset": "full.mp4",
+      "formKey": "embajadores",
+      "nav": {
+        "type": "next",
+        "next": "s35"
+      }
+    },
+    "s35": {
+      "folder": "05",
+      "label": "Slide 35 — Vídeo",
+      "asset": "bg.mp4",
+      "nav": {
+        "type": "next",
+        "next": "s36"
+      }
+    },
+    "s36": {
+      "folder": "35",
+      "label": "Slide 36",
+      "nav": {
+        "type": "next",
+        "next": "s37"
+      }
+    },
+    "s37": {
+      "folder": "36",
+      "label": "Slide 37",
+      "asset": "full.mp4",
+      "nav": {
+        "type": "end"
+      }
+    }
+  },
+  "forms": {
+    "historial_medico": {
+      "layout": "historial_medico",
+      "theme": "light",
+      "always": true,
+      "persist": true,
+      "fields": [
+        { "id": "antecedentes", "type": "textarea" },
+        { "id": "resultado_antecedentes", "type": "text" },
+        { "id": "viabilidad", "type": "textarea" },
+        { "id": "resultado_viabilidad", "type": "text" },
+        { "id": "autonomia", "type": "textarea" },
+        { "id": "resultado_autonomia", "type": "text" },
+        { "id": "conducta", "type": "textarea" },
+        { "id": "resultado_conducta", "type": "text" }
+      ]
+    },
+    "confirmacion_clinica": {
+      "layout": "confirmacion_clinica",
+      "theme": "light",
+      "always": true,
+      "persist": true,
+      "fields": [
+        { "id": "inquietudes_pendientes", "type": "textarea" },
+        { "id": "hallazgos_relevantes", "type": "textarea" },
+        { "id": "confirmacion_diagnostica", "type": "textarea" },
+        { "id": "contraindicaciones", "type": "textarea" },
+        { "id": "conducta_propuesta", "type": "textarea" }
+      ]
+    },
+    "plan_vinculacion": {
+      "layout": "plan_vinculacion",
+      "theme": "light",
+      "always": false,
+      "persist": true,
+      "showTopMoney": true,
+      "showOptionsTable": true,
+      "showModalidad": true,
+      "budgetFields": "full",
+      "fields": []
+    },
+    "plan_vinculacion_sin_opciones": {
+      "layout": "plan_vinculacion",
+      "theme": "light",
+      "always": false,
+      "persist": true,
+      "showTopMoney": true,
+      "showOptionsTable": false,
+      "showModalidad": true,
+      "budgetFields": "full",
+      "fields": []
+    },
+    "plan_vinculacion_opciones": {
+      "layout": "plan_vinculacion",
+      "theme": "light",
+      "always": false,
+      "persist": true,
+      "showTopMoney": false,
+      "showOptionsTable": true,
+      "showModalidad": false,
+      "budgetFields": "comentarios",
+      "fields": []
+    },
+    "embajadores": {
+      "layout": "embajadores",
+      "theme": "dark",
+      "always": true,
+      "persist": true,
+      "fields": [
+        { "id": "beneficio", "type": "text" }
+      ]
+    }
+  },
+  "preloadFromLead": ["nombre", "ocupacion", "edad", "nivel_ingles"]
+}

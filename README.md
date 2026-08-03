@@ -1,16 +1,34 @@
-# React + Vite
+# Oficina Virtual — MD English
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Portal interno de comerciales (leads, pitch, presentaciones, recordatorios).
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+cp .env.example .env   # pedir credenciales al equipo
+npm run dev            # http://localhost:5173
+```
 
-## React Compiler
+Ver flujo Git, ambientes y reglas en [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Ambientes
 
-## Expanding the ESLint configuration
+| Ambiente | URL | Deploy |
+|----------|-----|--------|
+| Local | http://localhost:5173 | `npm run dev` |
+| Staging | https://oficina-virtual-md.web.app | push/merge a `develop` |
+| Producción | https://portal.mdenglish.us | merge a `main` |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm run deploy:staging   # build staging + Firebase hosting:staging
+npm run deploy:prod      # solo tras validar staging
+```
+
+## Presentación personalizada
+
+Documentación completa (rutas, migraciones, webhooks, checklist):
+
+→ [docs/presentacion-personalizada.md](./docs/presentacion-personalizada.md)
+
+Entrada: sidebar del lead → **Pitch** → **Presentación**.

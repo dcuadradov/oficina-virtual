@@ -4,6 +4,8 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Home from './pages/Home/Home';
 import Dashboard from './pages/Dashboard/Dashboard';
+import PresentationPage from './pages/Presentation/PresentationPage';
+import ResultPage from './pages/Presentation/ResultPage';
 import { supabase } from './supabaseClient';
 
 // Este componente actúa como "Guardia de Seguridad"
@@ -85,6 +87,19 @@ export default function App() {
           </ProtectedRoute>
         } 
       />
+
+      {/* Presentación personalizada del lead (solo comerciales autenticados) */}
+      <Route
+        path="/presentation/:cardId"
+        element={
+          <ProtectedRoute>
+            <PresentationPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Resultado público (solo lectura del recorrido generado) */}
+      <Route path="/result/:version/:cardId" element={<ResultPage />} />
 
       {/* Si entran a cualquier otro lado, mandar al home (el guardia decidirá si entran o no) */}
       <Route path="*" element={<Navigate to="/home" replace />} />

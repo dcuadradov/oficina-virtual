@@ -39,12 +39,15 @@ import {
   History,
   Tag,
   Plus,
-  Trophy
+  Trophy,
+  Presentation,
+  Play
 } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
+import { listPresentationRuns } from '../../../lib/presentation/runs';
 
 /**
  * Calcula las horas restantes de la ventana de 24h de WhatsApp
@@ -550,6 +553,10 @@ const sortCategorias = (arr) =>
 const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', etapasFunnel = { etapas: [], grupos: [] }, onMarcarNoRevisado, onRefreshData, comerciales = [], puedeVerTodos = false, configTags = {} }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [subActiveTab, setSubActiveTab] = useState('informacion'); // 'informacion' | 'pitch' | 'resumen-ia'
+  const [pitchSectionTab, setPitchSectionTab] = useState('meet'); // 'meet' | 'presentacion'
+  // Historial de presentaciones generadas.
+  const [presentationRuns, setPresentationRuns] = useState([]);
+  const [loadingPresentationRuns, setLoadingPresentationRuns] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   
@@ -1020,11 +1027,44 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     }
   }, [isOpen, activeTab, subActiveTab, lead?.card_id, fetchPitchResultados]);
 
+  // Historial de presentaciones generadas (tab Presentación)
+  useEffect(() => {
+    let active = true;
+    if (
+      !isOpen ||
+      activeTab !== 'info' ||
+      subActiveTab !== 'pitch' ||
+      pitchSectionTab !== 'presentacion' ||
+      !lead?.card_id
+    ) {
+      return undefined;
+    }
+
+    setLoadingPresentationRuns(true);
+    listPresentationRuns(lead.card_id)
+      .then((rows) => {
+        if (active) setPresentationRuns(rows);
+      })
+      .catch((err) => {
+        console.warn('[Presentación] No se pudo cargar historial:', err?.message || err);
+        if (active) setPresentationRuns([]);
+      })
+      .finally(() => {
+        if (active) setLoadingPresentationRuns(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, activeTab, subActiveTab, pitchSectionTab, lead?.card_id]);
+
   // Reset del formulario, edición y sub-tab cuando cambia el lead.
   // Importante: el sub-tab vuelve a 'informacion' para que al abrir otro lead
   // siempre arranque ahí, no donde el usuario lo dejó en el lead anterior.
   useEffect(() => {
     setSubActiveTab('informacion');
+    setPitchSectionTab('meet');
+    setPresentationRuns([]);
     setPitchFormValues({});
     setPitchSelectOpenId(null);
     setEditingPitchId(null);
@@ -4475,8 +4515,131 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       : (seguimientos < intentos ? 'pendiente' : 'registrado');
 
                     const fechaPitchTexto = formatFechaPitchTarjeta(lead?.fecha_pitch);
+                    const presentationUrl = lead?.card_id
+                      ? `/presentation/${lead.card_id}`
+                      : null;
+
+                    const formatPresentationDate = (iso) => {
+                      if (!iso) return '—';
+                      try {
+                        return new Date(iso).toLocaleString('es-CO', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        });
+                      } catch {
+                        return '—';
+                      }
+                    };
 
                     return (
+                      <div className="space-y-4">
+                        {/* Sub-sección Pitch: Meet | Presentación */}
+                        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setPitchSectionTab('meet')}
+                            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                              pitchSectionTab === 'meet'
+                                ? 'bg-white text-slate-700 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            Meet
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPitchSectionTab('presentacion')}
+                            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-200 ${
+                              pitchSectionTab === 'presentacion'
+                                ? 'bg-white text-slate-700 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            Presentación
+                          </button>
+                        </div>
+
+                        {pitchSectionTab === 'presentacion' && (
+                          <div className="space-y-4">
+                            <button
+                              type="button"
+                              disabled={!presentationUrl}
+                              onClick={() => {
+                                if (!presentationUrl) return;
+                                window.open(presentationUrl, '_blank', 'noopener,noreferrer');
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl text-sm font-semibold text-white bg-gradient-to-r from-[#02214A] to-[#1717AF] hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            >
+                              <Play size={16} fill="currentColor" />
+                              Abrir presentación
+                            </button>
+                            <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+                              Abre la presentación personalizada de este lead. Al finalizar podrás generar un link público con el recorrido mostrado.
+                            </p>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                                  Generadas
+                                </h4>
+                                {presentationRuns.length > 0 && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {presentationRuns.length}
+                                  </span>
+                                )}
+                              </div>
+
+                              {loadingPresentationRuns ? (
+                                <div className="flex items-center justify-center py-8">
+                                  <Loader2 size={18} className="animate-spin text-slate-400" />
+                                </div>
+                              ) : presentationRuns.length === 0 ? (
+                                <div className="p-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center">
+                                  <Presentation size={18} className="mx-auto text-slate-300 mb-2" />
+                                  <p className="text-xs text-slate-500">
+                                    Aún no hay presentaciones generadas para este lead.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {[...presentationRuns]
+                                    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
+                                    .map((run) => (
+                                      <a
+                                        key={run.id || run.version}
+                                        href={`/result/${run.version}/${lead.card_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-[#1717AF]/30 hover:shadow-sm transition-all"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-slate-700">
+                                              Versión {run.version}
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                              {formatPresentationDate(run.created_at)}
+                                            </p>
+                                            {run.created_by && (
+                                              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                                {run.created_by}
+                                              </p>
+                                            )}
+                                          </div>
+                                          <ExternalLink size={14} className="text-slate-400 flex-shrink-0 mt-0.5" />
+                                        </div>
+                                      </a>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {pitchSectionTab === 'meet' && (
                       <div className="space-y-5">
                         {/* Estado: completado — recién registrado este pitch + lead movido de fase. */}
                         {/* Tiene prioridad sobre los 3 estados de abajo y se limpia al cambiar de lead. */}
@@ -4809,6 +4972,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             </div>
                           )}
                         </div>
+                      </div>
+                        )}
                       </div>
                     );
                   })()}

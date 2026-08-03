@@ -120,6 +120,14 @@ git push origin main
 - **Staging**: Para desarrollo y pruebas (puedes crear/borrar datos libremente)
 - **Producción**: Datos reales de usuarios (¡cuidado!)
 
+Migraciones SQL versionadas en `db/migrations/`. Aplicarlas manualmente en Supabase
+(staging primero) antes de probar features que las requieran.
+
+### Presentación personalizada
+
+Ver [docs/presentacion-personalizada.md](./docs/presentacion-personalizada.md) para
+tablas, webhooks, assets y checklist de staging.
+
 ---
 
 ## 🔑 Credenciales
