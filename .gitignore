@@ -28,3 +28,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Firebase local cache
+.firebase/
+
+# Presentación: media pesado del pipeline (el runtime vive en public/presentation/)
+presentation-raw/gifs/
+presentation-raw/plate/
+presentation-raw/fg/
+presentation-raw/*.pdf
+presentation-raw/rects.json
+public/anim-test.html

@@ -1,0 +1,1122 @@
+{
+  "version": 2,
+  "_doc": {
+    "clave": "carpeta del slide (Slides/NN)",
+    "hide": "rects cuyo contenido se elimina del diseño",
+    "steps": "orden de aparición. rects en % del marco [x, y, w, h]",
+    "in": "left = entra de izquierda a derecha · right = de derecha a izquierda · up = de abajo a arriba · fade = aparece",
+    "auto": "true = sale solo tras `delay` ms; false/ausente = necesita click",
+    "fuente": "rects medidos con inspect-layers.mjs; build-anim.mjs los convierte en capas"
+  },
+  "slides": {
+    "10": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "up",
+          "box": [
+            5.62,
+            41.45,
+            21.96,
+            41.81
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "up",
+          "box": [
+            30.32,
+            41.45,
+            21.96,
+            41.81
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "13": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            5.7,
+            29.44,
+            66.58,
+            62.4
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "14": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "up",
+          "box": [
+            -1.26,
+            19.62,
+            88.239,
+            73.27
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "16": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "right",
+          "box": [
+            24.29,
+            29.44,
+            66.59,
+            62.4
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "18": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            2.362,
+            10.37,
+            31.648,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            },
+            {
+              "file": "anim/s1-g1.mp4",
+              "x": 2.344,
+              "y": 38.796,
+              "w": 31.615,
+              "h": 52.87
+            },
+            {
+              "file": "anim/s1-b1.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            36.02,
+            10.37,
+            27.97,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            },
+            {
+              "file": "anim/s2-g1.mp4",
+              "x": 36.042,
+              "y": 37.87,
+              "w": 26.927,
+              "h": 53.796
+            },
+            {
+              "file": "anim/s2-b1.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            65.99,
+            10.37,
+            27.98,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            },
+            {
+              "file": "anim/s3-g1.mp4",
+              "x": 65.99,
+              "y": 50.556,
+              "w": 27.5,
+              "h": 41.111
+            }
+          ]
+        }
+      ]
+    },
+    "19": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            6.04,
+            10.37,
+            27.97,
+            81.681
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            },
+            {
+              "file": "anim/s1-g1.mp4",
+              "x": 7.083,
+              "y": 39.815,
+              "w": 25.885,
+              "h": 52.315
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            34.028,
+            10.37,
+            29.962,
+            81.681
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            },
+            {
+              "file": "anim/s2-g1.mp4",
+              "x": 34.01,
+              "y": 42.315,
+              "w": 29.948,
+              "h": 49.722
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            65.833,
+            10.37,
+            28.137,
+            81.681
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            },
+            {
+              "file": "anim/s3-g1.mp4",
+              "x": 65.833,
+              "y": 38.611,
+              "w": 28.125,
+              "h": 53.426
+            }
+          ]
+        }
+      ]
+    },
+    "20": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            -11.29,
+            10.37,
+            49.5,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            34.02,
+            10.37,
+            51.79,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            54.46,
+            10.37,
+            49.5,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "21": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            -2.44,
+            10.37,
+            46.21,
+            81.68
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            31.35,
+            10.37,
+            51.61,
+            81.69
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            60.08,
+            10.37,
+            49.19,
+            81.76
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "22": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            5.62,
+            52.47,
+            45.34,
+            31.88
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "23": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            49.03,
+            52.47,
+            45.34,
+            25.71
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "24": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            5.62,
+            52.47,
+            45.34,
+            25.12
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "25": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            16.86,
+            35.74,
+            19.13,
+            6.33
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            10.51,
+            50.74,
+            18.58,
+            6.33
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            3.12,
+            67.8,
+            24.25,
+            6.31
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            9.89,
+            85.21,
+            20.2,
+            6.31
+          ],
+          "layers": [
+            {
+              "file": "anim/s4-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            61.36,
+            35.74,
+            21.99,
+            6.88
+          ],
+          "layers": [
+            {
+              "file": "anim/s5-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            68.34,
+            50.74,
+            25.77,
+            6.9
+          ],
+          "layers": [
+            {
+              "file": "anim/s6-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            70.13,
+            67.8,
+            17.95,
+            6.89
+          ],
+          "layers": [
+            {
+              "file": "anim/s7-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "26": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            6.11,
+            24.64,
+            45.39,
+            64.56
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "27": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "auto": true,
+          "delay": 400,
+          "box": [
+            5.65,
+            21.2,
+            53.9,
+            10.91
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 400,
+          "box": [
+            8.021,
+            38.889,
+            37.5,
+            10.37
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            6.16,
+            51.44,
+            11.58,
+            12.54
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            21.32,
+            51.91,
+            6.6,
+            11.8
+          ],
+          "layers": [
+            {
+              "file": "anim/s4-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            31.5,
+            49.52,
+            9.73,
+            17.29
+          ],
+          "layers": [
+            {
+              "file": "anim/s5-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            42.87,
+            49.53,
+            9.51,
+            17.85
+          ],
+          "layers": [
+            {
+              "file": "anim/s6-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            53.39,
+            47.57,
+            10.25,
+            18.22
+          ],
+          "layers": [
+            {
+              "file": "anim/s7-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            6.16,
+            65.9,
+            8.07,
+            14.35
+          ],
+          "layers": [
+            {
+              "file": "anim/s8-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            16.76,
+            66.47,
+            19.92,
+            13.2
+          ],
+          "layers": [
+            {
+              "file": "anim/s9-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            36.23,
+            67.96,
+            16.16,
+            9.15
+          ],
+          "layers": [
+            {
+              "file": "anim/s10-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            53.8,
+            70.41,
+            10.15,
+            18.4
+          ],
+          "layers": [
+            {
+              "file": "anim/s11-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            5.63,
+            82.2,
+            13.53,
+            9.78
+          ],
+          "layers": [
+            {
+              "file": "anim/s12-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            21.28,
+            82.2,
+            14.2,
+            9.56
+          ],
+          "layers": [
+            {
+              "file": "anim/s13-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "auto": true,
+          "delay": 300,
+          "box": [
+            38.5,
+            74.5,
+            13.47,
+            23.95
+          ],
+          "layers": [
+            {
+              "file": "anim/s14-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "30": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "fade",
+          "box": [
+            7.09,
+            30.69,
+            22.25,
+            27.77
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            31.38,
+            29.54,
+            23.81,
+            34.49
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            5.63,
+            64.03,
+            50.04,
+            19.99
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ]
+        },
+        {
+          "in": "fade",
+          "box": [
+            57.55,
+            62.88,
+            42.45,
+            26.77
+          ],
+          "layers": [
+            {
+              "file": "anim/s4-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "34": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "up",
+          "box": [
+            14.08,
+            15.365,
+            33.48,
+            62.035
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            },
+            {
+              "file": "anim/s1-g1.mp4",
+              "x": 16.198,
+              "y": 15.37,
+              "w": 20.313,
+              "h": 49.722
+            }
+          ]
+        },
+        {
+          "in": "up",
+          "box": [
+            49.375,
+            21.939,
+            36.555,
+            55.481
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            },
+            {
+              "file": "anim/s2-g1.mp4",
+              "x": 49.375,
+              "y": 21.944,
+              "w": 26.302,
+              "h": 43.148
+            }
+          ]
+        },
+        {
+          "in": "up",
+          "box": [
+            29.45,
+            84.82,
+            40.57,
+            5.87
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ],
+          "dy": -3.5
+        }
+      ]
+    },
+    "35": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            6.87,
+            37.43,
+            27.36,
+            33.02
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ],
+          "dx": 0.13
+        },
+        {
+          "in": "left",
+          "box": [
+            51.11,
+            37.43,
+            22.85,
+            33.02
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ],
+          "dx": -8.8
+        },
+        {
+          "in": "left",
+          "box": [
+            73.22,
+            37.43,
+            19.9,
+            33.02
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            }
+          ],
+          "dx": -0.12
+        }
+      ]
+    },
+    "02": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            6.76,
+            72.39,
+            31.22,
+            8.26
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "03": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "auto": true,
+          "delay": 350,
+          "box": [
+            9.3,
+            22.902,
+            24.03,
+            65.74
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            },
+            {
+              "file": "anim/s1-g1.mp4",
+              "x": 9.323,
+              "y": 22.87,
+              "w": 22.031,
+              "h": 65.741
+            },
+            {
+              "file": "anim/s1-b1.png"
+            }
+          ]
+        },
+        {
+          "in": "left",
+          "box": [
+            37.99,
+            23.052,
+            24.03,
+            65.368
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            },
+            {
+              "file": "anim/s2-g1.mp4",
+              "x": 38.385,
+              "y": 23.056,
+              "w": 22.031,
+              "h": 65.37
+            },
+            {
+              "file": "anim/s2-b1.png"
+            }
+          ]
+        },
+        {
+          "in": "left",
+          "box": [
+            63.335,
+            19.509,
+            27.365,
+            68.911
+          ],
+          "layers": [
+            {
+              "file": "anim/s3-a.png"
+            },
+            {
+              "file": "anim/s3-g1.mp4",
+              "x": 63.333,
+              "y": 19.537,
+              "w": 25.885,
+              "h": 68.889
+            },
+            {
+              "file": "anim/s3-b1.png"
+            }
+          ]
+        }
+      ]
+    },
+    "06": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            7.55,
+            77.47,
+            54.45,
+            10.89
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "07": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            9.26,
+            24.59,
+            40.33,
+            45.18
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "08": {
+      "base": "anim/plate.mp4",
+      "steps": [
+        {
+          "in": "left",
+          "box": [
+            12.43,
+            33.08,
+            18.4,
+            18.88
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "right",
+          "box": [
+            57.35,
+            30.66,
+            30.33,
+            38.71
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        }
+      ]
+    },
+    "09": {
+      "base": "anim/plate.jpg",
+      "steps": [
+        {
+          "in": "right",
+          "box": [
+            50.95,
+            27.04,
+            20.96,
+            63.4
+          ],
+          "layers": [
+            {
+              "file": "anim/s1-a.png"
+            }
+          ]
+        },
+        {
+          "in": "right",
+          "box": [
+            72.95,
+            27.04,
+            20.96,
+            63.4
+          ],
+          "layers": [
+            {
+              "file": "anim/s2-a.png"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
