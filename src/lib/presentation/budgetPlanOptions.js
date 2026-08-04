@@ -56,15 +56,15 @@ export function computeModalidadFromPlan(plan, inversionFinalHoy) {
   }
 }
 
-/** Planes 1–4: cuota mensual se muestra como "No aplica". */
+/** Planes 1–2: cuota mensual se muestra como "No aplica". */
 export function isCuotaNoAplica(planNumero) {
   const n = Number(planNumero)
-  return Number.isFinite(n) && n >= 1 && n <= 4
+  return Number.isFinite(n) && n >= 1 && n <= 2
 }
 
 /**
  * Fila de alternativas a partir de un plan del catálogo.
- * Columna "Inscripción": planes 1–4 → inscripcion; resto → cuota_mensual.
+ * Columna "Inscripción": planes 1–2 → inscripcion; resto → cuota_mensual.
  */
 export function optionFieldsFromPlan(plan) {
   if (!plan) return null
