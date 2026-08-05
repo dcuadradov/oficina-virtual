@@ -61,6 +61,7 @@ import ConfirmacionClinicaForm from './ConfirmacionClinicaForm'
 import PlanVinculacionForm from './PlanVinculacionForm'
 import EmbajadoresForm from './EmbajadoresForm'
 import SaveChangesDialog from './SaveChangesDialog'
+import SlideNavSidebar from './SlideNavSidebar'
 
 export default function PresentationPage() {
   const { cardId } = useParams()
@@ -73,6 +74,8 @@ export default function PresentationPage() {
 
   const [currentSlideId, setCurrentSlideId] = useState(null)
   const [path, setPath] = useState([])
+  /** Índice actual dentro del recorrido visitado (no se trunca al saltar atrás). */
+  const [pathIndex, setPathIndex] = useState(0)
   /** Segundo paso del fork (ej. ejercicios a/b/c/d en slide 16). */
   const [forkBranchOptions, setForkBranchOptions] = useState(null)
   /** El último movimiento fue hacia atrás: el slide se muestra ya animado. */
@@ -103,9 +106,10 @@ export default function PresentationPage() {
   const [twoPersons, setTwoPersons] = useState(false)
   const [planCatalog, setPlanCatalog] = useState([])
 
-  const [pendingNav, setPendingNav] = useState(null) // { nextId, choice }
+  const [pendingNav, setPendingNav] = useState(null) // { nextId, choice } | { jumpToIndex }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const slide = useMemo(
     () => (manifest && currentSlideId ? getSlide(manifest, currentSlideId) : null),
@@ -155,6 +159,10 @@ export default function PresentationPage() {
     twoPersons,
     selectedPlanName,
   }
+  const pathIndexRef = useRef(0)
+  pathIndexRef.current = pathIndex
+  const pathRef = useRef(path)
+  pathRef.current = path
 
   const computePersistDirty = useCallback(() => {
     const s = persistStateRef.current
@@ -179,14 +187,24 @@ export default function PresentationPage() {
     }
   }, [isPlanForm, activeForm?.budgetFields])
 
+  /**
+   * Avanza a un slide nuevo. Si estabas a mitad del recorrido, descarta solo
+   * el "futuro" desde el índice actual y continúa desde ahí.
+   */
   const goTo = useCallback((nextId, choice = null) => {
     if (!nextId) return
     setForkBranchOptions(null)
     setPendingNav(null)
     setSaveError(null)
     setNavBack(false)
-    setCurrentSlideId(nextId)
-    setPath((prev) => [...prev, createPathEntry(nextId, choice)])
+    setPath((prev) => {
+      const idx = pathIndexRef.current
+      const base = prev.slice(0, idx + 1)
+      const next = [...base, createPathEntry(nextId, choice)]
+      setPathIndex(next.length - 1)
+      setCurrentSlideId(nextId)
+      return next
+    })
   }, [])
 
   /**
@@ -255,6 +273,7 @@ export default function PresentationPage() {
         const startId = m.start
         setCurrentSlideId(startId)
         setPath([createPathEntry(startId)])
+        setPathIndex(0)
         setForkBranchOptions(null)
         setGenerated(null)
         setGenerateError(null)
@@ -270,11 +289,38 @@ export default function PresentationPage() {
     }
   }, [cardId])
 
+  /** Replay: avanzar al siguiente del path sin truncar. */
+  const advanceAlongPath = useCallback(() => {
+    const prev = pathRef.current
+    const idx = pathIndexRef.current
+    if (idx >= prev.length - 1) return false
+    const entry = prev[idx + 1]
+    if (!entry?.slideId) return false
+    setPendingNav(null)
+    setForkBranchOptions(null)
+    setNavBack(false)
+    setPathIndex(idx + 1)
+    setCurrentSlideId(entry.slideId)
+    return true
+  }, [])
+
   const handlePrimaryNext = useCallback(() => {
     if (!slide) return
+    // A mitad del recorrido: rehacer el camino ya visitado.
+    if (pathIndex < path.length - 1) {
+      const replayId = path[pathIndex + 1]?.slideId
+      const next = resolvePrimaryNext(slide)
+      if (next && replayId && next === replayId) {
+        advanceAlongPath()
+        return
+      }
+      // Bifurcó distinto al camino guardado → se recorta el futuro en goTo.
+      if (next) requestNavigate(next)
+      return
+    }
     const next = resolvePrimaryNext(slide)
     if (next) requestNavigate(next)
-  }, [slide, requestNavigate])
+  }, [slide, pathIndex, path, requestNavigate, advanceAlongPath])
 
   const handleExtra = useCallback(() => {
     if (!slide) return
@@ -317,16 +363,47 @@ export default function PresentationPage() {
   )
 
   const handleBack = useCallback(() => {
+    const idx = pathIndexRef.current
+    const prev = pathRef.current
+    if (idx <= 0 || !prev[idx - 1]) return
     setPendingNav(null)
     setNavBack(true)
-    setPath((prev) => {
-      if (prev.length <= 1) return prev
-      const nextPath = prev.slice(0, -1)
-      setCurrentSlideId(nextPath[nextPath.length - 1].slideId)
-      setForkBranchOptions(null)
-      return nextPath
-    })
+    setForkBranchOptions(null)
+    setPathIndex(idx - 1)
+    setCurrentSlideId(prev[idx - 1].slideId)
   }, [])
+
+  /** Salta a un slide ya visitado sin borrar el resto del recorrido. */
+  const jumpToPathIndex = useCallback((index) => {
+    const prev = pathRef.current
+    if (!Number.isInteger(index) || index < 0 || index >= prev.length) return
+    const entry = prev[index]
+    if (!entry?.slideId) return
+    const from = pathIndexRef.current
+    setPendingNav(null)
+    setSaveError(null)
+    setNavBack(index < from)
+    setForkBranchOptions(null)
+    setPathIndex(index)
+    setCurrentSlideId(entry.slideId)
+  }, [])
+
+  const requestJumpToPathIndex = useCallback(
+    (index) => {
+      if (!Number.isInteger(index) || index < 0 || index >= path.length) return
+      if (index === pathIndex) return
+      const s = persistStateRef.current
+      const askSave =
+        computePersistDirty() || (s.isEmbajadores && Boolean(s.selectedPlanName))
+      if (askSave) {
+        setSaveError(null)
+        setPendingNav({ jumpToIndex: index })
+        return
+      }
+      jumpToPathIndex(index)
+    },
+    [path.length, pathIndex, computePersistDirty, jumpToPathIndex],
+  )
 
   const saveWebhookOption =
     selectedPlanName && isPlanForm
@@ -390,6 +467,18 @@ export default function PresentationPage() {
     ],
   )
 
+  const applyPendingNav = useCallback(
+    (nav) => {
+      if (!nav) return
+      if (Number.isInteger(nav.jumpToIndex)) {
+        jumpToPathIndex(nav.jumpToIndex)
+        return
+      }
+      goTo(nav.nextId, nav.choice)
+    },
+    [jumpToPathIndex, goTo],
+  )
+
   const handleSaveAndContinue = useCallback(
     async ({ sendWebhook = false } = {}) => {
       if (!pendingNav) return
@@ -400,7 +489,7 @@ export default function PresentationPage() {
           sendPaymentLink: sendWebhook && saveWebhookOption?.type === 'payment_link',
           sendContract: sendWebhook && saveWebhookOption?.type === 'contract',
         })
-        goTo(pendingNav.nextId, pendingNav.choice)
+        applyPendingNav(pendingNav)
       } catch (err) {
         setSaveError(
           err instanceof Error
@@ -411,7 +500,7 @@ export default function PresentationPage() {
         setSaving(false)
       }
     },
-    [pendingNav, persistAllDrafts, goTo, saveWebhookOption],
+    [pendingNav, persistAllDrafts, applyPendingNav, saveWebhookOption],
   )
 
   const handleSkipAndContinue = useCallback(() => {
@@ -420,8 +509,8 @@ export default function PresentationPage() {
     setLeadDraft(savedLead)
     setBudget(savedBudget)
     setBudgetOptions(savedBudgetOptions)
-    goTo(pendingNav.nextId, pendingNav.choice)
-  }, [pendingNav, savedData, savedLead, savedBudget, savedBudgetOptions, goTo])
+    applyPendingNav(pendingNav)
+  }, [pendingNav, savedData, savedLead, savedBudget, savedBudgetOptions, applyPendingNav])
 
   const handleGenerate = useCallback(async () => {
     if (!lead || generating) return
@@ -664,6 +753,18 @@ export default function PresentationPage() {
         onSkip={handleSkipAndContinue}
       />
 
+      {chromeVisible && (
+        <SlideNavSidebar
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen((v) => !v)}
+          manifest={manifest}
+          path={path}
+          activeIndex={pathIndex}
+          onSelect={requestJumpToPathIndex}
+          light={lightSlide}
+        />
+      )}
+
       {/* Chrome superior */}
       {chromeVisible && (
         <header
@@ -702,7 +803,7 @@ export default function PresentationPage() {
             </p>
           </div>
           <p className={`text-[10px] font-mono tabular-nums ${lightSlide ? 'text-slate-400' : 'text-white/40'}`}>
-            {path.length} slides
+            {pathIndex + 1} / {path.length}
             {dirty ? ' · ·' : ''}
           </p>
         </header>

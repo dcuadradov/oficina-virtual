@@ -28,6 +28,7 @@ import HistorialMedicoForm from './HistorialMedicoForm'
 import ConfirmacionClinicaForm from './ConfirmacionClinicaForm'
 import PlanVinculacionForm from './PlanVinculacionForm'
 import EmbajadoresForm from './EmbajadoresForm'
+import SlideNavSidebar from './SlideNavSidebar'
 
 /**
  * Replay público de una presentación generada.
@@ -46,6 +47,7 @@ export default function ResultPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [chromeVisible, setChromeVisible] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   /** El último movimiento fue hacia atrás: el slide se muestra ya animado. */
   const [navBack, setNavBack] = useState(false)
 
@@ -82,6 +84,16 @@ export default function ResultPage() {
     setNavBack(true)
     setIndex((i) => Math.max(i - 1, 0))
   }, [])
+
+  const jumpToPathIndex = useCallback(
+    (nextIndex) => {
+      if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= path.length) return
+      if (nextIndex === index) return
+      setNavBack(nextIndex < index)
+      setIndex(nextIndex)
+    },
+    [path.length, index],
+  )
 
   useEffect(() => {
     let active = true
@@ -230,6 +242,18 @@ export default function ResultPage() {
           <SlideFormPanel formDef={activeForm} values={formData} readOnly />
         )}
       </SlideFrame>
+
+      {chromeVisible && (
+        <SlideNavSidebar
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen((v) => !v)}
+          manifest={manifest}
+          path={path}
+          activeIndex={index}
+          onSelect={jumpToPathIndex}
+          light={lightSlide}
+        />
+      )}
 
       {chromeVisible && (
         <header

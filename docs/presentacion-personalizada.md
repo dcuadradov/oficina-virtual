@@ -41,10 +41,23 @@ Al **Salir** sin generar: se borran solo drafts (`run_id` null). No se toca `lea
 Catálogo: `lead_presentation_budget_plan_options`.
 
 - Número de plan + Enter rellena la fila
+- **Plan 1**: columna Inscripción usa `inscripcion` y cuota mensual muestra "No aplica"
+- **Plan 2+**: columna Inscripción usa `cuota_mensual`
 - Checkbox de selección única (alternativa, fila extra o modalidad contado)
 - Al guardar con cambios: modal de confirmación
 - Si hay plan seleccionado: checkbox **Enviar comprobante de pago**  
   → GET `https://api.mdenglish.us/webhook/link_de_pago?card_id=&plan=`
+
+## Navegación lateral (sidebar de recorrido)
+
+Componente: `src/pages/Presentation/SlideNavSidebar.jsx`
+
+- Botón en el borde izquierdo (cerrado por defecto) abre miniaturas del **recorrido visitado** (`path`)
+- Solo permite saltar a slides ya recorridos; el contador del header muestra `{posición} / {total}`
+- **Saltar atrás no borra el futuro**: si vas del slide 30 al 20, el camino 21–30 se conserva; al avanzar con Continuar se rehace ese tramo o se bifurca si eliges otra opción
+- Si hay cambios sin guardar (formularios o plan en embajadores), el salto dispara el modal de guardar
+- Mismo sidebar en `/result/:version/:cardId` (solo lectura)
+- El panel queda **entre header y footer** para que el último thumbnail sea clicable
 
 ## Embajadores (slide 34)
 
@@ -75,9 +88,10 @@ Relacionado (cron recordatorios, no bloquea la presentación):
 2. Merge / push a `develop` → deploy Firebase staging
 3. Abrir https://oficina-virtual-md.web.app
 4. Lead → Pitch → Presentación
-5. Probar slides 31/32/33 (guardar + link de pago)
+5. Probar slides 31/32/33 (guardar + link de pago; plan 1 vs plan 2+ en Inscripción)
 6. Probar slide 34 (contrato si hay plan)
-7. Generar resultado y abrir `/result/{version}/{cardId}`
+7. Sidebar: abrir recorrido, saltar atrás/adelante, último slide clicable
+8. Generar resultado y abrir `/result/{version}/{cardId}` (sidebar en replay)
 
 ## Notas
 
