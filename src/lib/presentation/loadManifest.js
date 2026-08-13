@@ -21,6 +21,20 @@ export function getSlide(manifest, slideId) {
   return manifest?.slides?.[slideId] ?? null
 }
 
+/** Slides del deck en orden de id (s01, s02, …), para el sidebar de salto libre. */
+export function listManifestSlides(manifest) {
+  const slides = manifest?.slides
+  if (!slides) return []
+  return Object.keys(slides)
+    .sort((a, b) => {
+      const na = Number.parseInt(String(a).replace(/\D/g, ''), 10)
+      const nb = Number.parseInt(String(b).replace(/\D/g, ''), 10)
+      if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
+      return String(a).localeCompare(String(b))
+    })
+    .map((id) => ({ id, ...slides[id] }))
+}
+
 /** Capas de animación del slide (generadas por presentation-raw/build-anim.mjs). */
 export function getSlideAnim(manifest, slide) {
   if (!slide?.folder) return null

@@ -3,17 +3,18 @@ import { ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react'
 import { buildPosterUrl, getSlide } from '../../lib/presentation/loadManifest'
 
 /**
- * Sidebar de navegación rápida entre slides ya visitados (`path`).
- * Solo permite saltar a índices del recorrido actual.
+ * Sidebar de navegación rápida entre slides.
+ * `items` es la lista a mostrar (`{ slideId }[]`): el deck completo o el recorrido.
  */
 export default function SlideNavSidebar({
   open,
   onToggle,
   manifest,
-  path = [],
+  items = [],
   activeIndex,
   onSelect,
   light = false,
+  title = 'Slides',
 }) {
   const listRef = useRef(null)
   const activeRef = useRef(null)
@@ -22,14 +23,14 @@ export default function SlideNavSidebar({
     if (!open) return
     const el = activeRef.current
     if (!el) return
-    const nearEnd = activeIndex >= path.length - 2
+    const nearEnd = activeIndex >= items.length - 2
     el.scrollIntoView({
       block: nearEnd ? 'center' : 'nearest',
       behavior: 'smooth',
     })
-  }, [open, activeIndex, path.length])
+  }, [open, activeIndex, items.length])
 
-  if (!manifest || path.length === 0) return null
+  if (!manifest || items.length === 0) return null
 
   /** Evita que header/footer (z-20) tapen el primer/último thumb. */
   const chromeTop = '3.25rem'
@@ -76,14 +77,14 @@ export default function SlideNavSidebar({
             light ? 'text-slate-500' : 'text-white/45'
           }`}
         >
-          Recorrido
+          {title}
         </div>
 
         <div
           ref={listRef}
           className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-1 pb-6 space-y-2 scrollbar-thin"
         >
-          {path.map((entry, index) => {
+          {items.map((entry, index) => {
             const slide = getSlide(manifest, entry.slideId)
             if (!slide) return null
             const active = index === activeIndex
