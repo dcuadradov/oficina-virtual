@@ -248,10 +248,11 @@ export default function ResultPage() {
           open={sidebarOpen}
           onToggle={() => setSidebarOpen((v) => !v)}
           manifest={manifest}
-          path={path}
+          items={path}
           activeIndex={index}
           onSelect={jumpToPathIndex}
           light={lightSlide}
+          title="Recorrido"
         />
       )}
 

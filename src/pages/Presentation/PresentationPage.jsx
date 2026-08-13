@@ -15,6 +15,7 @@ import { supabase } from '../../supabaseClient'
 import {
   getSlide,
   getSlideAnim,
+  listManifestSlides,
   loadPresentationManifest,
 } from '../../lib/presentation/loadManifest'
 import {
@@ -106,7 +107,7 @@ export default function PresentationPage() {
   const [twoPersons, setTwoPersons] = useState(false)
   const [planCatalog, setPlanCatalog] = useState([])
 
-  const [pendingNav, setPendingNav] = useState(null) // { nextId, choice } | { jumpToIndex }
+  const [pendingNav, setPendingNav] = useState(null) // { nextId, choice } | { jumpToIndex } | { jumpToSlideId }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -114,6 +115,16 @@ export default function PresentationPage() {
   const slide = useMemo(
     () => (manifest && currentSlideId ? getSlide(manifest, currentSlideId) : null),
     [manifest, currentSlideId],
+  )
+
+  const catalog = useMemo(() => listManifestSlides(manifest), [manifest])
+  const catalogItems = useMemo(
+    () => catalog.map((s) => ({ slideId: s.id })),
+    [catalog],
+  )
+  const catalogIndex = useMemo(
+    () => catalog.findIndex((s) => s.id === currentSlideId),
+    [catalog, currentSlideId],
   )
 
   const activeForm = useMemo(() => {
@@ -388,21 +399,39 @@ export default function PresentationPage() {
     setCurrentSlideId(entry.slideId)
   }, [])
 
-  const requestJumpToPathIndex = useCallback(
-    (index) => {
-      if (!Number.isInteger(index) || index < 0 || index >= path.length) return
-      if (index === pathIndex) return
+  /** Salta a cualquier slide del deck. Si ya está en el path, no recorta el futuro. */
+  const jumpToSlideId = useCallback((slideId) => {
+    if (!slideId) return
+    if (slideId === currentSlideId) return
+    const prev = pathRef.current
+    let existing = -1
+    for (let i = prev.length - 1; i >= 0; i -= 1) {
+      if (prev[i]?.slideId === slideId) {
+        existing = i
+        break
+      }
+    }
+    if (existing >= 0) {
+      jumpToPathIndex(existing)
+      return
+    }
+    goTo(slideId, { type: 'jump' })
+  }, [currentSlideId, jumpToPathIndex, goTo])
+
+  const requestJumpToSlideId = useCallback(
+    (slideId) => {
+      if (!slideId || slideId === currentSlideId) return
       const s = persistStateRef.current
       const askSave =
         computePersistDirty() || (s.isEmbajadores && Boolean(s.selectedPlanName))
       if (askSave) {
         setSaveError(null)
-        setPendingNav({ jumpToIndex: index })
+        setPendingNav({ jumpToSlideId: slideId })
         return
       }
-      jumpToPathIndex(index)
+      jumpToSlideId(slideId)
     },
-    [path.length, pathIndex, computePersistDirty, jumpToPathIndex],
+    [currentSlideId, computePersistDirty, jumpToSlideId],
   )
 
   const saveWebhookOption =
@@ -474,9 +503,13 @@ export default function PresentationPage() {
         jumpToPathIndex(nav.jumpToIndex)
         return
       }
+      if (nav.jumpToSlideId) {
+        jumpToSlideId(nav.jumpToSlideId)
+        return
+      }
       goTo(nav.nextId, nav.choice)
     },
-    [jumpToPathIndex, goTo],
+    [jumpToPathIndex, jumpToSlideId, goTo],
   )
 
   const handleSaveAndContinue = useCallback(
@@ -758,10 +791,11 @@ export default function PresentationPage() {
           open={sidebarOpen}
           onToggle={() => setSidebarOpen((v) => !v)}
           manifest={manifest}
-          path={path}
-          activeIndex={pathIndex}
-          onSelect={requestJumpToPathIndex}
+          items={catalogItems}
+          activeIndex={catalogIndex}
+          onSelect={(index) => requestJumpToSlideId(catalog[index]?.id)}
           light={lightSlide}
+          title="Slides"
         />
       )}
 
@@ -803,7 +837,7 @@ export default function PresentationPage() {
             </p>
           </div>
           <p className={`text-[10px] font-mono tabular-nums ${lightSlide ? 'text-slate-400' : 'text-white/40'}`}>
-            {pathIndex + 1} / {path.length}
+            {catalogIndex >= 0 ? catalogIndex + 1 : '—'} / {catalog.length}
             {dirty ? ' · ·' : ''}
           </p>
         </header>
