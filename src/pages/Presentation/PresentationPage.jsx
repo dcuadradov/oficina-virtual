@@ -668,7 +668,7 @@ export default function PresentationPage() {
       plan_nombre: twoPersons ? 'Platinum' : 'Elite',
     }
     if (!fromCatalog) {
-      console.warn('[presentation] catálogo de planes vacío; usando descuento Elite/Platinum')
+      console.warn('[presentation] Elite/Platinum no está en el catálogo; usando 15%/20%')
     }
     const m = computeModalidadFromPlan(plan, budget.inversion_final_hoy)
     setBudget((prev) => ({

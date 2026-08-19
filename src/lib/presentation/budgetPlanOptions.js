@@ -56,19 +56,27 @@ export function computeModalidadFromPlan(plan, inversionFinalHoy) {
   }
 }
 
-/** Solo plan 1: cuota mensual se muestra como "No aplica". */
-export function isCuotaNoAplica(planNumero) {
-  const n = Number(planNumero)
+function planNameKey(plan) {
+  return String(plan?.plan_nombre || '').trim().toLowerCase()
+}
+
+/** Elite (contado, 1 mes): cuota mensual se muestra como "No aplica". */
+export function isCuotaNoAplica(planOrNumero) {
+  if (planOrNumero && typeof planOrNumero === 'object') {
+    if (planNameKey(planOrNumero) === 'elite') return true
+    return Number(planOrNumero.plan_numero) === 1
+  }
+  const n = Number(planOrNumero)
   return Number.isFinite(n) && n === 1
 }
 
 /**
  * Fila de alternativas a partir de un plan del catálogo.
- * Columna "Inscripción": plan 1 → inscripcion; resto → cuota_mensual.
+ * Columna "Inscripción": Elite → inscripcion; resto → cuota_mensual.
  */
 export function optionFieldsFromPlan(plan) {
   if (!plan) return null
-  const noCuota = isCuotaNoAplica(plan.plan_numero)
+  const noCuota = isCuotaNoAplica(plan)
   return {
     plan: plan.plan_nombre || '',
     inscripcion: noCuota ? moneyStr(plan.inscripcion) : moneyStr(plan.cuota_mensual),
@@ -94,10 +102,12 @@ export function findPlanByNumero(plans, numero) {
 }
 
 export function findPlanByUsuarios(plans, usuarios) {
-  const n = Number(usuarios)
-  // Elite = 1 usuario plan_numero 1; Platinum = 2 usuarios plan_numero 2
-  if (n === 2) {
-    return (plans || []).find((p) => Number(p.plan_numero) === 2) || null
-  }
-  return (plans || []).find((p) => Number(p.plan_numero) === 1) || null
+  const list = plans || []
+  const wantPlatinum = Number(usuarios) === 2
+  const name = wantPlatinum ? 'platinum' : 'elite'
+  const byName = list.find((p) => planNameKey(p) === name)
+  if (byName) return byName
+  // Staging seed: Elite = 1, Platinum = 2 (en prod son 100 / 101)
+  const fallbackNumero = wantPlatinum ? 2 : 1
+  return list.find((p) => Number(p.plan_numero) === fallbackNumero) || null
 }
