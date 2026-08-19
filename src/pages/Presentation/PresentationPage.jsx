@@ -662,10 +662,13 @@ export default function PresentationPage() {
 
   const handleFillModalidad = useCallback(() => {
     if (!canFillModalidad) return
-    const plan = findPlanByUsuarios(planCatalog, twoPersons ? 2 : 1)
-    if (!plan) {
-      console.warn('[presentation] plan Elite/Platinum no encontrado en catálogo')
-      return
+    const fromCatalog = findPlanByUsuarios(planCatalog, twoPersons ? 2 : 1)
+    const plan = fromCatalog || {
+      descuento: twoPersons ? '20%' : '15%',
+      plan_nombre: twoPersons ? 'Platinum' : 'Elite',
+    }
+    if (!fromCatalog) {
+      console.warn('[presentation] Elite/Platinum no está en el catálogo; usando 15%/20%')
     }
     const m = computeModalidadFromPlan(plan, budget.inversion_final_hoy)
     setBudget((prev) => ({
@@ -673,7 +676,9 @@ export default function PresentationPage() {
       beneficio_exclusivo: m.beneficio_exclusivo,
       valor_vinculacion: m.valor_vinculacion,
       inversion_final: m.inversion_final,
+      modalidad_selected: true,
     }))
+    setBudgetOptions((prev) => prev.map((row) => ({ ...row, selected: false })))
   }, [canFillModalidad, planCatalog, twoPersons, budget.inversion_final_hoy])
 
   // Teclado: → / Space = siguiente (solo next / optional_extra); ← = atrás
