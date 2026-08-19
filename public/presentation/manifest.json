@@ -157,6 +157,23 @@
                 { "id": "ejemplo_d", "label": "Ejemplo d", "next": "s21" }
               ]
             }
+          },
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       }
@@ -180,6 +197,23 @@
                 { "id": "ejemplo_d", "label": "Ejemplo d", "next": "s21" }
               ]
             }
+          },
+          {
+            "id": "tests",
+            "label": "Tests",
+            "then": {
+              "type": "branch",
+              "options": [
+                { "id": "test_a", "label": "Test a", "next": "s22" },
+                { "id": "test_b", "label": "Test b", "next": "s23" },
+                { "id": "test_c", "label": "Test c", "next": "s24" }
+              ]
+            }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       }
@@ -201,6 +235,11 @@
                 { "id": "test_c", "label": "Test c", "next": "s24" }
               ]
             }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       },
@@ -223,6 +262,11 @@
                 { "id": "test_c", "label": "Test c", "next": "s24" }
               ]
             }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       },
@@ -245,6 +289,11 @@
                 { "id": "test_c", "label": "Test c", "next": "s24" }
               ]
             }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       }
@@ -266,6 +315,11 @@
                 { "id": "test_c", "label": "Test c", "next": "s24" }
               ]
             }
+          },
+          {
+            "id": "saltar",
+            "label": "Saltar",
+            "next": "s25"
           }
         ]
       }

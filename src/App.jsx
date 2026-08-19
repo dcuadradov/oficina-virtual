@@ -6,6 +6,7 @@ import Home from './pages/Home/Home';
 import Dashboard from './pages/Dashboard/Dashboard';
 import PresentationPage from './pages/Presentation/PresentationPage';
 import ResultPage from './pages/Presentation/ResultPage';
+import PropuestaPage from './pages/Presentation/PropuestaPage';
 import { supabase } from './supabaseClient';
 
 // Este componente actúa como "Guardia de Seguridad"
@@ -100,6 +101,9 @@ export default function App() {
 
       {/* Resultado público (solo lectura del recorrido generado) */}
       <Route path="/result/:version/:cardId" element={<ResultPage />} />
+
+      {/* Propuesta comercial pública (landing enviada al lead) */}
+      <Route path="/propuesta/:version/:cardId" element={<PropuestaPage />} />
 
       {/* Si entran a cualquier otro lado, mandar al home (el guardia decidirá si entran o no) */}
       <Route path="*" element={<Navigate to="/home" replace />} />

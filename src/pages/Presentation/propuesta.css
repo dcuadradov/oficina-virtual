@@ -1,0 +1,102 @@
+/* ===== PROPUESTA – SVG template approach ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap');
+
+.propuesta {
+  --navy: #0a1931;
+  --sans: 'Montserrat', system-ui, sans-serif;
+  --text: #1a1a1a;
+}
+
+.propuesta *,
+.propuesta *::before,
+.propuesta *::after {
+  box-sizing: border-box;
+}
+
+/* Loading / Error */
+.p-state {
+  min-height: 100vh;
+  background: var(--navy);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: var(--sans);
+}
+.p-state a { color: #7eb6ff; }
+
+/* SVG page container */
+.p-svg-page {
+  position: relative;
+  width: 100%;
+  max-width: 1512px;
+  margin: 0 auto;
+  container-type: inline-size;
+}
+
+.p-svg-page img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Overlay layer */
+.p-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Single economic block overlay */
+.p-ov {
+  position: absolute;
+  pointer-events: auto;
+  font-family: var(--sans);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.p-ov--econ-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+
+.p-ov--option {
+  font-size: 2.52cqw;
+  line-height: 1.35;
+  padding: 0.25em 0;
+  border-bottom: 1px solid rgba(26, 26, 26, 0.18);
+}
+.p-ov--option strong {
+  font-weight: 700;
+}
+
+.p-ov--contado-in-box {
+  font-size: 2.52cqw;
+  line-height: 1.4;
+  padding: 1.2% 1.2% 0;
+}
+.p-ov--contado-in-box .p-ov__heading {
+  font-size: 2.8cqw;
+  font-weight: 700;
+  margin-bottom: 0.3em;
+}
+
+.p-ov--observaciones {
+  font-size: 2.52cqw;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+/* ─── CONTADO overlay (payment plan details in navy section) ─── */
+.p-ov--contado-block {
+  display: flex;
+  flex-direction: column;
+}
