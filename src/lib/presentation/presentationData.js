@@ -16,6 +16,7 @@ export const PRESENTATION_DATA_FIELDS = [
   'contraindicaciones',
   'conducta_propuesta',
   'beneficio',
+  'observaciones',
 ]
 
 export function emptyPresentationData() {

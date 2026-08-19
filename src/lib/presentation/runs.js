@@ -77,7 +77,11 @@ export function resultUrl(cardId, version) {
   return `/result/${version}/${cardId}`
 }
 
-/** Fragmento público tras `/result/` → `1/1297586102`. */
+export function propuestaUrl(cardId, version) {
+  return `/propuesta/${version}/${cardId}`
+}
+
+/** Fragmento público tras `/result/` o `/propuesta/` → `1/1297586102`. */
 export function resultPath(cardId, version) {
   return `${version}/${cardId}`
 }
@@ -86,12 +90,16 @@ const PRESENTATION_WEBHOOK_URL =
   'https://api.mdenglish.us/webhook/envio_presentacion_personalizada'
 
 /**
- * Notifica al webhook al Generar (card_id + path de resultado).
+ * Notifica al webhook al Generar.
+ * `result` = presentación guardada en OV.
+ * `propuesta` = landing comercial que se envía al lead.
  */
 export async function notifyPresentationGenerated({ cardId, version }) {
+  const path = resultPath(cardId, version)
   const payload = {
     card_id: String(cardId),
-    result: resultPath(cardId, version),
+    result: path,
+    propuesta: path,
   }
 
   const response = await fetch(PRESENTATION_WEBHOOK_URL, {
