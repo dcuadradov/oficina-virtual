@@ -27,8 +27,9 @@ npm run deploy:prod      # solo tras validar staging
 
 ## Presentación personalizada
 
-Documentación completa (rutas, migraciones, webhooks, checklist):
+Documentación completa (rutas, landing `/propuesta`, migraciones, webhooks, checklist):
 
 → [docs/presentacion-personalizada.md](./docs/presentacion-personalizada.md)
 
 Entrada: sidebar del lead → **Pitch** → **Presentación**.
+Tras generar: el link que se envía al lead es `/propuesta/{version}/{cardId}`.

@@ -26,7 +26,12 @@ import {
   resolveOptionNext,
   resolvePrimaryNext,
 } from '../../lib/presentation/navEngine'
-import { createPresentationRun, notifyPresentationGenerated, resultUrl } from '../../lib/presentation/runs'
+import {
+  createPresentationRun,
+  notifyPresentationGenerated,
+  propuestaUrl,
+  resultUrl,
+} from '../../lib/presentation/runs'
 import {
   emptyBudget,
   emptyBudgetOption,
@@ -53,6 +58,7 @@ import {
   saveHistorialChanges,
   AGE_OPTIONS_FALLBACK,
 } from '../../lib/presentation/historialSave'
+import { upsertPresentationData } from '../../lib/presentation/presentationData'
 import { useSlideAnim } from '../../lib/presentation/useSlideAnim'
 import SlideFrame from './SlideFrame'
 import SlideStage from './SlideStage'
@@ -62,6 +68,7 @@ import ConfirmacionClinicaForm from './ConfirmacionClinicaForm'
 import PlanVinculacionForm from './PlanVinculacionForm'
 import EmbajadoresForm from './EmbajadoresForm'
 import SaveChangesDialog from './SaveChangesDialog'
+import ObservacionesDialog from './ObservacionesDialog'
 import SlideNavSidebar from './SlideNavSidebar'
 
 export default function PresentationPage() {
@@ -83,8 +90,9 @@ export default function PresentationPage() {
   const [navBack, setNavBack] = useState(false)
   const [chromeVisible, setChromeVisible] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [generated, setGenerated] = useState(null) // { version, url }
+  const [generated, setGenerated] = useState(null) // { version, url, propuestaUrl }
   const [generateError, setGenerateError] = useState(null)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [exiting, setExiting] = useState(false)
 
@@ -436,7 +444,7 @@ export default function PresentationPage() {
 
   const saveWebhookOption =
     selectedPlanName && isPlanForm
-      ? { type: 'payment_link', label: 'Enviar comprobante de pago' }
+      ? { type: 'payment_link', label: 'Enviar link de pago' }
       : selectedPlanName && isEmbajadores
         ? { type: 'contract', label: 'Enviar el contrato' }
         : null
@@ -545,13 +553,16 @@ export default function PresentationPage() {
     applyPendingNav(pendingNav)
   }, [pendingNav, savedData, savedLead, savedBudget, savedBudgetOptions, applyPendingNav])
 
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(async (observaciones = '') => {
     if (!lead || generating) return
     setGenerating(true)
     setGenerateError(null)
     setCopied(false)
     try {
       const snapshot = await persistAllDrafts()
+      await upsertPresentationData(cardId, {
+        observaciones: String(observaciones || '').trim(),
+      })
 
       const run = await createPresentationRun({
         cardId,
@@ -565,8 +576,12 @@ export default function PresentationPage() {
         },
       })
       await associateDraftsToRun(cardId, run.id)
-      const url = resultUrl(run.card_id, run.version)
-      setGenerated({ version: run.version, url })
+      setNotesOpen(false)
+      setGenerated({
+        version: run.version,
+        url: resultUrl(run.card_id, run.version),
+        propuestaUrl: propuestaUrl(run.card_id, run.version),
+      })
 
       try {
         await notifyPresentationGenerated({
@@ -785,6 +800,19 @@ export default function PresentationPage() {
         onSave={handleSaveAndContinue}
         onSkip={handleSkipAndContinue}
       />
+
+      {notesOpen && (
+        <ObservacionesDialog
+          saving={generating}
+          error={generateError}
+          onCancel={() => {
+            if (generating) return
+            setNotesOpen(false)
+            setGenerateError(null)
+          }}
+          onGenerate={handleGenerate}
+        />
+      )}
 
       {chromeVisible && (
         <SlideNavSidebar
@@ -1030,13 +1058,16 @@ export default function PresentationPage() {
                 <button
                   type="button"
                   disabled={generating}
-                  onClick={handleGenerate}
+                  onClick={() => {
+                    setGenerateError(null)
+                    setNotesOpen(true)
+                  }}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors disabled:opacity-60"
                 >
                   {generating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                   Generar resultado
                 </button>
-                {generateError && (
+                {generateError && !notesOpen && (
                   <p className="text-xs text-rose-300 text-center max-w-sm">{generateError}</p>
                 )}
               </div>
@@ -1048,13 +1079,15 @@ export default function PresentationPage() {
                   Versión {generated.version} generada
                 </p>
                 <p className="text-[11px] text-white/55 text-center break-all">
-                  {typeof window !== 'undefined' ? `${window.location.origin}${generated.url}` : generated.url}
+                  {typeof window !== 'undefined'
+                    ? `${window.location.origin}${generated.propuestaUrl || generated.url}`
+                    : generated.propuestaUrl || generated.url}
                 </p>
                 <div className="flex gap-2 justify-center">
                   <button
                     type="button"
                     onClick={async () => {
-                      const full = `${window.location.origin}${generated.url}`
+                      const full = `${window.location.origin}${generated.propuestaUrl || generated.url}`
                       try {
                         await navigator.clipboard.writeText(full)
                         setCopied(true)
@@ -1065,10 +1098,10 @@ export default function PresentationPage() {
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-white text-slate-900"
                   >
                     <Copy size={13} />
-                    {copied ? 'Copiado' : 'Copiar link'}
+                    {copied ? 'Copiado' : 'Copiar propuesta'}
                   </button>
                   <a
-                    href={generated.url}
+                    href={generated.propuestaUrl || generated.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-emerald-500 text-white"
