@@ -26,6 +26,7 @@ const PAISES_TELEFONO = [
   { codigo: '505', pais: 'Nicaragua', bandera: '🇳🇮', longitud: [8], placeholder: '81234567' },
   { codigo: '591', pais: 'Bolivia', bandera: '🇧🇴', longitud: [8], placeholder: '71234567' },
   { codigo: '595', pais: 'Paraguay', bandera: '🇵🇾', longitud: [9], placeholder: '981234567' },
+  { codigo: '597', pais: 'Surinam', bandera: '🇸🇷', longitud: [7], placeholder: '7123456' },
   { codigo: '598', pais: 'Uruguay', bandera: '🇺🇾', longitud: [8, 9], placeholder: '91234567' },
   { codigo: '55', pais: 'Brasil', bandera: '🇧🇷', longitud: [10, 11], placeholder: '11912345678' },
   { codigo: '53', pais: 'Cuba', bandera: '🇨🇺', longitud: [8], placeholder: '51234567' },
