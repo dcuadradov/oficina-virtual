@@ -7,6 +7,7 @@
 import { AGE_OPTIONS_FALLBACK } from '../../lib/presentation/historialSave'
 
 const ENGLISH_LEVELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+const OCUPACION_OPTIONS = ['Especialista', 'Estudiante', 'Médico General', 'Residente']
 
 const EVAL_ROWS = [
   { id: 'antecedentes', resultId: 'resultado_antecedentes', label: 'ANTECEDENTES' },
@@ -292,6 +293,11 @@ export default function HistorialMedicoForm({
                 value={leadValues.ocupacion}
                 onChange={(v) => onLeadChange?.('ocupacion', v)}
                 readOnly={readOnly}
+                options={
+                  leadValues.ocupacion && !OCUPACION_OPTIONS.includes(leadValues.ocupacion)
+                    ? [leadValues.ocupacion, ...OCUPACION_OPTIONS]
+                    : OCUPACION_OPTIONS
+                }
               />
             </div>
           </div>
