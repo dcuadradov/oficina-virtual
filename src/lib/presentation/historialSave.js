@@ -32,6 +32,8 @@ export function isHistorialDirty({ formData, savedData, leadDraft, savedLead }) 
 
 /**
  * Persiste campos de presentación + actualiza el lead si cambió.
+ * Si hay Antecedentes, motivacion = "Otro" y motivacion_detalle = ese texto.
+ * Si Antecedentes está vacío, no se tocan esos dos campos.
  */
 export async function saveHistorialChanges({
   cardId,
@@ -43,17 +45,28 @@ export async function saveHistorialChanges({
   let nextForm = normalizePresentationData(savedData)
   let nextLead = normalizeLeadDraft(savedLead)
 
-  if (isPresentationDataDirty(formData, savedData)) {
+  const formDirty = isPresentationDataDirty(formData, savedData)
+  const leadDirty = isLeadDraftDirty(leadDraft, savedLead)
+  const antecedentes = String(formData?.antecedentes ?? '').trim()
+
+  if (formDirty) {
     const saved = await upsertPresentationData(cardId, formData)
     nextForm = normalizePresentationData(saved)
   }
 
-  if (isLeadDraftDirty(leadDraft, savedLead)) {
+  if (leadDirty || antecedentes) {
     const payload = {}
-    for (const key of LEAD_EDIT_FIELDS) {
-      const v = leadDraft?.[key]
-      payload[key] = v == null || v === '' ? null : String(v)
+    if (leadDirty) {
+      for (const key of LEAD_EDIT_FIELDS) {
+        const v = leadDraft?.[key]
+        payload[key] = v == null || v === '' ? null : String(v)
+      }
     }
+    if (antecedentes) {
+      payload.motivacion = 'Otro'
+      payload.motivacion_detalle = antecedentes
+    }
+
     const { data, error } = await supabase
       .from('leads')
       .update(payload)
