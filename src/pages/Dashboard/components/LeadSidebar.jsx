@@ -462,13 +462,14 @@ const PITCH_FIELD_NAME_TO_COLUMN = {
   'en que etapa se quedo': 'pitch_stage',
   'resultado del pitch': 'pitch_result',
   'asistio al pitch': 'attended',
+  'como agendaste el pitch': 'cierre_pitch',
 };
 
 // Columnas adicionales de pitches_resultados que pueden venir de campos
 // dinámicos agregados desde la config (fields_formulario_creacion_leads) y que
 // se resuelven por campo_origen ("tabla,columna"). Se limita a columnas que
 // existen en pitches_resultados para no romper el insert/update.
-const PITCH_EXTRA_COLUMNS = ['motivo_matricula', 'calificacion_setter'];
+const PITCH_EXTRA_COLUMNS = ['motivo_matricula', 'calificacion_setter', 'cierre_pitch'];
 
 // Columnas que, además de guardarse en pitches_resultados, se reflejan en la
 // tabla leads (el lead conserva el último valor registrado en el pitch).
@@ -480,6 +481,9 @@ const getPitchColumnForField = (field) => {
   // Campo "¿El lead estuvo bien calificado por el Setter?": se persiste en la
   // columna calificacion_setter (independiente de su campo_origen en config).
   if (isSetterCalificadoPitchField(field)) return 'calificacion_setter';
+  // Campo "¿Cómo agendaste el Pitch?": se persiste en cierre_pitch aunque
+  // campo_origen no esté configurado en la fila de config.
+  if (isCierrePitchField(field)) return 'cierre_pitch';
   // Campo dinámico agregado por config: la columna sale de campo_origen.
   if (field?.campo_origen) {
     const parts = String(field.campo_origen).split(',').map(s => s.trim());
@@ -494,6 +498,11 @@ const getPitchColumnForField = (field) => {
 const isSetterCalificadoPitchField = (field) => {
   const n = normalizePitchFieldName(field?.nombre);
   return n.includes('calificado por el setter') || n.includes('bien calificado por el setter');
+};
+
+const isCierrePitchField = (field) => {
+  const n = normalizePitchFieldName(field?.nombre);
+  return n.includes('como agendaste') || n.includes('cierre del pitch') || n === 'cierre pitch';
 };
 
 const getLeadPropertyValue = (prop, leadRow, localRow) => {
