@@ -1,5 +1,6 @@
 const MANIFEST_URL = '/presentation/manifest.json'
-const ANIM_URL = '/presentation/anim.json'
+/** Query de cache-bust: subir este valor si cambia anim.json o capas de logos. */
+const ANIM_URL = '/presentation/anim.json?v=fucs-lockup'
 
 let cachedManifest = null
 

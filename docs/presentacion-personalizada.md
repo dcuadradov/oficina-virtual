@@ -68,6 +68,16 @@ En `public/presentation/manifest.json`:
 
 Tests: a → s22, b → s23, c → s24.
 
+## Slide 27 (convenios / lockup de logos)
+
+Logos **Federación Médica Colombiana** + **FUCS** en `public/presentation/Slides/27/`.
+
+- Capa animada: `anim/s2-a.png` (el recorte debe cubrir ambos logos)
+- Fuente del recorte: `presentation-raw/anim.src.json` → slide `"27"`, segundo paso (`rects`)
+- Rebuild: `node presentation-raw/build-anim.mjs 27` (genera `public/presentation/anim.json` y las PNG)
+- También actualizar `bg.png` y `full.jpg` del slide si el lockup está en la placa estática
+- Tras cambiar PNG/JSON estáticos, subir el query `?v=` en `ANIM_URL` (`src/lib/presentation/loadManifest.js`) y en el `file` de `s2-a` en `anim.json` para que el navegador no sirva el logo anterior cacheado
+
 ## Plan de vinculación (slides 31 / 32 / 33)
 
 Catálogo: `lead_presentation_budget_plan_options`.
@@ -131,6 +141,7 @@ Relacionado (cron recordatorios, no bloquea la presentación):
 10. **Generar resultado** sin plan seleccionado → propuesta con pago vacío
 11. Generar con observaciones (≤ 220 caracteres) y abrir `/propuesta/{version}/{cardId}`
 12. Generar con contado vs otras opciones y verificar overlays + observaciones
+13. Slide 27: lockup Federación Médica + FUCS visible (ambos logos, recorte completo)
 
 ## Notas
 

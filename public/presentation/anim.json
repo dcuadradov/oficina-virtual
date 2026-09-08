@@ -538,14 +538,14 @@
           "auto": true,
           "delay": 400,
           "box": [
-            8.021,
-            38.889,
-            37.5,
-            10.37
+            7.97,
+            38.7,
+            55.89,
+            10.75
           ],
           "layers": [
             {
-              "file": "anim/s2-a.png"
+              "file": "anim/s2-a.png?v=fucs"
             }
           ]
         },
