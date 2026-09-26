@@ -33,7 +33,7 @@
       "label": "Slide 3",
       "nav": {
         "type": "next",
-        "next": "s04"
+        "next": "s06"
       },
       "asset": "full.mp4"
     },
@@ -44,7 +44,7 @@
       "formKey": "historial_medico",
       "nav": {
         "type": "next",
-        "next": "s06"
+        "next": "s09"
       }
     },
     "s06": {
@@ -68,7 +68,7 @@
       "label": "Slide 8",
       "nav": {
         "type": "next",
-        "next": "s09"
+        "next": "s04"
       },
       "asset": "full.mp4"
     },
