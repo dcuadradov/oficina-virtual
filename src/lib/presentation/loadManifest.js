@@ -22,18 +22,53 @@ export function getSlide(manifest, slideId) {
   return manifest?.slides?.[slideId] ?? null
 }
 
-/** Slides del deck en orden de id (s01, s02, …), para el sidebar de salto libre. */
+/** Destinos a recorrer al armar el catálogo (orden de presentación, no de id). */
+function navFollowIds(nav) {
+  if (!nav) return []
+  if (nav.type === 'next') return nav.next ? [nav.next] : []
+  if (nav.type === 'optional_extra') {
+    return [nav.extra, nav.next].filter(Boolean)
+  }
+  if (nav.type === 'branch' || nav.type === 'fork') {
+    const ids = []
+    for (const opt of nav.options || []) {
+      if (opt.next) ids.push(opt.next)
+      for (const nested of opt.then?.options || []) {
+        if (nested.next) ids.push(nested.next)
+      }
+    }
+    if (nav.skip) ids.push(nav.skip)
+    if (nav.next) ids.push(nav.next)
+    return ids
+  }
+  return []
+}
+
+/** Slides del deck en orden del grafo (`next` / extras / forks), para el sidebar. */
 export function listManifestSlides(manifest) {
   const slides = manifest?.slides
   if (!slides) return []
-  return Object.keys(slides)
+
+  const order = []
+  const seen = new Set()
+  const visit = (id) => {
+    if (!id || !slides[id] || seen.has(id)) return
+    seen.add(id)
+    order.push(id)
+    for (const next of navFollowIds(slides[id].nav)) visit(next)
+  }
+  visit(manifest.start)
+
+  const leftover = Object.keys(slides)
+    .filter((id) => !seen.has(id))
     .sort((a, b) => {
       const na = Number.parseInt(String(a).replace(/\D/g, ''), 10)
       const nb = Number.parseInt(String(b).replace(/\D/g, ''), 10)
       if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb
       return String(a).localeCompare(String(b))
     })
-    .map((id) => ({ id, ...slides[id] }))
+
+  return [...order, ...leftover].map((id) => ({ id, ...slides[id] }))
 }
 
 /** Capas de animación del slide (generadas por presentation-raw/build-anim.mjs). */

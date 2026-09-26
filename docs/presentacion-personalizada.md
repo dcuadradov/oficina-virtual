@@ -61,6 +61,8 @@ En `public/presentation/manifest.json` (los ids `s04`/`s06` no cambian; solo el 
 
 `s01 → s02 → s03 → s06 → s07 → s08 → s04 (historial médico) → s09 → …`
 
+El sidebar de miniaturas usa el mismo archivo: `listManifestSlides` recorre ese grafo (ya no ordena por `s01`, `s02`, `s04`…).
+
 Tras cambiar el grafo, subir el query `?v=` de `MANIFEST_URL` en `src/lib/presentation/loadManifest.js` para no servir el `manifest.json` cacheado.
 
 ## Navegación ejemplos / tests (slides 16–25)
@@ -150,7 +152,7 @@ Relacionado (cron recordatorios, no bloquea la presentación):
 11. Generar con observaciones (≤ 220 caracteres) y abrir `/propuesta/{version}/{cardId}`
 12. Generar con contado vs otras opciones y verificar overlays + observaciones
 13. Slide 27: lockup Federación Médica + FUCS visible (ambos logos, recorte completo)
-14. Inicio: 3 → 6 → 7 → 8 → 4 (historial) → 9
+14. Inicio y miniaturas laterales: 3 → 6 → 7 → 8 → 4 (historial) → 9
 
 ## Notas
 
