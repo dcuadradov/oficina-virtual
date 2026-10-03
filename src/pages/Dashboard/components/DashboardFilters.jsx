@@ -202,6 +202,7 @@ const DashboardFilters = ({
   }, [tagOpen, tagsStaged]);
   const [fuenteOpen, setFuenteOpen] = useState(false);
   const [referidoOpen, setReferidoOpen] = useState(false);
+  const [referidoBusqueda, setReferidoBusqueda] = useState('');
   const [gestionWAOpen, setGestionWAOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -327,6 +328,18 @@ const DashboardFilters = ({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!referidoOpen) setReferidoBusqueda('');
+  }, [referidoOpen]);
+
+  const referidosFiltrados = useMemo(() => {
+    const normalizar = (s) => (s || '').toString().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const term = normalizar(referidoBusqueda.trim());
+    if (!term) return referidos;
+    return referidos.filter((referido) => normalizar(referido).includes(term));
+  }, [referidos, referidoBusqueda]);
   
   // Obtener label del comercial seleccionado
   const selectedComercialLabel = comerciales.find(c => c.email === selectedComercial)?.nombre || 'Todos los comerciales';
@@ -1677,38 +1690,62 @@ const DashboardFilters = ({
           </button>
           
           {referidoOpen && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
-              <button
-                onClick={() => {
-                  onReferidoChange(null);
-                  setReferidoOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedReferido 
-                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Todos los referidos
-              </button>
-              <div className="h-px bg-slate-100 my-1" />
-              {referidos.map((referido) => (
-                <button
-                  key={referido}
-                  onClick={() => {
-                    onReferidoChange(referido);
-                    setReferidoOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                    selectedReferido === referido
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <UserPlus size={12} />
-                  {referido}
-                </button>
-              ))}
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col overflow-hidden" style={{ maxHeight: '320px' }}>
+              <div className="p-2 border-b border-slate-100">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={referidoBusqueda}
+                    onChange={(e) => setReferidoBusqueda(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Buscar referido..."
+                    autoFocus
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                  />
+                </div>
+              </div>
+              <div className="overflow-y-auto py-1">
+                {!referidoBusqueda.trim() && (
+                  <>
+                    <button
+                      onClick={() => {
+                        onReferidoChange(null);
+                        setReferidoOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        !selectedReferido 
+                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Todos los referidos
+                    </button>
+                    <div className="h-px bg-slate-100 my-1" />
+                  </>
+                )}
+                {referidosFiltrados.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
+                ) : (
+                  referidosFiltrados.map((referido) => (
+                    <button
+                      key={referido}
+                      onClick={() => {
+                        onReferidoChange(referido);
+                        setReferidoOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                        selectedReferido === referido
+                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <UserPlus size={12} />
+                      {referido}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
