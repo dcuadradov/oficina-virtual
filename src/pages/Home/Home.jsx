@@ -7,7 +7,8 @@ import {
   Settings, 
   LogOut,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Newspaper
 } from 'lucide-react';
 
 // Configuración de módulos disponibles
@@ -41,6 +42,16 @@ const modulosConfig = {
     color: 'from-slate-500 to-slate-700',
     bgLight: 'bg-slate-50',
     iconColor: 'text-slate-600'
+  },
+  cms: {
+    id: 'cms',
+    nombre: 'CMS Blog página WEB MD',
+    descripcion: 'Crear y publicar artículos del blog público',
+    icono: Newspaper,
+    ruta: '/cms',
+    color: 'from-violet-500 to-indigo-600',
+    bgLight: 'bg-violet-50',
+    iconColor: 'text-violet-600'
   }
 };
 
