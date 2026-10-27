@@ -13,6 +13,7 @@ import { usePitchAnalisisUniverse } from './components/usePitchAnalisisUniverse'
 import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
+import { collectPaises } from './paisFilter';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
@@ -81,6 +82,8 @@ export default function Dashboard() {
   const [tagsDisponibles, setTagsDisponibles] = useState([]);
   const [selectedFuente, setSelectedFuente] = useState([]);
   const [fuentesDisponibles, setFuentesDisponibles] = useState([]);
+  const [selectedPais, setSelectedPais] = useState([]);
+  const [paisesDisponibles, setPaisesDisponibles] = useState([]);
   const [selectedReferido, setSelectedReferido] = useState(null);
   const [referidosDisponibles, setReferidosDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
@@ -482,6 +485,39 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Países distintos de leads.pais. PostgREST corta en 1000 filas, así que
+  // se pagina para que el dropdown no se quede solo con los primeros leads.
+  const fetchPaises = useCallback(async () => {
+    try {
+      const PAGE_SIZE = 1000;
+      const pages = [];
+      let from = 0;
+      let keepFetching = true;
+
+      while (keepFetching) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('pais')
+          .not('pais', 'is', null)
+          .neq('pais', '')
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        pages.push(data || []);
+        if (!data || data.length < PAGE_SIZE) {
+          keepFetching = false;
+        } else {
+          from += PAGE_SIZE;
+        }
+      }
+
+      setPaisesDisponibles(collectPaises(pages));
+    } catch (error) {
+      console.error('Error cargando países:', error);
+    }
+  }, []);
+
   // Función para cargar referidos únicos de los leads
   const fetchReferidos = useCallback(async () => {
     try {
@@ -841,6 +877,10 @@ export default function Dashboard() {
           statsQuery = statsQuery.in('fuente_dato', selectedFuente);
         }
 
+        if (selectedPais.length > 0) {
+          statsQuery = statsQuery.in('pais', selectedPais);
+        }
+
         if (selectedReferido) {
           statsQuery = statsQuery.eq('referido_por', selectedReferido);
         }
@@ -924,7 +964,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error cargando estadísticas:', error.message);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, selectedCategoria, selectedTag, selectedFuente, selectedPais, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Función para obtener leads paginados
   const fetchLeads = useCallback(async (silent = false, page = 0) => {
@@ -989,6 +1029,7 @@ export default function Dashboard() {
         if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
         if (selectedTag.length > 0) q = q.in('label', selectedTag);
         if (selectedFuente.length > 0) q = q.in('fuente_dato', selectedFuente);
+        if (selectedPais.length > 0) q = q.in('pais', selectedPais);
         if (selectedReferido) q = q.eq('referido_por', selectedReferido);
         if (filtroWhatsApp === 'abierta') {
           const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -1101,7 +1142,7 @@ export default function Dashboard() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento, esSetter, fasesSetter, aplicarVisibilidadFases]);
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedPais, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, parseDateFilters, dateFilterField, filtroSinSeguimiento, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Efecto para carga inicial
   useEffect(() => {
@@ -1110,6 +1151,7 @@ export default function Dashboard() {
       fetchCategorias();
       fetchTags();
       fetchFuentes();
+      fetchPaises();
       fetchReferidos();
       fetchColoresFases();
       fetchFasesSetter();
@@ -1176,7 +1218,7 @@ export default function Dashboard() {
       fetchNuevosLeads();
       fetchLeads(true, 0); // Volver a página 0 cuando cambian filtros
     }
-  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento, fasesSetter]);
+  }, [activeFilter, activeEtapas, selectedComercial, selectedMes, selectedPeriodo, selectedDia, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedPais, selectedReferido, filtroWhatsApp, filtroNuevosLeads, filtroHot, filtroEmdi, filtroGestionWA, sortConfig, dateFilterField, filtroSinSeguimiento, fasesSetter]);
 
   // Heartbeat: actualizar última conexión cada 30 segundos
   useEffect(() => {
@@ -1448,6 +1490,10 @@ export default function Dashboard() {
                   selectedFuente={selectedFuente}
                   onFuenteChange={setSelectedFuente}
                   fuentes={fuentesDisponibles}
+                  selectedPais={selectedPais}
+                  onPaisChange={setSelectedPais}
+                  paises={paisesDisponibles}
+                  showPaisFilter
                   selectedReferido={selectedReferido}
                   onReferidoChange={setSelectedReferido}
                   referidos={referidosDisponibles}
@@ -1479,7 +1525,7 @@ export default function Dashboard() {
             />
 
                 {/* Indicador de filtro activo */}
-                {(activeFilter !== 'todos' || activeEtapas.length > 0 || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedReferido || filtroGestionWA) && (
+                {(activeFilter !== 'todos' || activeEtapas.length > 0 || selectedComercial || selectedMes || selectedPeriodo || selectedDia || searchQuery || selectedCategoria || selectedTag.length > 0 || selectedFuente.length > 0 || selectedPais.length > 0 || selectedReferido || filtroGestionWA) && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#1717AF]/5 border border-[#1717AF]/20 rounded-2xl">
                 <div className="w-2 h-2 rounded-full bg-[#1717AF] animate-pulse" />
                 <span className="text-sm text-slate-600">
@@ -1493,6 +1539,7 @@ export default function Dashboard() {
                       {selectedCategoria && <span className="text-slate-400"> • Categoría: {selectedCategoria}</span>}
                       {selectedTag.length > 0 && <span className="text-slate-400"> • Tags: {selectedTag.join(', ')}</span>}
                       {selectedFuente.length > 0 && <span className="text-slate-400"> • Fuentes: {selectedFuente.join(', ')}</span>}
+                      {selectedPais.length > 0 && <span className="text-slate-400"> • País: {selectedPais.join(', ')}</span>}
                       {selectedReferido && <span className="text-slate-400"> • Referido por: {selectedReferido}</span>}
                       {filtroGestionWA && <span className="text-slate-400"> • Gestión WA: {filtroGestionWA === 'respond' ? 'Respond' : 'WA Business del Comercial'}</span>}
                 </span>
@@ -1508,6 +1555,7 @@ export default function Dashboard() {
                         setSelectedCategoria(null);
                         setSelectedTag([]);
                         setSelectedFuente([]);
+                        setSelectedPais([]);
                         setSelectedReferido(null);
                         setFiltroGestionWA(null);
                         setFiltroSinSeguimiento(false);

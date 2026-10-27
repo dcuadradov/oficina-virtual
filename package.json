@@ -11,7 +11,7 @@
     "deploy:staging": "npm run build:staging && firebase deploy --only hosting:staging",
     "deploy:prod": "npm run build:prod && firebase deploy --only hosting:production",
     "lint": "eslint .",
-    "test": "node --test src/lib/cms/*.test.js",
+    "test": "node --test src/lib/cms/*.test.js src/pages/Dashboard/paisFilter.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

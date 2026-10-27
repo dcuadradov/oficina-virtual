@@ -35,6 +35,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar por mes, por semana comercial (martes a lunes) o por un día puntual.
 - Se puede elegir si esa fecha corresponde a la creación del lead o a su última actualización.
 - Se puede filtrar por fuente, tag, referido y categoría de seguimiento.
+- En **Gestión** se puede filtrar por país del lead. Se pueden marcar varios: el lead entra si es de cualquiera de ellos, y ese resultado se sigue combinando con fuente, tag, comercial, fechas y el resto. En el listado se puede escribir para buscar el país (no distingue mayúsculas ni tildes).
 - En **Referido por** se puede escribir para ir filtrando la lista al momento (no distingue mayúsculas ni tildes). Si no hay coincidencias, muestra “Sin resultados”.
 - Se puede filtrar por comercial dueño del lead (solo supervisores).
 - Se puede filtrar por leads que llegaron con clase de cortesía.

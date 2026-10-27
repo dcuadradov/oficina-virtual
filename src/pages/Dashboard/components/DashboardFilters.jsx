@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
+import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, Flag, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
+import { getCountryFlag } from '../../../utils/countryFlags';
+import { filtrarPaises } from '../paisFilter';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -145,6 +147,10 @@ const DashboardFilters = ({
   selectedFuente,
   onFuenteChange,
   fuentes = [],
+  selectedPais = [],
+  onPaisChange,
+  paises = [],
+  showPaisFilter = false,
   selectedReferido,
   onReferidoChange,
   referidos = [],
@@ -201,6 +207,8 @@ const DashboardFilters = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagOpen, tagsStaged]);
   const [fuenteOpen, setFuenteOpen] = useState(false);
+  const [paisOpen, setPaisOpen] = useState(false);
+  const [paisBusqueda, setPaisBusqueda] = useState('');
   const [referidoOpen, setReferidoOpen] = useState(false);
   const [referidoBusqueda, setReferidoBusqueda] = useState('');
   const [gestionWAOpen, setGestionWAOpen] = useState(false);
@@ -320,6 +328,7 @@ const DashboardFilters = ({
         setCategoriaOpen(false);
         setTagOpen(false);
         setFuenteOpen(false);
+        setPaisOpen(false);
         setReferidoOpen(false);
         setGestionWAOpen(false);
         setPerformanceDropdownOpen(null);
@@ -333,6 +342,10 @@ const DashboardFilters = ({
     if (!referidoOpen) setReferidoBusqueda('');
   }, [referidoOpen]);
 
+  useEffect(() => {
+    if (!paisOpen) setPaisBusqueda('');
+  }, [paisOpen]);
+
   const referidosFiltrados = useMemo(() => {
     const normalizar = (s) => (s || '').toString().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -340,6 +353,11 @@ const DashboardFilters = ({
     if (!term) return referidos;
     return referidos.filter((referido) => normalizar(referido).includes(term));
   }, [referidos, referidoBusqueda]);
+
+  const paisesFiltrados = useMemo(
+    () => filtrarPaises(paises, paisBusqueda),
+    [paises, paisBusqueda],
+  );
   
   // Obtener label del comercial seleccionado
   const selectedComercialLabel = comerciales.find(c => c.email === selectedComercial)?.nombre || 'Todos los comerciales';
@@ -764,6 +782,7 @@ const DashboardFilters = ({
               setMesOpen(!mesOpen);
               setComercialOpen(false);
               setPeriodoOpen(false);
+              setPaisOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedMes
@@ -861,6 +880,7 @@ const DashboardFilters = ({
               setPeriodoOpen(!periodoOpen);
               setComercialOpen(false);
               setMesOpen(false);
+              setPaisOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedPeriodo
@@ -948,6 +968,7 @@ const DashboardFilters = ({
               setComercialOpen(false);
               setMesOpen(false);
               setPeriodoOpen(false);
+              setPaisOpen(false);
               // Resetear calendario al mes actual o al mes del día seleccionado
               if (selectedDia) {
                 setCalendarMonth(new Date(selectedDia + 'T12:00:00'));
@@ -1130,6 +1151,7 @@ const DashboardFilters = ({
               setComercialOpen(!comercialOpen);
               setMesOpen(false);
               setPeriodoOpen(false);
+              setPaisOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedComercial
@@ -1321,6 +1343,7 @@ const DashboardFilters = ({
               setMesOpen(false);
               setPeriodoOpen(false);
               setDiaOpen(false);
+              setPaisOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedCategoria
@@ -1403,6 +1426,7 @@ const DashboardFilters = ({
               setDiaOpen(false);
               setCategoriaOpen(false);
               setFuenteOpen(false);
+              setPaisOpen(false);
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
@@ -1577,6 +1601,7 @@ const DashboardFilters = ({
               setDiaOpen(false);
               setCategoriaOpen(false);
               setTagOpen(false);
+              setPaisOpen(false);
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
@@ -1649,6 +1674,117 @@ const DashboardFilters = ({
         </div>
       )}
 
+      {/* Filtro por País (multi-select, solo Gestión) */}
+      {showPaisFilter && paises.length > 0 && onPaisChange && (
+        <div className="relative filter-dropdown">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setPaisOpen(!paisOpen);
+              setComercialOpen(false);
+              setMesOpen(false);
+              setPeriodoOpen(false);
+              setDiaOpen(false);
+              setCategoriaOpen(false);
+              setTagOpen(false);
+              setFuenteOpen(false);
+              setReferidoOpen(false);
+              setGestionWAOpen(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+              selectedPais.length > 0
+                ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]'
+            }`}
+          >
+            <Flag size={16} />
+            <span className="max-w-[150px] truncate">
+              {selectedPais.length > 0 ? `País (${selectedPais.length})` : 'País'}
+            </span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${paisOpen ? 'rotate-180' : ''}`} />
+            {selectedPais.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPaisChange([]);
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/20"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </button>
+
+          {paisOpen && (
+            <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col overflow-hidden" style={{ maxHeight: '320px' }}>
+              <div className="p-2 border-b border-slate-100">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={paisBusqueda}
+                    onChange={(e) => setPaisBusqueda(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Buscar país..."
+                    autoFocus
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                  />
+                </div>
+              </div>
+              <div className="overflow-y-auto py-1">
+                {!paisBusqueda.trim() && (
+                  <>
+                    <button
+                      onClick={() => onPaisChange([])}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        selectedPais.length === 0
+                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Todos los países
+                    </button>
+                    <div className="h-px bg-slate-100 my-1" />
+                  </>
+                )}
+                {paisesFiltrados.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
+                ) : (
+                  paisesFiltrados.map((pais) => {
+                    const isChecked = selectedPais.includes(pais);
+                    return (
+                      <button
+                        key={pais}
+                        onClick={() => {
+                          if (isChecked) {
+                            onPaisChange(selectedPais.filter((p) => p !== pais));
+                          } else {
+                            onPaisChange([...selectedPais, pais]);
+                          }
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                          isChecked
+                            ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isChecked ? 'bg-[#1717AF] border-[#1717AF]' : 'border-slate-300'
+                        }`}>
+                          {isChecked && <Check size={10} className="text-white" />}
+                        </div>
+                        <span className="text-base leading-none">{getCountryFlag(pais)}</span>
+                        <span className="truncate">{pais}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Filtro por Referido */}
       {showReferidoFilter && referidos.length > 0 && (
         <div className="relative filter-dropdown">
@@ -1663,6 +1799,7 @@ const DashboardFilters = ({
               setCategoriaOpen(false);
               setTagOpen(false);
               setFuenteOpen(false);
+              setPaisOpen(false);
               setGestionWAOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
@@ -1765,6 +1902,7 @@ const DashboardFilters = ({
               setCategoriaOpen(false);
               setTagOpen(false);
               setFuenteOpen(false);
+              setPaisOpen(false);
               setReferidoOpen(false);
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
