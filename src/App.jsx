@@ -4,6 +4,10 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Home from './pages/Home/Home';
 import Dashboard from './pages/Dashboard/Dashboard';
+import CmsGuard from './pages/Cms/CmsGuard';
+import CmsList from './pages/Cms/CmsList';
+import CmsEditor from './pages/Cms/CmsEditor';
+import CmsPerformance from './pages/Cms/CmsPerformance';
 import PresentationPage from './pages/Presentation/PresentationPage';
 import ResultPage from './pages/Presentation/ResultPage';
 import PropuestaPage from './pages/Presentation/PropuestaPage';
@@ -87,6 +91,48 @@ export default function App() {
             <Dashboard />
           </ProtectedRoute>
         } 
+      />
+
+      {/* CMS Blog */}
+      <Route
+        path="/cms"
+        element={
+          <ProtectedRoute>
+            <CmsGuard>
+              <CmsList />
+            </CmsGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cms/nuevo"
+        element={
+          <ProtectedRoute>
+            <CmsGuard>
+              <CmsEditor />
+            </CmsGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cms/:id/performance"
+        element={
+          <ProtectedRoute>
+            <CmsGuard>
+              <CmsPerformance />
+            </CmsGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cms/:id"
+        element={
+          <ProtectedRoute>
+            <CmsGuard>
+              <CmsEditor />
+            </CmsGuard>
+          </ProtectedRoute>
+        }
       />
 
       {/* Presentación personalizada del lead (solo comerciales autenticados) */}

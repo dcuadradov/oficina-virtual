@@ -13,7 +13,9 @@ Portal interno del equipo comercial de MD English (programa de inglés para prof
 - Al entrar se elige el módulo con el que se va a trabajar.
 - Se puede cerrar sesión desde el inicio o desde el tablero.
 
-Hoy el módulo construido es **Operación Comercial**. En el inicio aparecen también Finanzas y Administración, pero todavía no tienen pantalla.
+Hoy hay dos módulos construidos: **Operación Comercial** y **CMS Blog página WEB MD**. En el inicio aparecen también Finanzas y Administración, pero todavía no tienen pantalla.
+
+El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde ahí se crean y publican los artículos del blog público (mdenglish.us). El sitio público lee solo los publicados; el portal también guarda borradores y pausados.
 
 ---
 
@@ -33,6 +35,7 @@ Hoy el módulo construido es **Operación Comercial**. En el inicio aparecen tam
 - Se puede filtrar por mes, por semana comercial (martes a lunes) o por un día puntual.
 - Se puede elegir si esa fecha corresponde a la creación del lead o a su última actualización.
 - Se puede filtrar por fuente, tag, referido y categoría de seguimiento.
+- En **Gestión** se puede filtrar por país del lead. Se pueden marcar varios: el lead entra si es de cualquiera de ellos, y ese resultado se sigue combinando con fuente, tag, comercial, fechas y el resto. En el listado se puede escribir para buscar el país (no distingue mayúsculas ni tildes).
 - En **Referido por** se puede escribir para ir filtrando la lista al momento (no distingue mayúsculas ni tildes). Si no hay coincidencias, muestra “Sin resultados”.
 - Se puede filtrar por comercial dueño del lead (solo supervisores).
 - Se puede filtrar por leads que llegaron con clase de cortesía.
@@ -244,9 +247,23 @@ Solo supervisores. Se elige un mes y cada informe compara contra años anteriore
 
 ---
 
-## 18. Lo que no existe hoy
+## 18. CMS del blog público
+
+- Se entra desde el inicio, con la tarjeta **CMS Blog página WEB MD**.
+- Se puede crear un artículo en borrador y publicarlo cuando esté listo.
+- Se puede pausar un artículo publicado (deja de verse en la web) y reanudarlo.
+- Se puede buscar por título y filtrar por estado, destacado y novedades.
+- Cada artículo tiene banner 16:9 (recomendado 2560×1440), título, subtítulo, categoría, autor, fecha, cuerpo por bloques y marcas de destacado / novedades.
+- En el cuerpo se pueden mezclar títulos, subtítulos, párrafos con enlace, listas, media a todo el ancho (16:9) y texto + media cuadrado (1:1).
+- Se puede ver el performance de un artículo: visitas totales, últimos 7 y 30 días, únicos y una curva de 30 días.
+- El sitio público no se edita desde WordPress: lee los publicados en Supabase. Detalle técnico en `docs/cms-blog.md`.
+
+---
+
+## 19. Lo que no existe hoy
 
 - Exportar leads, métricas o informes a Excel, CSV o PDF.
 - Chat de WhatsApp dentro del portal (solo se abre Respond.io por fuera).
 - Administrar usuarios, roles, etapas o formularios desde la interfaz (se hace directo en la base).
 - Módulos de Finanzas y Administración.
+- El CMS no publica solo: el sitio mdenglish.us tiene que leer las tablas del blog.
