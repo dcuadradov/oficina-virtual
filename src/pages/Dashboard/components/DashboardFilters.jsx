@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, Flag, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
-import { filtrarPaises } from '../paisFilter';
+import { filtrarPaises, formatoConteoLeads } from '../paisFilter';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -1716,7 +1716,7 @@ const DashboardFilters = ({
           </button>
 
           {paisOpen && (
-            <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col overflow-hidden" style={{ maxHeight: '320px' }}>
+            <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col overflow-hidden" style={{ maxHeight: '320px' }}>
               <div className="p-2 border-b border-slate-100">
                 <div className="relative">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1750,7 +1750,8 @@ const DashboardFilters = ({
                 {paisesFiltrados.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
                 ) : (
-                  paisesFiltrados.map((pais) => {
+                  paisesFiltrados.map((item) => {
+                    const pais = item.pais;
                     const isChecked = selectedPais.includes(pais);
                     return (
                       <button
@@ -1775,6 +1776,9 @@ const DashboardFilters = ({
                         </div>
                         <span className="text-base leading-none">{getCountryFlag(pais)}</span>
                         <span className="truncate">{pais}</span>
+                        <span className={`ml-auto shrink-0 tabular-nums text-xs ${isChecked ? 'text-[#1717AF]/70' : 'text-slate-400'}`}>
+                          ({formatoConteoLeads(item.count)})
+                        </span>
                       </button>
                     );
                   })

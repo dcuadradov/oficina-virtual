@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import DashboardStats from './components/DashboardStats';
@@ -13,7 +13,7 @@ import { usePitchAnalisisUniverse } from './components/usePitchAnalisisUniverse'
 import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
-import { collectPaises } from './paisFilter';
+import { contarPaises, opcionesPais } from './paisFilter';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
@@ -83,7 +83,12 @@ export default function Dashboard() {
   const [selectedFuente, setSelectedFuente] = useState([]);
   const [fuentesDisponibles, setFuentesDisponibles] = useState([]);
   const [selectedPais, setSelectedPais] = useState([]);
-  const [paisesDisponibles, setPaisesDisponibles] = useState([]);
+  const [paisesContados, setPaisesContados] = useState([]);
+  const paisesDisponibles = useMemo(
+    () => opcionesPais(paisesContados, selectedPais),
+    [paisesContados, selectedPais],
+  );
+  const paisFetchId = useRef(0);
   const [selectedReferido, setSelectedReferido] = useState(null);
   const [referidosDisponibles, setReferidosDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
@@ -485,39 +490,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Países distintos de leads.pais. PostgREST corta en 1000 filas, así que
-  // se pagina para que el dropdown no se quede solo con los primeros leads.
-  const fetchPaises = useCallback(async () => {
-    try {
-      const PAGE_SIZE = 1000;
-      const pages = [];
-      let from = 0;
-      let keepFetching = true;
-
-      while (keepFetching) {
-        const { data, error } = await supabase
-          .from('leads')
-          .select('pais')
-          .not('pais', 'is', null)
-          .neq('pais', '')
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (error) throw error;
-
-        pages.push(data || []);
-        if (!data || data.length < PAGE_SIZE) {
-          keepFetching = false;
-        } else {
-          from += PAGE_SIZE;
-        }
-      }
-
-      setPaisesDisponibles(collectPaises(pages));
-    } catch (error) {
-      console.error('Error cargando países:', error);
-    }
-  }, []);
-
   // Función para cargar referidos únicos de los leads
   const fetchReferidos = useCallback(async () => {
     try {
@@ -759,6 +731,118 @@ export default function Dashboard() {
 
     return { fechaInicio, fechaFin };
   }, [selectedDia, selectedMes, selectedPeriodo, monthConfigs]);
+
+  // Países del desplegable, con conteo. Usa los mismos filtros que la tabla
+  // excepto el propio país, para que la lista se achique con fuente, comercial,
+  // fechas, etc., y se pueda seguir marcando más de un país.
+  const fetchPaises = useCallback(async () => {
+    const fetchId = ++paisFetchId.current;
+    const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+    if (!targetEmail && !puedeVerTodos) return;
+    if (esSetter && fasesSetter === null) return;
+
+    const publicar = (pages) => {
+      if (fetchId !== paisFetchId.current) return;
+      setPaisesContados(contarPaises(pages));
+    };
+
+    try {
+      const { fechaInicio, fechaFin } = parseDateFilters();
+
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) {
+        publicar([]);
+        return;
+      }
+
+      let cardIdsConCategoria = null;
+      if (selectedCategoria) {
+        const { data: comentariosConCategoria, error: errorCat } = await supabase
+          .from('comentarios')
+          .select('lead_id')
+          .eq('categoria', selectedCategoria);
+        if (!errorCat && comentariosConCategoria) {
+          cardIdsConCategoria = [...new Set(comentariosConCategoria.map((c) => c.lead_id))];
+          if (cardIdsConCategoria.length === 0) {
+            publicar([]);
+            return;
+          }
+        }
+      }
+
+      const PAGE_SIZE = 1000;
+      const pages = [];
+      let from = 0;
+      let keepFetching = true;
+      const fasesEmdi = ['340832804', '339756097', '341769991'];
+
+      while (keepFetching) {
+        let q = aplicarVisibilidadFases(
+          supabase.from('leads').select('pais')
+        );
+        if (puedeVerTodos && selectedComercial) {
+          q = q.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          q = q.eq('comercial_email', userEmail);
+        }
+        if (fechaInicio && fechaFin) {
+          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+        if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
+        if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
+        if (searchQuery && searchQuery.trim()) {
+          if (isOnlyCortesiaSearch(searchQuery)) {
+            q = q.eq('tiene_clase_de_cortesia', 'Si');
+          } else {
+            const searchTerm = `%${searchQuery.trim()}%`;
+            q = q.or(
+              `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+            );
+          }
+        }
+        if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
+        if (selectedTag.length > 0) q = q.in('label', selectedTag);
+        if (selectedFuente.length > 0) q = q.in('fuente_dato', selectedFuente);
+        if (selectedReferido) q = q.eq('referido_por', selectedReferido);
+        if (filtroWhatsApp === 'abierta') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          q = q.in('card_id', nuevosLeadsCardIds);
+        }
+        if (filtroHot) q = q.eq('is_hot', true);
+        if (filtroEmdi === 'activo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+        } else if (filtroEmdi === 'inactivo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+        }
+        if (filtroGestionWA === 'respond') {
+          q = q.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          q = q.eq('gestion_whatsapp_personal', true);
+        }
+
+        const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (fetchId !== paisFetchId.current) return;
+
+        pages.push(data || []);
+        if (!data || data.length < PAGE_SIZE) {
+          keepFetching = false;
+        } else {
+          from += PAGE_SIZE;
+        }
+      }
+
+      publicar(pages);
+    } catch (error) {
+      console.error('Error cargando países:', error);
+    }
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
 
   // Función para calcular ventanas de WhatsApp abiertas (< 24 horas)
   const fetchVentanasAbiertas = useCallback(async () => {
@@ -1151,7 +1235,6 @@ export default function Dashboard() {
       fetchCategorias();
       fetchTags();
       fetchFuentes();
-      fetchPaises();
       fetchReferidos();
       fetchColoresFases();
       fetchFasesSetter();
@@ -1163,6 +1246,10 @@ export default function Dashboard() {
       fetchLeads(false, 0);
     }
   }, [userEmail]);
+
+  useEffect(() => {
+    if (userEmail) fetchPaises();
+  }, [userEmail, fetchPaises]);
 
   // Setter: los fetches iniciales de leads dependen de fasesSetter, que carga
   // async. Cuando llega (null → array), disparamos la carga real (el primer
