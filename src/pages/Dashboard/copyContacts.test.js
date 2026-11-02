@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectContacts, formatEmail, formatPhone, joinForClipboard, nextContactPage } from './copyContacts.js';
+import { collectContacts, formatEmail, formatPhone, joinForClipboard, nextContactPage, whatsappWebUrl } from './copyContacts.js';
 
 test('formatPhone deja el internacional todo pegado', () => {
   assert.equal(formatPhone('+57.3173588591'), '+573173588591');
@@ -8,6 +8,13 @@ test('formatPhone deja el internacional todo pegado', () => {
   assert.equal(formatPhone('00573173588591'), '+573173588591');
   assert.equal(formatPhone(''), null);
   assert.equal(formatPhone('   '), null);
+});
+
+test('whatsappWebUrl arma el enlace de WhatsApp Web', () => {
+  assert.equal(whatsappWebUrl('+57.3173588591'), 'https://wa.me/573173588591');
+  assert.equal(whatsappWebUrl('+57 317 358 8591'), 'https://wa.me/573173588591');
+  assert.equal(whatsappWebUrl('+573176675788'), 'https://wa.me/573176675788');
+  assert.equal(whatsappWebUrl(''), null);
 });
 
 test('formatEmail recorta y descarta lo que no es correo', () => {

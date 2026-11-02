@@ -57,6 +57,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar los que no tienen ningún seguimiento todavía.
 - Se puede cambiar la etapa del lead desde la misma fila, y el cambio queda reflejado en Pipefy.
 - Se puede abrir la conversación del lead en Respond.io, o crearle el contacto ahí mismo si todavía no existe.
+- También se puede abrir el número del lead en WhatsApp Web del comercial (isotipo verde), desde la fila. Si no hay teléfono, el botón no abre nada. Respond.io se queda al lado.
 - Se puede indicar si ese lead se gestiona por Respond.io o por el WhatsApp personal del comercial.
 - Se puede activar los recordatorios automáticos desde la fila, cuando la etapa lo permite.
 - Se puede seleccionar varias filas y marcarlas como leídas o no leídas en bloque.
@@ -77,6 +78,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede reasignar el lead a otro comercial, y al elegir se ve quién está conectado y quién no.
 - Se puede copiar los datos del lead al portapapeles.
 - Se puede escribirle por WhatsApp desde la ficha, con el contador de la ventana de 24 horas a la vista.
+- Desde la ficha también se puede abrir el número del lead en WhatsApp Web del comercial, igual que en la tabla.
 - Cuando el lead ya está listo para agendar, aparece un aviso con el link de agenda del comercial asignado.
 - Cuando el lead ya tiene pitch agendado, aparece la fecha y el link de la reunión.
 - Se puede pedir un resumen del lead hecho con inteligencia artificial, y volverlo a generar cuando haya información nueva.
@@ -264,7 +266,7 @@ Solo supervisores. Se elige un mes y cada informe compara contra años anteriore
 ## 19. Lo que no existe hoy
 
 - Exportar leads, métricas o informes a Excel, CSV o PDF.
-- Chat de WhatsApp dentro del portal (solo se abre Respond.io por fuera).
+- Chat de WhatsApp dentro del portal (por fuera se abre Respond.io o WhatsApp Web).
 - Administrar usuarios, roles, etapas o formularios desde la interfaz (se hace directo en la base).
 - Módulos de Finanzas y Administración.
 - El CMS no publica solo: el sitio mdenglish.us tiene que leer las tablas del blog.

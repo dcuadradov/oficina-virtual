@@ -28,6 +28,12 @@ export function formatPhone(raw) {
   return `+${digits}`;
 }
 
+export function whatsappWebUrl(raw) {
+  const phone = formatPhone(raw);
+  if (!phone) return null;
+  return `https://wa.me/${phone.slice(1)}`;
+}
+
 export function formatEmail(raw) {
   const value = String(raw || '').trim();
   if (!value || !value.includes('@')) return null;

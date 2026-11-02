@@ -47,6 +47,7 @@ import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
+import WhatsAppWebButton from './WhatsAppWebButton';
 import { listPresentationRuns } from '../../../lib/presentation/runs';
 
 /**
@@ -3454,6 +3455,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                   
                   {/* WhatsApp con contador de ventana 24h */}
                   <WhatsAppButtonSidebar lead={lead} size={18} onCrearRespond={handleCrearRespond} />
+                  <WhatsAppWebButton
+                    telefono={getFieldValue('telefono') || lead.telefono}
+                    size={18}
+                    className="p-2 sm:p-2.5 rounded-xl transition-all duration-200"
+                  />
                 </div>
                 
                 {/* Botón cerrar - siempre visible */}
