@@ -167,6 +167,7 @@ const DashboardFilters = ({
   puedeVerTodos = false,
   monthConfigs = {},
   onSaveMonthConfig,
+  showSearch = true,
   showTagFilter = true,
   showFuenteFilter = true,
   showReferidoFilter = true,
@@ -743,7 +744,7 @@ const DashboardFilters = ({
       {/* Fila 1: Búsqueda + Filtros de fecha + Pill */}
       <div className="flex flex-wrap items-center gap-3">
       {/* Campo de búsqueda */}
-      {(
+      {showSearch && (
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search size={16} className="text-slate-400" />
@@ -1675,7 +1676,7 @@ const DashboardFilters = ({
       )}
 
       {/* Filtro por País (multi-select, solo Gestión) */}
-      {showPaisFilter && paises.length > 0 && onPaisChange && (
+      {showPaisFilter && onPaisChange && (
         <div className="relative filter-dropdown">
           <button
             onClick={(e) => {

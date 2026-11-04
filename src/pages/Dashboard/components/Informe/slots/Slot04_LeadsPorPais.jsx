@@ -5,42 +5,13 @@ import {
 } from 'recharts';
 import { supabase } from '../../../../../supabaseClient';
 import { getCountryFlag } from '../../../../../utils/countryFlags';
+import { applyLeadFilters } from '../informeFiltros';
 
 // Colores para las líneas del top N países (incluye "Otros" en gris al final).
 const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 const COLOR_OTROS = '#94A3B8';
 const SIN_PAIS = 'Sin país';
 const TOP_N = 5;
-
-function buildRango(monthConfigs, mesKey) {
-  const config = monthConfigs?.[mesKey];
-  if (config?.fecha_inicio) {
-    const fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-    let fechaFin;
-    let endDateLocal;
-    if (config.fecha_fin) {
-      const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-      const finMasUno = new Date(Date.UTC(yF, mF - 1, dF + 1));
-      fechaFin = `${finMasUno.getUTCFullYear()}-${String(finMasUno.getUTCMonth() + 1).padStart(2, '0')}-${String(finMasUno.getUTCDate()).padStart(2, '0')} 05:00:00+00`;
-      endDateLocal = config.fecha_fin;
-    } else {
-      const now = new Date();
-      const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      fechaFin = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')} 05:00:00+00`;
-      const today = new Date();
-      endDateLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    }
-    return { fechaInicio, fechaFin, startDateLocal: config.fecha_inicio, endDateLocal };
-  }
-  const [year, month] = mesKey.split('-').map(Number);
-  const fechaInicio = `${year}-${String(month).padStart(2, '0')}-01 05:00:00+00`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const mesSiguiente = new Date(year, month, 1);
-  const fechaFin = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01 05:00:00+00`;
-  const startDateLocal = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endDateLocal = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { fechaInicio, fechaFin, startDateLocal, endDateLocal };
-}
 
 // Lista de fechas (YYYY-MM-DD) entre start y end (inclusivo).
 function buildDayList(startDateLocal, endDateLocal) {
@@ -76,18 +47,13 @@ function dateKeyUtcMinus5(tsString) {
   return `${y}-${m}-${dd}`;
 }
 
-export default function Slot04_LeadsPorPais({ selectedMes, monthConfigs }) {
-  const [leadsRows, setLeadsRows] = useState([]); // [{ pais, created_at }]
+export default function Slot04_LeadsPorPais({ rango, filtros = {} }) {
+  const [leadsRows, setLeadsRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const dateField = filtros.dateField === 'updated_at' ? 'updated_at' : 'created_at';
 
-  const rango = useMemo(
-    () => (selectedMes ? buildRango(monthConfigs, selectedMes) : null),
-    [monthConfigs, selectedMes],
-  );
-
-  // Cargar leads del mes (sólo pais y created_at, paginado).
   useEffect(() => {
-    if (!rango) return;
+    if (!rango?.fechaInicio) return;
     let cancelled = false;
     const cargar = async () => {
       setLoading(true);
@@ -97,13 +63,12 @@ export default function Slot04_LeadsPorPais({ selectedMes, monthConfigs }) {
         let from = 0;
         let keep = true;
         while (keep && !cancelled) {
-          const { data, error } = await supabase
-            .from('leads')
-            .select('pais, created_at')
-            .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
-            .gte('created_at', rango.fechaInicio)
-            .lte('created_at', rango.fechaFin)
-            .range(from, from + PAGE_SIZE - 1);
+          const q = applyLeadFilters(
+            supabase.from('leads').select(`pais, ${dateField}`)
+              .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
+            filtros,
+          );
+          const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
           if (error) throw error;
           acc.push(...(data || []));
           if (!data || data.length < PAGE_SIZE) keep = false;
@@ -118,7 +83,7 @@ export default function Slot04_LeadsPorPais({ selectedMes, monthConfigs }) {
     };
     cargar();
     return () => { cancelled = true; };
-  }, [rango]);
+  }, [rango, filtros, dateField]);
 
   const days = useMemo(
     () => (rango ? buildDayList(rango.startDateLocal, rango.endDateLocal) : []),
@@ -130,17 +95,18 @@ export default function Slot04_LeadsPorPais({ selectedMes, monthConfigs }) {
     const totalsByPais = {};
     const byDayByPais = {};
     let total = 0;
-    leadsRows.forEach(({ pais, created_at }) => {
+    leadsRows.forEach((row) => {
+      const pais = row.pais;
       const key = (pais == null || String(pais).trim() === '') ? SIN_PAIS : String(pais).trim();
       totalsByPais[key] = (totalsByPais[key] || 0) + 1;
       total++;
-      const dKey = dateKeyUtcMinus5(created_at);
+      const dKey = dateKeyUtcMinus5(row[dateField]);
       if (!dKey) return;
       if (!byDayByPais[dKey]) byDayByPais[dKey] = {};
       byDayByPais[dKey][key] = (byDayByPais[dKey][key] || 0) + 1;
     });
     return { totalsByPais, byDayByPais, total };
-  }, [leadsRows]);
+  }, [leadsRows, dateField]);
 
   // Países ordenados por count desc, con bandera y % asignado.
   const sortedPaises = useMemo(() => {

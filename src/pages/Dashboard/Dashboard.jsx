@@ -2073,7 +2073,12 @@ export default function Dashboard() {
                 )}
               </>
             ) : activeView === 'informe' && puedeVerTodos ? (
-              <Informe monthConfigs={monthConfigs} />
+              <Informe
+                monthConfigs={monthConfigs}
+                onSaveMonthConfig={handleSaveMonthConfig}
+                comerciales={comerciales}
+                onRefreshComerciales={fetchComerciales}
+              />
             ) : null}
           </div>
         )}

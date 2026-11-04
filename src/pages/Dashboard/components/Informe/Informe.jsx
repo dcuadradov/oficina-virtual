@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../../../../supabaseClient';
+import DashboardFilters from '../DashboardFilters';
 import Slot01_LeadsCreadosMes from './slots/Slot01_LeadsCreadosMes';
 import Slot02_FuentesLeads from './slots/Slot02_FuentesLeads';
 import Slot03_AsignacionLeads from './slots/Slot03_AsignacionLeads';
@@ -8,174 +9,197 @@ import SlotFasePorPais from './slots/SlotFasePorPais';
 import Slot05_LeadsPorOcupacion from './slots/Slot05_LeadsPorOcupacion';
 import Slot06_MatriculasMes from './slots/Slot06_MatriculasMes';
 import Slot07_MatriculasPorOcupacion from './slots/Slot07_MatriculasPorOcupacion';
-import { MESES_LARGOS } from './data/leadsHistoricos';
+import InformeFacetFilters from './InformeFacetFilters';
+import { applyLeadFilters, facetasCruzadas, getCurrentMonthKey, parseInformeDates } from './informeFiltros';
 
-// Inicio de los meses disponibles en el dropdown del informe.
-// Antes de esta fecha no había información comparable.
-const MES_MIN = '2026-03';
+export default function Informe({
+  monthConfigs,
+  onSaveMonthConfig,
+  comerciales = [],
+  onRefreshComerciales,
+}) {
+  const [selectedMes, setSelectedMes] = useState(getCurrentMonthKey);
+  const [selectedPeriodo, setSelectedPeriodo] = useState(null);
+  const [selectedDia, setSelectedDia] = useState(null);
+  const [selectedPais, setSelectedPais] = useState([]);
+  const [selectedComercial, setSelectedComercial] = useState(null);
+  const [selectedOcupacion, setSelectedOcupacion] = useState([]);
+  const [selectedLabel, setSelectedLabel] = useState([]);
+  const [selectedSexo, setSelectedSexo] = useState([]);
+  const [selectedEdad, setSelectedEdad] = useState([]);
+  const [dateFilterField, setDateFilterField] = useState('created_at');
+  const [facetRows, setFacetRows] = useState([]);
 
-function formatMesLabel(mesKey) {
-  const [year, mm] = mesKey.split('-');
-  const idx = parseInt(mm, 10) - 1;
-  return `${MESES_LARGOS[idx]} ${year}`;
-}
+  const dimSelections = useMemo(() => ({
+    pais: selectedPais,
+    ocupacion: selectedOcupacion,
+    label: selectedLabel,
+    sexo: selectedSexo,
+    edad: selectedEdad,
+  }), [selectedPais, selectedOcupacion, selectedLabel, selectedSexo, selectedEdad]);
 
-// Mes actual del calendario (formato 'YYYY-MM'), igual que el filtro de Gestión.
-function getCurrentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
+  const paisesDisponibles = useMemo(
+    () => facetasCruzadas(facetRows, dimSelections, 'pais')
+      .map(({ value, count }) => ({ pais: value, count })),
+    [facetRows, dimSelections],
+  );
 
-// Genera todos los meses del calendario desde fromKey hasta toKey (inclusive).
-function generarMesesCalendario(fromKey, toKey) {
-  const result = [];
-  let [y, m] = fromKey.split('-').map(Number);
-  const [yEnd, mEnd] = toKey.split('-').map(Number);
-  while (y < yEnd || (y === yEnd && m <= mEnd)) {
-    result.push(`${y}-${String(m).padStart(2, '0')}`);
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return result;
-}
+  const facetOptions = useMemo(() => ({
+    ocupacion: facetasCruzadas(facetRows, dimSelections, 'ocupacion'),
+    label: facetasCruzadas(facetRows, dimSelections, 'label'),
+    sexo: facetasCruzadas(facetRows, dimSelections, 'sexo'),
+    edad: facetasCruzadas(facetRows, dimSelections, 'edad'),
+  }), [facetRows, dimSelections]);
 
-export default function Informe({ monthConfigs }) {
-  const [selectedMes, setSelectedMes] = useState(null);
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const rango = useMemo(
+    () => parseInformeDates({ selectedDia, selectedPeriodo, selectedMes, monthConfigs }),
+    [selectedDia, selectedPeriodo, selectedMes, monthConfigs],
+  );
 
-  // Opciones del dropdown: meses del calendario desde MES_MIN hasta el mes en curso,
-  // ordenados de más reciente a más antiguo. (Igual que el filtro de Gestión.)
-  const opciones = useMemo(() => {
-    return generarMesesCalendario(MES_MIN, getCurrentMonthKey())
-      .sort((a, b) => b.localeCompare(a));
-  }, []);
+  const filtros = useMemo(() => ({
+    fechaInicio: rango.fechaInicio,
+    fechaFin: rango.fechaFin,
+    dateField: dateFilterField,
+    selectedPais,
+    selectedComercial,
+    selectedOcupacion,
+    selectedLabel,
+    selectedSexo,
+    selectedEdad,
+  }), [rango, dateFilterField, selectedPais, selectedComercial, selectedOcupacion, selectedLabel, selectedSexo, selectedEdad]);
 
-  // Default: mes en curso del calendario.
+  const handleMesChange = (mes) => {
+    setSelectedMes(mes);
+    setSelectedPeriodo(null);
+    setSelectedDia(null);
+  };
+
+  const handlePeriodoChange = (periodo) => {
+    setSelectedPeriodo(periodo);
+    setSelectedMes(null);
+    setSelectedDia(null);
+  };
+
+  const handleDiaChange = (dia) => {
+    setSelectedDia(dia);
+    setSelectedMes(null);
+    setSelectedPeriodo(null);
+  };
+
+  const fetchFacetas = useCallback(async () => {
+    try {
+      const { fechaInicio, fechaFin } = parseInformeDates({
+        selectedDia, selectedPeriodo, selectedMes, monthConfigs,
+      });
+      const pages = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
+      let keep = true;
+      while (keep) {
+        const q = applyLeadFilters(
+          supabase.from('leads').select('pais, ocupacion, label, sexo, edad')
+            .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
+          {
+            fechaInicio,
+            fechaFin,
+            dateField: dateFilterField,
+            selectedComercial,
+          },
+        );
+        const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        pages.push(data || []);
+        if (!data || data.length < PAGE_SIZE) keep = false;
+        else from += PAGE_SIZE;
+      }
+      setFacetRows(pages.flat());
+    } catch (error) {
+      console.error('Error cargando facetas del informe:', error);
+    }
+  }, [selectedDia, selectedPeriodo, selectedMes, monthConfigs, dateFilterField, selectedComercial]);
+
   useEffect(() => {
-    if (selectedMes) return;
-    setSelectedMes(getCurrentMonthKey());
-  }, [selectedMes]);
+    fetchFacetas();
+  }, [fetchFacetas]);
 
-  // Cerrar dropdown al click fuera.
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
+  const handleFacetChange = (key, next) => {
+    if (key === 'ocupacion') setSelectedOcupacion(next);
+    else if (key === 'label') setSelectedLabel(next);
+    else if (key === 'sexo') setSelectedSexo(next);
+    else if (key === 'edad') setSelectedEdad(next);
+  };
+
+  const slotProps = { rango, filtros, selectedMes, monthConfigs };
 
   return (
     <div className="space-y-6">
-      {/* Header con dropdown global de mes */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Informe</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Selecciona un mes para ver el detalle del periodo.
-          </p>
-        </div>
-
-        <div className="relative" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => setOpen(o => !o)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors"
-          >
-            <Calendar size={16} className="text-slate-400" />
-            {selectedMes ? formatMesLabel(selectedMes) : 'Seleccionar mes'}
-            <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-          </button>
-
-          {open && (
-            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-64 overflow-auto">
-              {opciones.length ? opciones.map(mesKey => {
-                const isActive = mesKey === selectedMes;
-                return (
-                  <button
-                    key={mesKey}
-                    type="button"
-                    onClick={() => { setSelectedMes(mesKey); setOpen(false); }}
-                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-[#1717AF]/10 text-[#1717AF] font-semibold'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {formatMesLabel(mesKey)}
-                  </button>
-                );
-              }) : (
-                <div className="px-4 py-3 text-xs text-slate-400">Sin meses configurados.</div>
-              )}
-            </div>
-          )}
-        </div>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800">Informe</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Los tiempos usan la misma configuración de mes, periodo y día que Gestión.
+        </p>
       </div>
 
-      {/* Slot 1 */}
-      <Slot01_LeadsCreadosMes
+      <DashboardFilters
+        comerciales={comerciales}
+        selectedComercial={selectedComercial}
+        onComercialChange={setSelectedComercial}
         selectedMes={selectedMes}
+        onMesChange={handleMesChange}
+        selectedPeriodo={selectedPeriodo}
+        onPeriodoChange={handlePeriodoChange}
+        selectedDia={selectedDia}
+        onDiaChange={handleDiaChange}
+        selectedPais={selectedPais}
+        onPaisChange={setSelectedPais}
+        paises={paisesDisponibles}
+        showPaisFilter
+        showComercialFilter
+        showSearch={false}
+        showTagFilter={false}
+        showFuenteFilter={false}
+        showReferidoFilter={false}
+        showGestionWAFilter={false}
+        dateFilterField={dateFilterField}
+        onDateFilterFieldChange={setDateFilterField}
+        puedeVerTodos
         monthConfigs={monthConfigs}
-      />
+        onSaveMonthConfig={onSaveMonthConfig}
+        onRefreshComerciales={onRefreshComerciales}
+      >
+        <InformeFacetFilters
+          value={{
+            ocupacion: selectedOcupacion,
+            label: selectedLabel,
+            sexo: selectedSexo,
+            edad: selectedEdad,
+          }}
+          options={facetOptions}
+          onChange={handleFacetChange}
+        />
+      </DashboardFilters>
 
-      {/* Slot 2 */}
-      <Slot02_FuentesLeads
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
-      {/* Slot 3 */}
-      <Slot03_AsignacionLeads
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
-      {/* Slot 4 */}
-      <Slot04_LeadsPorPais
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
+      <Slot01_LeadsCreadosMes {...slotProps} />
+      <Slot02_FuentesLeads {...slotProps} />
+      <Slot03_AsignacionLeads {...slotProps} />
+      <Slot04_LeadsPorPais {...slotProps} />
       <SlotFasePorPais
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
+        {...slotProps}
         nombreFase="Pitch"
         title="Pitch por país"
-        subtitle="Leads que entraron a la fase Pitch en el mes seleccionado."
-        emptyLabel="Sin leads que hayan entrado a Pitch en el mes seleccionado."
+        subtitle="Leads que entraron a la fase Pitch en el periodo filtrado."
+        emptyLabel="Sin leads que hayan entrado a Pitch en el periodo filtrado."
       />
-
       <SlotFasePorPais
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
+        {...slotProps}
         nombreFase="Matrícula"
         title="Matrícula por país"
-        subtitle="Leads que entraron a la fase Matrícula en el mes seleccionado."
-        emptyLabel="Sin leads que hayan entrado a Matrícula en el mes seleccionado."
+        subtitle="Leads que entraron a la fase Matrícula en el periodo filtrado."
+        emptyLabel="Sin leads que hayan entrado a Matrícula en el periodo filtrado."
       />
-
-      {/* Slot 5 */}
-      <Slot05_LeadsPorOcupacion
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
-      {/* Slot 6 */}
-      <Slot06_MatriculasMes
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
-      {/* Slot 7 */}
-      <Slot07_MatriculasPorOcupacion
-        selectedMes={selectedMes}
-        monthConfigs={monthConfigs}
-      />
-
-      {/* Próximos slots aquí */}
+      <Slot05_LeadsPorOcupacion {...slotProps} />
+      <Slot06_MatriculasMes {...slotProps} />
+      <Slot07_MatriculasPorOcupacion {...slotProps} />
     </div>
   );
 }

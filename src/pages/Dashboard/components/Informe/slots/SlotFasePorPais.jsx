@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { supabase } from '../../../../../supabaseClient';
 import { getCountryFlag } from '../../../../../utils/countryFlags';
+import { applyLeadFilters, tieneFiltrosDeAtributo } from '../informeFiltros';
 
 const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 const COLOR_OTROS = '#94A3B8';
@@ -12,36 +13,6 @@ const SIN_PAIS = 'Sin país';
 const TOP_N = 5;
 const PAGE_SIZE = 1000;
 const LEAD_IN_CHUNK = 200;
-
-function buildRango(monthConfigs, mesKey) {
-  const config = monthConfigs?.[mesKey];
-  if (config?.fecha_inicio) {
-    const fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-    let fechaFin;
-    let endDateLocal;
-    if (config.fecha_fin) {
-      const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-      const finMasUno = new Date(Date.UTC(yF, mF - 1, dF + 1));
-      fechaFin = `${finMasUno.getUTCFullYear()}-${String(finMasUno.getUTCMonth() + 1).padStart(2, '0')}-${String(finMasUno.getUTCDate()).padStart(2, '0')} 05:00:00+00`;
-      endDateLocal = config.fecha_fin;
-    } else {
-      const now = new Date();
-      const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      fechaFin = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')} 05:00:00+00`;
-      const today = new Date();
-      endDateLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    }
-    return { fechaInicio, fechaFin, startDateLocal: config.fecha_inicio, endDateLocal };
-  }
-  const [year, month] = mesKey.split('-').map(Number);
-  const fechaInicio = `${year}-${String(month).padStart(2, '0')}-01 05:00:00+00`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const mesSiguiente = new Date(year, month, 1);
-  const fechaFin = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01 05:00:00+00`;
-  const startDateLocal = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endDateLocal = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { fechaInicio, fechaFin, startDateLocal, endDateLocal };
-}
 
 function buildDayList(startDateLocal, endDateLocal) {
   const days = [];
@@ -80,23 +51,18 @@ function dateKeyUtcMinus5(tsString) {
  * únicos por lead_id, país desde leads.card_id.
  */
 export default function SlotFasePorPais({
-  selectedMes,
-  monthConfigs,
+  rango,
+  filtros = {},
   nombreFase,
   title,
   subtitle,
   emptyLabel,
 }) {
-  const [rows, setRows] = useState([]); // [{ pais, created_at }]
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const rango = useMemo(
-    () => (selectedMes ? buildRango(monthConfigs, selectedMes) : null),
-    [monthConfigs, selectedMes],
-  );
-
   useEffect(() => {
-    if (!rango || !nombreFase) return;
+    if (!rango?.fechaInicio || !nombreFase) return;
     let cancelled = false;
 
     const cargar = async () => {
@@ -133,10 +99,18 @@ export default function SlotFasePorPais({
         const paisByCard = {};
         for (let i = 0; i < leadIds.length && !cancelled; i += LEAD_IN_CHUNK) {
           const chunk = leadIds.slice(i, i + LEAD_IN_CHUNK);
-          const { data, error } = await supabase
-            .from('leads')
-            .select('card_id, pais')
-            .in('card_id', chunk);
+          const leadsQuery = applyLeadFilters(
+            supabase.from('leads').select('card_id, pais').in('card_id', chunk),
+            {
+              selectedPais: filtros.selectedPais,
+              selectedComercial: filtros.selectedComercial,
+              selectedOcupacion: filtros.selectedOcupacion,
+              selectedLabel: filtros.selectedLabel,
+              selectedSexo: filtros.selectedSexo,
+              selectedEdad: filtros.selectedEdad,
+            },
+          );
+          const { data, error } = await leadsQuery;
           if (error) throw error;
           (data || []).forEach((l) => {
             paisByCard[l.card_id] = l.pais;
@@ -144,10 +118,13 @@ export default function SlotFasePorPais({
         }
         if (cancelled) return;
 
-        const nextRows = leadIds.map((leadId) => ({
-          pais: paisByCard[leadId],
-          created_at: firstByLead.get(leadId),
-        }));
+        const hayFiltroLead = tieneFiltrosDeAtributo(filtros);
+        const nextRows = leadIds
+          .filter((leadId) => !hayFiltroLead || Object.prototype.hasOwnProperty.call(paisByCard, leadId))
+          .map((leadId) => ({
+            pais: paisByCard[leadId],
+            created_at: firstByLead.get(leadId),
+          }));
         setRows(nextRows);
       } catch (err) {
         console.error(`[SlotFasePorPais ${nombreFase}] error:`, err.message);
@@ -158,7 +135,7 @@ export default function SlotFasePorPais({
 
     cargar();
     return () => { cancelled = true; };
-  }, [rango, nombreFase]);
+  }, [rango, nombreFase, filtros]);
 
   const days = useMemo(
     () => (rango ? buildDayList(rango.startDateLocal, rango.endDateLocal) : []),
