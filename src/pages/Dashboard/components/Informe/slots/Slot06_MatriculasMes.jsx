@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { supabase } from '../../../../../supabaseClient';
 import { MATRICULAS_HISTORICAS, MESES_CORTOS, MESES_LARGOS } from '../data/leadsHistoricos';
+import { applyLeadFilters, rangoDeMes } from '../informeFiltros';
 
 const COLORS = {
   2024: '#cbd5e1', // slate-300
@@ -12,35 +13,7 @@ const COLORS = {
   2026: '#1717AF', // azul de marca
 };
 
-// Mismo patrón que Slot 1: rango por config_meses si existe, sino rango calendario.
-function buildRango(monthConfigs, mesKey) {
-  const config = monthConfigs?.[mesKey];
-
-  if (config?.fecha_inicio) {
-    const fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-    let fechaFin;
-    if (config.fecha_fin) {
-      const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-      const finMasUno = new Date(yF, mF - 1, dF + 1);
-      const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
-      fechaFin = `${fechaFinMasUno} 05:00:00+00`;
-    } else {
-      const now = new Date();
-      const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
-      fechaFin = `${fechaManana} 05:00:00+00`;
-    }
-    return { fechaInicio, fechaFin };
-  }
-
-  const [year, month] = mesKey.split('-').map(Number);
-  const fechaInicio = `${year}-${String(month).padStart(2, '0')}-01 05:00:00+00`;
-  const mesSiguiente = new Date(year, month, 1);
-  const fechaFin = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01 05:00:00+00`;
-  return { fechaInicio, fechaFin };
-}
-
-export default function Slot06_MatriculasMes({ selectedMes, monthConfigs }) {
+export default function Slot06_MatriculasMes({ selectedMes, monthConfigs, filtros = {} }) {
   const [matriculas2026Dynamic, setMatriculas2026Dynamic] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -82,13 +55,17 @@ export default function Slot06_MatriculasMes({ selectedMes, monthConfigs }) {
       try {
         const result = {};
         await Promise.all(mesesAConsultar.map(async (mesKey) => {
-          const rango = buildRango(monthConfigs, mesKey);
-          const { count, error } = await supabase
-            .from('leads')
-            .select('card_id', { count: 'exact', head: true })
-            .eq('etapa_funnel', 'Matrícula')
-            .gte('updated_at', rango.fechaInicio)
-            .lte('updated_at', rango.fechaFin);
+          const rangoMes = rangoDeMes(monthConfigs, mesKey);
+          const q = applyLeadFilters(
+            supabase.from('leads').select('card_id', { count: 'exact', head: true })
+              .eq('etapa_funnel', 'Matrícula'),
+            {
+              ...filtros,
+              fechaInicio: rangoMes.fechaInicio,
+              fechaFin: rangoMes.fechaFin,
+            },
+          );
+          const { count, error } = await q;
           if (!error) {
             const [, mm] = mesKey.split('-');
             result[mm] = count || 0;
@@ -101,7 +78,7 @@ export default function Slot06_MatriculasMes({ selectedMes, monthConfigs }) {
     };
     cargar();
     return () => { cancelled = true; };
-  }, [monthConfigs]);
+  }, [monthConfigs, filtros]);
 
   const chartData = useMemo(() => {
     const merged2026 = { ...MATRICULAS_HISTORICAS[2026], ...matriculas2026Dynamic };

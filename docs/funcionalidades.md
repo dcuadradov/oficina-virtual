@@ -42,6 +42,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar por tipo de gestión de WhatsApp: los que se atienden por Respond.io y los que se atienden desde el WhatsApp del comercial.
 - Se puede filtrar por los que tienen novedades sin leer, los que tienen ventana de WhatsApp abierta y los que tienen recordatorio activo.
 - Se puede limpiar todos los filtros de un golpe.
+- En **Gestión**, el botón **Copiar contactos** abre un recuadro con WhatsApp y correo. Copia todos los leads que cumplen los filtros, no solo la página visible. Junto a cada opción va cuántos hay: el número y el correo pueden no coincidir si a un lead le falta uno de los dos. El correo sale listo para pegar en el campo Para de Gmail. El teléfono sale internacional y pegado, por ejemplo +573173588591. La consulta va de a 1.000 y se detiene a los 15.000 para no recargar el portal.
 
 ---
 
@@ -56,6 +57,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar los que no tienen ningún seguimiento todavía.
 - Se puede cambiar la etapa del lead desde la misma fila, y el cambio queda reflejado en Pipefy.
 - Se puede abrir la conversación del lead en Respond.io, o crearle el contacto ahí mismo si todavía no existe.
+- También se puede abrir el número del lead en WhatsApp Web del comercial (isotipo verde), desde la fila. Si no hay teléfono, el botón no abre nada. Respond.io se queda al lado.
 - Se puede indicar si ese lead se gestiona por Respond.io o por el WhatsApp personal del comercial.
 - Se puede activar los recordatorios automáticos desde la fila, cuando la etapa lo permite.
 - Se puede seleccionar varias filas y marcarlas como leídas o no leídas en bloque.
@@ -76,6 +78,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede reasignar el lead a otro comercial, y al elegir se ve quién está conectado y quién no.
 - Se puede copiar los datos del lead al portapapeles.
 - Se puede escribirle por WhatsApp desde la ficha, con el contador de la ventana de 24 horas a la vista.
+- Desde la ficha también se puede abrir el número del lead en WhatsApp Web del comercial, igual que en la tabla.
 - Cuando el lead ya está listo para agendar, aparece un aviso con el link de agenda del comercial asignado.
 - Cuando el lead ya tiene pitch agendado, aparece la fecha y el link de la reunión.
 - Se puede pedir un resumen del lead hecho con inteligencia artificial, y volverlo a generar cuando haya información nueva.
@@ -88,6 +91,8 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede ver todo el historial de seguimientos como una conversación, de lo más nuevo a lo más viejo.
 - Se puede filtrar los seguimientos por categoría.
 - Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
+- Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA.) y/o del mensaje de WhatsApp (MC., MNC., MA.). Puede ser uno o los dos; sin al menos uno no se guarda.
+- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`.
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
 - Los seguimientos quedan marcados según de dónde salieron: gestión normal, resultado de pitch o recordatorio.
 
@@ -96,6 +101,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 ## 7. Recordatorios que programa el comercial
 
 - Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y una nota del motivo.
+- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento. Quedan en `llamada` y `mensaje` de `recordatorios`.
 - Al programarlo, el lead queda marcado como gestionado.
 - Se puede ver el historial de recordatorios con su estado: programado, vencido o cancelado.
 - Se puede ver todos los recordatorios en un calendario, con colores distintos para los vencidos, los de hoy y los que vienen.
@@ -199,14 +205,19 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 
 ## 14. Informes mensuales
 
-Solo supervisores. Se elige un mes y cada informe compara contra años anteriores.
+Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son independientes de Gestión, pero el mes, el periodo y el día usan la misma lógica: el mes toma el rango configurado en Gestión, el periodo es martes a lunes y el día es un día puntual. También se puede filtrar por país (varios), por comercial, por ocupación, por fuente (el `label` del lead, no la procedencia del gráfico), por género, por rango de edad y por si la fecha es de creación o de actualización. Todos se concatenan: el lead entra si cumple todos los que estén marcados, y las listas se recortan con lo ya elegido. Si el campo viene vacío aparece como Sin ocupación, Sin fuente, Sin género o Sin dato. Los números de 2024 y 2025 están fijos y no se recortan con esos filtros.
 
 - Leads creados en el mes.
 - Fuentes de donde vienen los leads.
 - Cómo se repartieron los leads entre comerciales.
-- Leads por país, día por día.
-- Pitches por país.
-- Matrículas por país.
+- Leads por país, día por día. El % de cada país es su participación sobre el total de leads.
+- Sin contacto por país: leads del periodo que hoy están en Sin contacto. El % de cada país es sobre Leads por país.
+- Gestionando por país: leads del periodo que hoy están en Gestionando o Pendiente de agenda. El % de cada país es sobre Sin contacto por país.
+- Pitch por país: leads que entraron a Pitch en el periodo. El % de cada país es sobre Gestionando por país.
+- Matrícula por país: leads que entraron a Matrícula en el periodo. El % de cada país es sobre Pitch por país.
+- Descartados por país: leads del periodo que hoy están en Descartado. El % de cada país es sobre Leads por país, no sobre la etapa anterior del funnel.
+
+De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 300 leads es 50%, y el de abajo se calcula sobre esos 150, no sobre el total. Esos porcentajes no suman 100%. Si un país no tiene leads en la etapa de arriba, el % sale como —. Pitch y Matrícula cuentan la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando y Descartados miran en qué etapa está hoy.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.
@@ -263,7 +274,7 @@ Solo supervisores. Se elige un mes y cada informe compara contra años anteriore
 ## 19. Lo que no existe hoy
 
 - Exportar leads, métricas o informes a Excel, CSV o PDF.
-- Chat de WhatsApp dentro del portal (solo se abre Respond.io por fuera).
+- Chat de WhatsApp dentro del portal (por fuera se abre Respond.io o WhatsApp Web).
 - Administrar usuarios, roles, etapas o formularios desde la interfaz (se hace directo en la base).
 - Módulos de Finanzas y Administración.
 - El CMS no publica solo: el sitio mdenglish.us tiene que leer las tablas del blog.

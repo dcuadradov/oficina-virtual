@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '../../../../../supabaseClient';
 import { PITCH_TAG_PRESETS } from '../../PitchKpis';
+import { applyLeadFilters } from '../informeFiltros';
 
 // Paleta para hasta ~10 comerciales (mismos tonos que Slot 2 pero saltando los grises de "Sin asignar").
 const PALETTE = [
@@ -12,30 +13,7 @@ const PALETTE = [
 const COLOR_SIN_ASIGNAR = '#94A3B8'; // slate-400
 const SIN_ASIGNAR = 'Sin asignar';
 
-function buildRango(monthConfigs, mesKey) {
-  const config = monthConfigs?.[mesKey];
-  if (config?.fecha_inicio) {
-    const fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-    let fechaFin;
-    if (config.fecha_fin) {
-      const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-      const finMasUno = new Date(yF, mF - 1, dF + 1);
-      fechaFin = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')} 05:00:00+00`;
-    } else {
-      const now = new Date();
-      const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      fechaFin = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')} 05:00:00+00`;
-    }
-    return { fechaInicio, fechaFin };
-  }
-  const [year, month] = mesKey.split('-').map(Number);
-  const fechaInicio = `${year}-${String(month).padStart(2, '0')}-01 05:00:00+00`;
-  const mesSiguiente = new Date(year, month, 1);
-  const fechaFin = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01 05:00:00+00`;
-  return { fechaInicio, fechaFin };
-}
-
-export default function Slot03_AsignacionLeads({ selectedMes, monthConfigs }) {
+export default function Slot03_AsignacionLeads({ filtros = {} }) {
   const [activePresetId, setActivePresetId] = useState('todos');
   const [counts, setCounts] = useState({}); // { email: count }
   const [total, setTotal] = useState(0);
@@ -47,26 +25,22 @@ export default function Slot03_AsignacionLeads({ selectedMes, monthConfigs }) {
     [activePresetId],
   );
 
-  // Trae los leads del mes filtrados por preset (tags) y los agrupa por comercial.
   useEffect(() => {
-    if (!selectedMes) return;
     let cancelled = false;
     const cargar = async () => {
       setLoading(true);
       try {
-        const rango = buildRango(monthConfigs, selectedMes);
         const PAGE_SIZE = 1000;
         const acc = {};
         let totalCount = 0;
         let from = 0;
         let keep = true;
         while (keep && !cancelled) {
-          let query = supabase
-            .from('leads')
-            .select('comercial_email')
-            .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
-            .gte('created_at', rango.fechaInicio)
-            .lte('created_at', rango.fechaFin);
+          let query = applyLeadFilters(
+            supabase.from('leads').select('comercial_email')
+              .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
+            filtros,
+          );
 
           if (presetActive.tags !== 'all' && Array.isArray(presetActive.tags)) {
             query = query.in('label', presetActive.tags);
@@ -111,7 +85,7 @@ export default function Slot03_AsignacionLeads({ selectedMes, monthConfigs }) {
     };
     cargar();
     return () => { cancelled = true; };
-  }, [selectedMes, monthConfigs, presetActive]);
+  }, [filtros, presetActive]);
 
   // Segmentos ordenados (mayor → menor); "Sin asignar" siempre con color gris.
   const segmentos = useMemo(() => {
@@ -197,7 +171,7 @@ export default function Slot03_AsignacionLeads({ selectedMes, monthConfigs }) {
 
       {!total ? (
         <div className="py-16 text-center text-sm text-slate-400">
-          Sin leads en el mes seleccionado para este grupo.
+          Sin leads en el periodo filtrado para este grupo.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">

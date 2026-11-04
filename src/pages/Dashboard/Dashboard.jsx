@@ -14,13 +14,15 @@ import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import { contarPaises, opcionesPais } from './paisFilter';
+import { collectContacts, CONTACT_PAGE_SIZE, nextContactPage } from './copyContacts';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
+import CopyContactsModal from './components/CopyContactsModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
 import MetricasPerformance from './components/MetricasPerformance';
 import Informe from './components/Informe/Informe';
-import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2 } from 'lucide-react';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2, Copy } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -89,6 +91,7 @@ export default function Dashboard() {
     [paisesContados, selectedPais],
   );
   const paisFetchId = useRef(0);
+  const copyFetchId = useRef(0);
   const [selectedReferido, setSelectedReferido] = useState(null);
   const [referidosDisponibles, setReferidosDisponibles] = useState([]);
   const [configTags, setConfigTags] = useState({}); // { nombreTag: { color_tag, color_letra_tag } }
@@ -105,6 +108,9 @@ export default function Dashboard() {
   
   // Estado para modal de crear lead
   const [crearLeadModalOpen, setCrearLeadModalOpen] = useState(false);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyContacts, setCopyContacts] = useState({ phones: [], emails: [], truncated: false });
   
   // Estados para KPIs adicionales
   const [ventanasAbiertas, setVentanasAbiertas] = useState(0);
@@ -843,6 +849,125 @@ export default function Dashboard() {
       console.error('Error cargando países:', error);
     }
   }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
+
+  // Teléfonos y correos de todos los leads que cumplen los filtros de Gestión.
+  const fetchContactos = useCallback(async (fetchId) => {
+    const empty = { phones: [], emails: [], truncated: false };
+    const targetEmail = puedeVerTodos && selectedComercial ? selectedComercial : userEmail;
+    if (!targetEmail && !puedeVerTodos) return empty;
+    if (esSetter && fasesSetter === null) return empty;
+
+    try {
+      const { fechaInicio, fechaFin } = parseDateFilters();
+
+      if (filtroNuevosLeads && nuevosLeadsCardIds.length === 0) return empty;
+
+      let cardIdsConCategoria = null;
+      if (selectedCategoria) {
+        const { data: comentariosConCategoria, error: errorCat } = await supabase
+          .from('comentarios')
+          .select('lead_id')
+          .eq('categoria', selectedCategoria);
+        if (!errorCat && comentariosConCategoria) {
+          cardIdsConCategoria = [...new Set(comentariosConCategoria.map((c) => c.lead_id))];
+          if (cardIdsConCategoria.length === 0) return empty;
+        }
+      }
+
+      const pages = [];
+      let from = 0;
+      let truncated = false;
+      let keepFetching = true;
+      const fasesEmdi = ['340832804', '339756097', '341769991'];
+
+      while (keepFetching) {
+        let q = aplicarVisibilidadFases(
+          supabase.from('leads').select('telefono, email')
+        );
+        if (puedeVerTodos && selectedComercial) {
+          q = q.eq('comercial_email', selectedComercial);
+        } else if (!puedeVerTodos) {
+          q = q.eq('comercial_email', userEmail);
+        }
+        if (fechaInicio && fechaFin) {
+          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
+        }
+        if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
+        if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
+        if (searchQuery && searchQuery.trim()) {
+          if (isOnlyCortesiaSearch(searchQuery)) {
+            q = q.eq('tiene_clase_de_cortesia', 'Si');
+          } else {
+            const searchTerm = `%${searchQuery.trim()}%`;
+            q = q.or(
+              `nombre.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm},pais.ilike.${searchTerm},fase_nombre_pipefy.ilike.${searchTerm},card_id.ilike.${searchTerm}`
+            );
+          }
+        }
+        if (cardIdsConCategoria) q = q.in('card_id', cardIdsConCategoria);
+        if (selectedTag.length > 0) q = q.in('label', selectedTag);
+        if (selectedFuente.length > 0) q = q.in('fuente_dato', selectedFuente);
+        if (selectedPais.length > 0) q = q.in('pais', selectedPais);
+        if (selectedReferido) q = q.eq('referido_por', selectedReferido);
+        if (filtroWhatsApp === 'abierta') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.not('timestamp_ultimo_mensaje_whatsapp', 'is', null)
+            .gte('timestamp_ultimo_mensaje_whatsapp', hace24Horas);
+        } else if (filtroWhatsApp === 'cerrada') {
+          const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          q = q.or(`timestamp_ultimo_mensaje_whatsapp.is.null,timestamp_ultimo_mensaje_whatsapp.lt.${hace24Horas}`);
+        }
+        if (filtroNuevosLeads && nuevosLeadsCardIds.length > 0) {
+          q = q.in('card_id', nuevosLeadsCardIds);
+        }
+        if (filtroHot) q = q.eq('is_hot', true);
+        if (filtroEmdi === 'activo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).gte('fecha_recordatorio_automatico', new Date().toISOString());
+        } else if (filtroEmdi === 'inactivo') {
+          q = q.in('fase_id_pipefy', fasesEmdi).or('fecha_recordatorio_automatico.is.null,fecha_recordatorio_automatico.lt.' + new Date().toISOString());
+        }
+        if (filtroGestionWA === 'respond') {
+          q = q.or('gestion_whatsapp_personal.is.null,gestion_whatsapp_personal.eq.false');
+        } else if (filtroGestionWA === 'personal') {
+          q = q.eq('gestion_whatsapp_personal', true);
+        }
+
+        const { data, error } = await q.range(from, from + CONTACT_PAGE_SIZE - 1);
+        if (error) throw error;
+        if (fetchId !== copyFetchId.current) return empty;
+        pages.push(data || []);
+        const step = nextContactPage(from, data?.length || 0);
+        truncated = step.truncated;
+        keepFetching = !step.done;
+        from = step.nextFrom;
+      }
+
+      return { ...collectContacts(pages), truncated };
+    } catch (error) {
+      console.error('Error cargando contactos:', error);
+      return empty;
+    }
+  }, [userEmail, puedeVerTodos, selectedComercial, activeFilter, activeEtapas, searchQuery, selectedCategoria, selectedTag, selectedFuente, selectedPais, selectedReferido, filtroWhatsApp, filtroNuevosLeads, nuevosLeadsCardIds, filtroHot, filtroEmdi, filtroGestionWA, parseDateFilters, dateFilterField, esSetter, fasesSetter, aplicarVisibilidadFases]);
+
+  const handleOpenCopyContacts = async () => {
+    const fetchId = ++copyFetchId.current;
+    setCopyModalOpen(true);
+    setCopyLoading(true);
+    setCopyContacts({ phones: [], emails: [], truncated: false });
+    try {
+      const contacts = await fetchContactos(fetchId);
+      if (fetchId !== copyFetchId.current) return;
+      setCopyContacts(contacts);
+    } finally {
+      if (fetchId === copyFetchId.current) setCopyLoading(false);
+    }
+  };
+
+  const handleCloseCopyContacts = () => {
+    copyFetchId.current += 1;
+    setCopyModalOpen(false);
+    setCopyLoading(false);
+  };
 
   // Función para calcular ventanas de WhatsApp abiertas (< 24 horas)
   const fetchVentanasAbiertas = useCallback(async () => {
@@ -1595,7 +1720,16 @@ export default function Dashboard() {
                   puedeVerTodos={puedeVerTodos}
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}
-                />
+                >
+                  <button
+                    type="button"
+                    onClick={handleOpenCopyContacts}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border bg-white text-slate-600 border-slate-200 hover:border-[#1717AF]/50 hover:text-[#1717AF]"
+                  >
+                    <Copy size={16} />
+                    Copiar contactos
+                  </button>
+                </DashboardFilters>
 
                 {/* KPIs - Debajo de los filtros */}
             <DashboardStats 
@@ -1939,7 +2073,12 @@ export default function Dashboard() {
                 )}
               </>
             ) : activeView === 'informe' && puedeVerTodos ? (
-              <Informe monthConfigs={monthConfigs} />
+              <Informe
+                monthConfigs={monthConfigs}
+                onSaveMonthConfig={handleSaveMonthConfig}
+                comerciales={comerciales}
+                onRefreshComerciales={fetchComerciales}
+              />
             ) : null}
           </div>
         )}
@@ -1968,6 +2107,15 @@ export default function Dashboard() {
       <CrearLeadModal 
         isOpen={crearLeadModalOpen}
         onClose={() => setCrearLeadModalOpen(false)}
+      />
+
+      <CopyContactsModal
+        isOpen={copyModalOpen}
+        onClose={handleCloseCopyContacts}
+        loading={copyLoading}
+        phones={copyContacts.phones}
+        emails={copyContacts.emails}
+        truncated={copyContacts.truncated}
       />
     </div>
   );

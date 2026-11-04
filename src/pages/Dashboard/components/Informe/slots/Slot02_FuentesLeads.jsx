@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '../../../../../supabaseClient';
+import { applyLeadFilters } from '../informeFiltros';
 
 // Paleta de 30+ colores. Mantiene #1717AF como primario y rota tonos
 // vivos pero coordinados (índigo, violeta, sky, teal, emerald, amber, rose...).
@@ -19,58 +20,31 @@ const COLOR_OTROS = '#CBD5E1';      // slate-300
 const SIN_FUENTE = 'Sin fuente';
 const OTROS = 'Otros';
 
-function buildRango(monthConfigs, mesKey) {
-  const config = monthConfigs?.[mesKey];
-  if (config?.fecha_inicio) {
-    const fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-    let fechaFin;
-    if (config.fecha_fin) {
-      const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-      const finMasUno = new Date(yF, mF - 1, dF + 1);
-      fechaFin = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')} 05:00:00+00`;
-    } else {
-      const now = new Date();
-      const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      fechaFin = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')} 05:00:00+00`;
-    }
-    return { fechaInicio, fechaFin };
-  }
-  const [year, month] = mesKey.split('-').map(Number);
-  const fechaInicio = `${year}-${String(month).padStart(2, '0')}-01 05:00:00+00`;
-  const mesSiguiente = new Date(year, month, 1);
-  const fechaFin = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01 05:00:00+00`;
-  return { fechaInicio, fechaFin };
-}
-
 const TAB_LIMITS = [10, 20, 30];
 
-export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
+export default function Slot02_FuentesLeads({ rango, filtros = {} }) {
   const [rawCounts, setRawCounts] = useState({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [topLimit, setTopLimit] = useState(10);
 
-  // Trae todas las fuentes del mes en una sola pasada paginada (mismo filtro que Gestión).
   useEffect(() => {
-    if (!selectedMes) return;
     let cancelled = false;
     const cargar = async () => {
       setLoading(true);
       try {
-        const rango = buildRango(monthConfigs, selectedMes);
         const PAGE_SIZE = 1000;
         const acc = {};
         let totalCount = 0;
         let from = 0;
         let keep = true;
         while (keep && !cancelled) {
-          const { data, error } = await supabase
-            .from('leads')
-            .select('fuente_dato')
-            .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null')
-            .gte('created_at', rango.fechaInicio)
-            .lte('created_at', rango.fechaFin)
-            .range(from, from + PAGE_SIZE - 1);
+          const q = applyLeadFilters(
+            supabase.from('leads').select('fuente_dato')
+              .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
+            { ...filtros, fechaInicio: rango?.fechaInicio, fechaFin: rango?.fechaFin },
+          );
+          const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
           if (error) throw error;
           (data || []).forEach((row) => {
             const key = (row.fuente_dato == null || String(row.fuente_dato).trim() === '')
@@ -85,7 +59,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
         if (!cancelled) {
           setRawCounts(acc);
           setTotal(totalCount);
-          setTopLimit(10); // reset al cambiar mes
+          setTopLimit(10);
         }
       } catch (err) {
         console.error('[Slot02] error cargando fuentes:', err.message);
@@ -95,7 +69,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
     };
     cargar();
     return () => { cancelled = true; };
-  }, [selectedMes, monthConfigs]);
+  }, [rango, filtros]);
 
   // Sorted entries (mayor → menor). "Sin fuente" se ordena junto con el resto por su cuenta.
   const sorted = useMemo(() => {
@@ -182,7 +156,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
         <div>
           <h3 className="text-base font-semibold text-slate-800">Procedencia de los leads</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Distribución por fuente del mes seleccionado.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Distribución por fuente del periodo filtrado.</p>
         </div>
         <div className="flex items-center gap-2">
           {availableTabs.map((n) => (
@@ -205,7 +179,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
 
       {!total ? (
         <div className="py-16 text-center text-sm text-slate-400">
-          Sin leads en el mes seleccionado.
+          Sin leads en el periodo filtrado.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -239,7 +213,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
             {/* Total al centro */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-3xl font-bold text-slate-800">{total.toLocaleString('es-CO')}</span>
-              <span className="text-xs text-slate-500 mt-0.5">leads del mes</span>
+              <span className="text-xs text-slate-500 mt-0.5">leads</span>
             </div>
           </div>
 
@@ -277,7 +251,7 @@ export default function Slot02_FuentesLeads({ selectedMes, monthConfigs }) {
         <div className="mt-5 flex items-start gap-2 text-sm bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
           <Sparkles size={16} className="text-[#1717AF] mt-0.5 flex-shrink-0" />
           <p className="text-slate-600 leading-relaxed">
-            El <span className="font-semibold text-slate-800">{pareto.pct.toFixed(0)}%</span> de los leads del mes provienen de{' '}
+            El <span className="font-semibold text-slate-800">{pareto.pct.toFixed(0)}%</span> de los leads provienen de{' '}
             <span className="font-semibold text-slate-800">{pareto.cantidad}</span>{' '}
             {pareto.cantidad === 1 ? 'fuente' : 'fuentes'}:{' '}
             <span className="text-slate-700">{pareto.nombres.slice(0, 5).join(', ')}{pareto.nombres.length > 5 ? '…' : ''}</span>.

@@ -4,6 +4,7 @@ import { MessageCircle, MessageCirclePlus, ClipboardList, Clock, ChevronRight, C
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
+import WhatsAppWebButton from './WhatsAppWebButton';
 
 /**
  * Calcula las horas restantes de la ventana de 24h de WhatsApp
@@ -1218,6 +1219,7 @@ const LeadsTable = ({
                     <div className="flex items-center justify-end gap-1">
                       {/* WhatsApp con contador de ventana 24h */}
                       <WhatsAppButton lead={lead} size={18} onCrearRespond={handleCrearRespond} />
+                      <WhatsAppWebButton telefono={lead.telefono} size={18} />
 
                       {/* Marcar como pendiente */}
                       {onMarcarNoRevisado && (

@@ -47,6 +47,8 @@ import { getCountryFlag } from '../../../utils/countryFlags';
 import { supabase } from '../../../supabaseClient';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
+import WhatsAppWebButton from './WhatsAppWebButton';
+import { OPCIONES_LLAMADA, OPCIONES_MENSAJE, camposCanal, tieneSiglaCanal as haySiglaCanal } from '../canalSiglas';
 import { listPresentationRuns } from '../../../lib/presentation/runs';
 
 /**
@@ -308,6 +310,59 @@ const FASES_LISTO_AGENDAR = ['339756287', '340855086'];
 const FASES_PITCH_AGENDADO = ['339756098', '340566951', '340859031'];
 
 const RECORDATORIOS_PER_PAGE = 50;
+
+function WhatsAppGlyph({ size = 16, className = '' }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+function CanalSiglaSelect({ icon, value, options, placeholder, open, onToggle, onChange, accentClass }) {
+  return (
+    <div className="flex-1 relative sigla-dropdown min-w-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center gap-2"
+      >
+        <span className={`flex-shrink-0 ${value ? accentClass : 'text-slate-400'}`}>{icon}</span>
+        <span className={`flex-1 text-left truncate ${value ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
+          {value || placeholder}
+        </span>
+        {value ? (
+          <X
+            size={14}
+            className="text-slate-400 hover:text-slate-600 flex-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange(null);
+            }}
+          />
+        ) : (
+          <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                opt === value ? 'bg-[#1717AF]/5 text-[#1717AF] font-medium' : 'text-slate-700'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Opciones para los campos editables con select
 const OPCIONES_OCUPACION = ['Estudiante', 'Médico General', 'Residente', 'Especialista'];
@@ -615,6 +670,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const [loadingCategorias, setLoadingCategorias] = useState(false);
   const [categoriaDropdownOpen, setCategoriaDropdownOpen] = useState(false);
   const [categoriaBusqueda, setCategoriaBusqueda] = useState('');
+  const [siglaLlamada, setSiglaLlamada] = useState(null);
+  const [siglaMensaje, setSiglaMensaje] = useState(null);
+  const [siglaDropdownOpen, setSiglaDropdownOpen] = useState(null);
   
   // Filtros de comentarios
   const [filtroEtapa, setFiltroEtapa] = useState(null);
@@ -2261,6 +2319,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       if (!e.target.closest('.categoria-dropdown')) {
         setCategoriaDropdownOpen(false);
       }
+      if (!e.target.closest('.sigla-dropdown')) {
+        setSiglaDropdownOpen(null);
+      }
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -2429,12 +2490,56 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
     }
   };
 
+  const tieneSiglaCanal = haySiglaCanal(siglaLlamada, siglaMensaje);
+
+  const cerrarSiglaDropdown = (which) => {
+    setCategoriaDropdownOpen(false);
+    setSiglaDropdownOpen((prev) => (prev === which ? null : which));
+  };
+
+  const renderCanalSiglas = () => (
+    <div className="mb-3">
+      <label className="text-xs text-slate-500 mb-1.5 block font-medium">
+        Llamada o mensaje <span className="text-slate-400 font-normal">(obligatorio, uno o ambos)</span>
+      </label>
+      <div className="flex gap-2">
+        <CanalSiglaSelect
+          icon={<Phone size={16} />}
+          value={siglaLlamada}
+          options={OPCIONES_LLAMADA}
+          placeholder="Llamada"
+          open={siglaDropdownOpen === 'llamada'}
+          onToggle={() => cerrarSiglaDropdown('llamada')}
+          onChange={(opt) => {
+            setSiglaLlamada(opt);
+            setSiglaDropdownOpen(null);
+          }}
+          accentClass="text-[#1717AF]"
+        />
+        <CanalSiglaSelect
+          icon={<WhatsAppGlyph size={16} />}
+          value={siglaMensaje}
+          options={OPCIONES_MENSAJE}
+          placeholder="Mensaje"
+          open={siglaDropdownOpen === 'mensaje'}
+          onToggle={() => cerrarSiglaDropdown('mensaje')}
+          onChange={(opt) => {
+            setSiglaMensaje(opt);
+            setSiglaDropdownOpen(null);
+          }}
+          accentClass="text-[#25D366]"
+        />
+      </div>
+    </div>
+  );
+
   // Enviar nuevo mensaje
   const handleEnviarMensaje = async () => {
     if (!lead?.card_id) return;
     if (enviandoMensaje) return;
     // El detalle del seguimiento es obligatorio.
     if (!nuevoMensaje.trim()) return;
+    if (!siglaLlamada && !siglaMensaje) return;
     
     try {
       setEnviandoMensaje(true);
@@ -2448,7 +2553,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         origen: 'Seguimiento',
         fase: lead.fase_nombre_pipefy || null,
         etapa_funnel: lead.etapa_funnel || null,
-        categoria: categoriaSeleccionada || 'Otro'
+        categoria: categoriaSeleccionada || 'Otro',
+        ...camposCanal(siglaLlamada, siglaMensaje),
       };
       
       const { data, error } = await supabase
@@ -2475,6 +2581,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
             fase: lead.fase_nombre_pipefy || null,
             etapa_funnel: lead.etapa_funnel || null,
             categoria: categoriaSeleccionada || 'Otro',
+            ...camposCanal(siglaLlamada, siglaMensaje),
             created_at: data.created_at,
             lead_nombre: lead.nombre,
             lead_telefono: lead.telefono,
@@ -2498,6 +2605,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setRecordatorios(prev => [comentarioConNombre, ...prev]);
       setNuevoMensaje('');
       setCategoriaSeleccionada('Otro'); // Reset a default
+      setSiglaLlamada(null);
+      setSiglaMensaje(null);
+      setSiglaDropdownOpen(null);
       
       // Toast de éxito (unificado si Respond respondió ok)
       const mensajeToast = respondOk 
@@ -2534,6 +2644,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setHasMoreRecordatorios(true);
       setFiltroEtapa(null);
       setFiltroFase(null);
+      setSiglaLlamada(null);
+      setSiglaMensaje(null);
+      setSiglaDropdownOpen(null);
       fetchRecordatorios(0, true);
       
       // Scroll al final para ver mensajes recientes e input (estilo chat)
@@ -2689,6 +2802,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setPeriodoInput('AM');
       setTextoRecordatorio('');
       setErrorRecordatorio(null);
+      setSiglaLlamada(null);
+      setSiglaMensaje(null);
+      setSiglaDropdownOpen(null);
       setSubTabRecordatorio('programar'); // Siempre iniciar en "Programar"
       
       // Scroll al inicio para el tab de recordatorio
@@ -2879,6 +2995,10 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   // Función para programar recordatorio
   const handleProgramarRecordatorio = async () => {
     if (!fechaSeleccionada || !textoRecordatorio.trim() || !lead?.card_id) return;
+    if (!siglaLlamada && !siglaMensaje) {
+      setErrorRecordatorio('Elige el resultado de la llamada o del mensaje');
+      return;
+    }
     
     // Convertir hora AM/PM a formato 24h
     let hora24 = parseInt(horaInput);
@@ -2912,7 +3032,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         estado: 'Programado',
         fase: lead.fase_nombre_pipefy || null,
         etapa_funnel: lead.etapa_funnel || null,
-        categoria: categoriaSeleccionada || 'Otro'
+        categoria: categoriaSeleccionada || 'Otro',
+        ...camposCanal(siglaLlamada, siglaMensaje),
       };
       
       const { error: errorRecordatorioInsert } = await supabase
@@ -2959,6 +3080,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
             fase: lead.fase_nombre_pipefy || null,
             etapa_funnel: lead.etapa_funnel || null,
             categoria: categoriaSeleccionada || 'Otro',
+            ...camposCanal(siglaLlamada, siglaMensaje),
             created_at: new Date().toISOString(),
             lead_nombre: lead.nombre,
             lead_telefono: lead.telefono,
@@ -2988,6 +3110,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setHoraInput('09');
       setMinutoInput('00');
       setPeriodoInput('AM');
+      setSiglaLlamada(null);
+      setSiglaMensaje(null);
+      setSiglaDropdownOpen(null);
       fetchRecordatoriosCalendario();
       fetchRecordatorioActivo(); // Actualizar estado de recordatorio activo
       
@@ -3454,6 +3579,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                   
                   {/* WhatsApp con contador de ventana 24h */}
                   <WhatsAppButtonSidebar lead={lead} size={18} onCrearRespond={handleCrearRespond} />
+                  <WhatsAppWebButton
+                    telefono={getFieldValue('telefono') || lead.telefono}
+                    size={18}
+                    className="p-2 sm:p-2.5 rounded-xl transition-all duration-200"
+                  />
                 </div>
                 
                 {/* Botón cerrar - siempre visible */}
@@ -5158,6 +5288,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       onClick={() => {
                         setCategoriaDropdownOpen(!categoriaDropdownOpen);
                         setCategoriaBusqueda('');
+                        setSiglaDropdownOpen(null);
                       }}
                       disabled={loadingCategorias}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center justify-between"
@@ -5226,6 +5357,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     )}
                   </div>
                   
+                  {renderCanalSiglas()}
+
                   {/* Input de mensaje */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
@@ -5246,9 +5379,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </div>
                     <button
                       onClick={handleEnviarMensaje}
-                      disabled={enviandoMensaje || !nuevoMensaje.trim()}
+                      disabled={enviandoMensaje || !nuevoMensaje.trim() || !tieneSiglaCanal}
                       className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                        !enviandoMensaje && nuevoMensaje.trim()
+                        !enviandoMensaje && nuevoMensaje.trim() && tieneSiglaCanal
                           ? 'bg-[#1717AF] text-white hover:bg-[#02214A] shadow-lg shadow-[#1717AF]/20'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       }`}
@@ -5261,7 +5394,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    Enter para enviar • El detalle es obligatorio
+                    Enter para enviar • El detalle es obligatorio • Elige llamada o mensaje
                   </p>
                 </div>
               </div>
@@ -5286,7 +5419,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
               const minutosValidation = parseInt(minutoInput) || 0;
               const timeIsValid = isTimeValid(fechaSeleccionada, hora24Validation, minutosValidation);
               
-              const canSubmit = fechaSeleccionada && textoRecordatorio.trim().length > 0 && !programandoRecordatorio && timeIsValid;
+              const canSubmit = fechaSeleccionada && textoRecordatorio.trim().length > 0 && tieneSiglaCanal && !programandoRecordatorio && timeIsValid;
               
               // Formatear fecha para historial
               const formatFechaHistorial = (dateString) => {
@@ -5679,6 +5812,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                         onClick={() => {
                           setCategoriaDropdownOpen(!categoriaDropdownOpen);
                           setCategoriaBusqueda('');
+                          setSiglaDropdownOpen(null);
                         }}
                         disabled={loadingCategorias}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] transition-all duration-200 flex items-center justify-between"
@@ -5747,6 +5881,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                       )}
                     </div>
                     
+                    {renderCanalSiglas()}
+
                     {/* Textarea */}
                     <div className="mb-3">
                       <label className="text-xs text-slate-500 mb-1 block">Detalle del recordatorio</label>
