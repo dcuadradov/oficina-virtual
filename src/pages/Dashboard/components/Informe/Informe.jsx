@@ -4,8 +4,7 @@ import DashboardFilters from '../DashboardFilters';
 import Slot01_LeadsCreadosMes from './slots/Slot01_LeadsCreadosMes';
 import Slot02_FuentesLeads from './slots/Slot02_FuentesLeads';
 import Slot03_AsignacionLeads from './slots/Slot03_AsignacionLeads';
-import Slot04_LeadsPorPais from './slots/Slot04_LeadsPorPais';
-import SlotFasePorPais from './slots/SlotFasePorPais';
+import InformePaisFunnel from './InformePaisFunnel';
 import Slot05_LeadsPorOcupacion from './slots/Slot05_LeadsPorOcupacion';
 import Slot06_MatriculasMes from './slots/Slot06_MatriculasMes';
 import Slot07_MatriculasPorOcupacion from './slots/Slot07_MatriculasPorOcupacion';
@@ -182,21 +181,7 @@ export default function Informe({
       <Slot01_LeadsCreadosMes {...slotProps} />
       <Slot02_FuentesLeads {...slotProps} />
       <Slot03_AsignacionLeads {...slotProps} />
-      <Slot04_LeadsPorPais {...slotProps} />
-      <SlotFasePorPais
-        {...slotProps}
-        nombreFase="Pitch"
-        title="Pitch por país"
-        subtitle="Leads que entraron a la fase Pitch en el periodo filtrado."
-        emptyLabel="Sin leads que hayan entrado a Pitch en el periodo filtrado."
-      />
-      <SlotFasePorPais
-        {...slotProps}
-        nombreFase="Matrícula"
-        title="Matrícula por país"
-        subtitle="Leads que entraron a la fase Matrícula en el periodo filtrado."
-        emptyLabel="Sin leads que hayan entrado a Matrícula en el periodo filtrado."
-      />
+      <InformePaisFunnel {...slotProps} />
       <Slot05_LeadsPorOcupacion {...slotProps} />
       <Slot06_MatriculasMes {...slotProps} />
       <Slot07_MatriculasPorOcupacion {...slotProps} />

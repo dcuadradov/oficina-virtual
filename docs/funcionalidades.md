@@ -207,9 +207,14 @@ Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son indep
 - Leads creados en el mes.
 - Fuentes de donde vienen los leads.
 - Cómo se repartieron los leads entre comerciales.
-- Leads por país, día por día.
-- Pitches por país.
-- Matrículas por país.
+- Leads por país, día por día. El % de cada país es su participación sobre el total de leads.
+- Sin contacto por país: leads del periodo que hoy están en Sin contacto. El % de cada país es sobre Leads por país.
+- Gestionando por país: leads del periodo que hoy están en Gestionando o Pendiente de agenda. El % de cada país es sobre Sin contacto por país.
+- Pitch por país: leads que entraron a Pitch en el periodo. El % de cada país es sobre Gestionando por país.
+- Matrícula por país: leads que entraron a Matrícula en el periodo. El % de cada país es sobre Pitch por país.
+- Descartados por país: leads del periodo que hoy están en Descartado. El % de cada país es sobre Leads por país, no sobre la etapa anterior del funnel.
+
+De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 300 leads es 50%, y el de abajo se calcula sobre esos 150, no sobre el total. Esos porcentajes no suman 100%. Si un país no tiene leads en la etapa de arriba, el % sale como —. Pitch y Matrícula cuentan la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando y Descartados miran en qué etapa está hoy.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.
