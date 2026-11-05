@@ -17,6 +17,11 @@ function formatPct(pct) {
   return `${pct.toFixed(1)}%`;
 }
 
+function formatPctConBase(pct, baselineCount) {
+  if (pct == null || Number.isNaN(pct)) return '—';
+  return `${pct.toFixed(1)}% (${(baselineCount || 0).toLocaleString('es-CO')})`;
+}
+
 export default function PaisPorDiaChart({
   title,
   subtitle,
@@ -168,8 +173,8 @@ export default function PaisPorDiaChart({
                 <span className="text-slate-500 text-xs tabular-nums">
                   {p.count.toLocaleString('es-CO')}
                 </span>
-                <span className="text-slate-800 font-semibold text-xs tabular-nums w-12 text-right">
-                  {formatPct(p.pct)}
+                <span className="text-slate-800 font-semibold text-xs tabular-nums whitespace-nowrap text-right">
+                  {pctMode === 'funnel' ? formatPctConBase(p.pct, p.baselineCount) : formatPct(p.pct)}
                 </span>
               </div>
             ))}

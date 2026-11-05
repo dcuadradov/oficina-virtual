@@ -75,6 +75,8 @@ test('sortedPaises en modo funnel usa el baseline del país, no el total de la e
   assert.equal(byName.Colombia.pct, 50);
   assert.equal(byName.México.pct, 25);
   assert.equal(byName.Colombia.sharePct, 75);
+  assert.equal(byName.Colombia.baselineCount, 300);
+  assert.equal(byName.México.baselineCount, 200);
 });
 
 test('Descartados se calcula sobre leads, no sobre la etapa previa del funnel', () => {

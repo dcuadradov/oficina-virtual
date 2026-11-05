@@ -108,6 +108,7 @@ export function sortedPaises({
         count,
         sharePct,
         pct: conversionPct,
+        baselineCount: pctMode === 'funnel' ? (baselineByPais?.[pais] || 0) : null,
       };
     })
     .sort((a, b) => b.count - a.count);

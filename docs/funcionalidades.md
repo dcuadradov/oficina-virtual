@@ -218,7 +218,7 @@ Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son indep
 - Matrícula por país: leads del periodo que hoy están en Matrícula. El % de cada país es sobre Leads por país.
 - Descartados por país: leads del periodo que hoy están en Descartado, No se matriculó, Matrícula caída, Dejó de contestar, MINDTAP o Datos de contacto errados. El % de cada país es sobre Leads por país.
 
-De Sin contacto en adelante el % de cada país es sobre Leads por país, no sobre la tabla de arriba. Esos porcentajes no suman 100%. Si un país no tiene leads, el % sale como —. Pitch cuenta la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando, Matrícula y Descartados miran en qué etapa está hoy.
+De Sin contacto en adelante el % de cada país es sobre Leads por país, no sobre la tabla de arriba. Al lado del % va entre paréntesis cuántos leads de ese país hay en Leads por país, por ejemplo Colombia 101 32.4% (414). Esos porcentajes no suman 100%. Si un país no tiene leads, el % sale como —. Pitch cuenta la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando, Matrícula y Descartados miran en qué etapa está hoy.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.
