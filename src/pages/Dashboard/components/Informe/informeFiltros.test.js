@@ -6,6 +6,7 @@ import {
   facetasCruzadas,
   parseInformeDates,
   rangoDeMes,
+  rangoTodosLosMeses,
   rowMatchesInformeDims,
   SIN_DATO,
 } from './informeFiltros.js';
@@ -61,6 +62,14 @@ test('parseInformeDates prioriza día, luego periodo, luego mes', () => {
 
   const porMes = parseInformeDates({ selectedMes: '2026-11', monthConfigs });
   assert.equal(porMes.startDateLocal, '2026-11-04');
+});
+
+test('rangoTodosLosMeses arranca en noviembre 2025 y no usa el mes del Informe', () => {
+  const rango = rangoTodosLosMeses(new Date('2026-11-05T18:00:00.000Z'));
+  assert.equal(rango.fechaInicio, '2025-11-01 05:00:00+00');
+  assert.equal(rango.startYm, '2025-11');
+  assert.equal(rango.endYm, '2026-11');
+  assert.equal(rango.fechaFin, '2026-11-06 05:00:00+00');
 });
 
 test('applyLeadFilters concatena país, comercial, ocupación, tags, fuente, género y edad', () => {

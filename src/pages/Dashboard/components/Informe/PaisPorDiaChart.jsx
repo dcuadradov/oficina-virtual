@@ -22,6 +22,11 @@ function formatPctConBase(pct, baselineCount) {
   return `${pct.toFixed(1)}% (${(baselineCount || 0).toLocaleString('es-CO')})`;
 }
 
+const VISTAS = [
+  { id: 'periodo', label: 'Periodo' },
+  { id: 'meses', label: 'Todos los meses' },
+];
+
 export default function PaisPorDiaChart({
   title,
   subtitle,
@@ -34,14 +39,34 @@ export default function PaisPorDiaChart({
   pctMode = 'share',
   baselineByPais = null,
   previousLabel = '',
+  monthly = null,
+  vista = 'periodo',
+  onVistaChange,
 }) {
+  const serie = vista === 'meses' && monthly ? monthly : {
+    days,
+    totalsByPais,
+    byDayByPais,
+    total,
+    baselineByPais,
+    loading,
+    subtitle,
+    emptyLabel,
+  };
+  const ejeMensual = vista === 'meses' && Boolean(monthly);
+  const serieLoading = serie.loading ?? loading;
+
   const ranked = useMemo(
-    () => sortedPaises({ totalsByPais, total, baselineByPais, pctMode })
-      .map((p) => ({
-        ...p,
-        bandera: p.pais === SIN_PAIS ? '🌎' : getCountryFlag(p.pais),
-      })),
-    [totalsByPais, total, baselineByPais, pctMode],
+    () => sortedPaises({
+      totalsByPais: serie.totalsByPais,
+      total: serie.total,
+      baselineByPais: serie.baselineByPais ?? baselineByPais,
+      pctMode,
+    }).map((p) => ({
+      ...p,
+      bandera: p.pais === SIN_PAIS ? '🌎' : getCountryFlag(p.pais),
+    })),
+    [serie.totalsByPais, serie.total, serie.baselineByPais, baselineByPais, pctMode],
   );
 
   const topPaises = useMemo(() => ranked.slice(0, TOP_N), [ranked]);
@@ -55,16 +80,16 @@ export default function PaisPorDiaChart({
   }, [topPaises, otrosPaises]);
 
   const chartData = useMemo(() => {
-    return days.map(({ dateKey, dayLabel, dayFull }) => {
+    return (serie.days || []).map(({ dateKey, dayLabel, dayFull }) => {
       const row = { day: dayLabel, dateKey, dayFull };
-      const byPais = byDayByPais[dateKey] || {};
+      const byPais = serie.byDayByPais?.[dateKey] || {};
       topPaises.forEach((p) => { row[p.pais] = byPais[p.pais] || 0; });
       if (otrosPaises.length) {
         row.Otros = otrosPaises.reduce((acc, p) => acc + (byPais[p.pais] || 0), 0);
       }
       return row;
     });
-  }, [days, byDayByPais, topPaises, otrosPaises]);
+  }, [serie.days, serie.byDayByPais, topPaises, otrosPaises]);
 
   const lineDefs = useMemo(() => {
     const out = topPaises.map((p, i) => ({ key: p.pais, color: LINE_COLORS[i] }));
@@ -81,7 +106,7 @@ export default function PaisPorDiaChart({
     if (!items.length) return null;
     return (
       <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs min-w-[160px]">
-        <div className="text-slate-500 mb-1.5">Día {dayFull}</div>
+        <div className="text-slate-500 mb-1.5">{ejeMensual ? dayFull : `Día ${dayFull}`}</div>
         {items.map((it) => (
           <div key={it.dataKey} className="flex items-center gap-2 py-0.5">
             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: it.color }} />
@@ -102,29 +127,49 @@ export default function PaisPorDiaChart({
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
         <div>
           <h3 className="text-base font-semibold text-slate-800">{title}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{serie.subtitle || subtitle}</p>
         </div>
-        {loading && <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>}
+        <div className="flex items-center gap-2">
+          {monthly && VISTAS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onVistaChange?.(tab.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                vista === tab.id
+                  ? 'bg-[#1717AF] text-white shadow-sm shadow-[#1717AF]/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+          {serieLoading && <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>}
+        </div>
       </div>
 
-      {!total ? (
+      {!serie.total ? (
         <div className="py-16 text-center text-sm text-slate-400">
-          {emptyLabel}
+          {serie.emptyLabel || emptyLabel}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
           <div className="md:col-span-2 w-full h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <LineChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                 <XAxis
                   dataKey="day"
                   stroke="#94A3B8"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: ejeMensual ? 10 : 11 }}
                   tickLine={false}
                   axisLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={12}
+                  interval={ejeMensual ? 0 : 'preserveStartEnd'}
+                  minTickGap={ejeMensual ? 0 : 12}
+                  angle={ejeMensual ? -40 : 0}
+                  textAnchor={ejeMensual ? 'end' : 'middle'}
+                  height={ejeMensual ? 52 : 30}
+                  dy={ejeMensual ? 8 : 0}
                 />
                 <YAxis
                   stroke="#94A3B8"
@@ -142,7 +187,7 @@ export default function PaisPorDiaChart({
                     dataKey={ln.key}
                     stroke={ln.color}
                     strokeWidth={2}
-                    dot={false}
+                    dot={ejeMensual ? { r: 3 } : false}
                     activeDot={{ r: 4 }}
                     isAnimationActive
                     animationDuration={900}
@@ -182,7 +227,7 @@ export default function PaisPorDiaChart({
         </div>
       )}
 
-      {ranked.length > 0 && total > 0 && (
+      {ranked.length > 0 && serie.total > 0 && (
         <div className="mt-5 flex items-start gap-2 text-sm bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
           <Sparkles size={16} className="text-[#1717AF] mt-0.5 flex-shrink-0" />
           {pctMode === 'funnel' ? (
@@ -200,7 +245,7 @@ export default function PaisPorDiaChart({
           ) : (
             <p className="text-slate-600 leading-relaxed">
               El <span className="font-semibold text-slate-800">{top3Share.toFixed(0)}%</span>{' '}
-              de los leads del mes provienen de{' '}
+              de los leads {ejeMensual ? 'desde noviembre 2025' : 'del mes'} provienen de{' '}
               <span className="font-semibold text-slate-800">{top3Count}</span>{' '}
               {top3Count === 1 ? 'país' : 'países'}:{' '}
               {ranked.slice(0, 3).map((p, i) => (

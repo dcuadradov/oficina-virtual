@@ -74,6 +74,22 @@ export function parseInformeDates({
   return { fechaInicio: null, fechaFin: null, startDateLocal: null, endDateLocal: null };
 }
 
+export const MOM_START_DATE = '2025-11-01';
+
+export function rangoTodosLosMeses(now = new Date()) {
+  const local = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const y = local.getUTCFullYear();
+  const m = String(local.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(local.getUTCDate()).padStart(2, '0');
+  const today = `${y}-${m}-${d}`;
+  return {
+    fechaInicio: `${MOM_START_DATE} 05:00:00+00`,
+    fechaFin: `${addOneDay(today)} 05:00:00+00`,
+    startYm: MOM_START_DATE.slice(0, 7),
+    endYm: `${y}-${m}`,
+  };
+}
+
 export const SIN_DATO = '__SIN__';
 
 const CAMPOS_CON_VACIO = new Set(['ocupacion', 'label', 'fuente_dato', 'sexo', 'edad']);

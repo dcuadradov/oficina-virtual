@@ -54,6 +54,31 @@ export function buildDayList(startDateLocal, endDateLocal) {
   return days;
 }
 
+const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+export function buildMonthList(startYm, endYm) {
+  const months = [];
+  if (!startYm || !endYm) return months;
+  const [ys, ms] = startYm.split('-').map(Number);
+  const [ye, me] = endYm.split('-').map(Number);
+  let y = ys;
+  let m = ms;
+  while (y < ye || (y === ye && m <= me)) {
+    months.push({
+      dateKey: `${y}-${String(m).padStart(2, '0')}`,
+      dayLabel: `${MESES_CORTO[m - 1]} ${String(y).slice(2)}`,
+      dayFull: `${MESES_LARGO[m - 1]} ${y}`,
+    });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return months;
+}
+
 export function dateKeyUtcMinus5(tsString) {
   if (!tsString) return null;
   const d = new Date(tsString);
@@ -75,7 +100,12 @@ export function filtrarPorEtapas(rows, etapas) {
   return (rows || []).filter((row) => set.has(row.etapa_funnel));
 }
 
-export function agregarPorPaisYDia(rows, dateField) {
+export function monthKeyUtcMinus5(tsString) {
+  const dKey = dateKeyUtcMinus5(tsString);
+  return dKey ? dKey.slice(0, 7) : null;
+}
+
+function agregarPorPais(rows, dateField, toKey) {
   const totalsByPais = {};
   const byDayByPais = {};
   let total = 0;
@@ -83,12 +113,20 @@ export function agregarPorPaisYDia(rows, dateField) {
     const key = paisKey(row.pais);
     totalsByPais[key] = (totalsByPais[key] || 0) + 1;
     total += 1;
-    const dKey = dateKeyUtcMinus5(row[dateField]);
+    const dKey = toKey(row[dateField]);
     if (!dKey) continue;
     if (!byDayByPais[dKey]) byDayByPais[dKey] = {};
     byDayByPais[dKey][key] = (byDayByPais[dKey][key] || 0) + 1;
   }
   return { totalsByPais, byDayByPais, total };
+}
+
+export function agregarPorPaisYDia(rows, dateField) {
+  return agregarPorPais(rows, dateField, dateKeyUtcMinus5);
+}
+
+export function agregarPorPaisYMes(rows, dateField) {
+  return agregarPorPais(rows, dateField, monthKeyUtcMinus5);
 }
 
 export function sortedPaises({

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   agregarPorPaisYDia,
+  agregarPorPaisYMes,
+  buildMonthList,
   ETAPAS_DESCARTADO,
   ETAPAS_GESTIONANDO,
   ETAPAS_MATRICULA,
@@ -115,6 +117,24 @@ test('Gestionando, Pitch y Matrícula calculan el % sobre Leads por país', () =
   assert.equal(gest[0].pct, 25);
   assert.equal(Math.round(pitch[0].pct * 10) / 10, 12.3);
   assert.equal(Math.round(matricula[0].pct * 10) / 10, 4.3);
+});
+
+test('buildMonthList arma el eje Nov 25 → Ene 26', () => {
+  const months = buildMonthList('2025-11', '2026-01');
+  assert.deepEqual(months.map((m) => m.dayLabel), ['Nov 25', 'Dic 25', 'Ene 26']);
+  assert.deepEqual(months.map((m) => m.dateKey), ['2025-11', '2025-12', '2026-01']);
+});
+
+test('agregarPorPaisYMes agrupa por mes y la lista es el acumulado', () => {
+  const agg = agregarPorPaisYMes([
+    { pais: 'Colombia', created_at: '2025-11-10T12:00:00.000Z' },
+    { pais: 'Colombia', created_at: '2026-01-02T12:00:00.000Z' },
+    { pais: 'México', created_at: '2025-11-10T12:00:00.000Z' },
+  ], 'created_at');
+  assert.equal(agg.total, 3);
+  assert.equal(agg.totalsByPais.Colombia, 2);
+  assert.equal(agg.byDayByPais['2025-11'].Colombia, 1);
+  assert.equal(agg.byDayByPais['2026-01'].Colombia, 1);
 });
 
 test('agregarPorPaisYDia agrupa vacíos como Sin país', () => {
