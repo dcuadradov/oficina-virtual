@@ -4,6 +4,8 @@ import {
   agregarPorPaisYDia,
   agregarPorPaisYMes,
   buildMonthList,
+  buildPaisChartRows,
+  OVERLAY_LEADS_KEY,
   ETAPAS_DESCARTADO,
   ETAPAS_GESTIONANDO,
   ETAPAS_MATRICULA,
@@ -135,6 +137,31 @@ test('agregarPorPaisYMes agrupa por mes y la lista es el acumulado', () => {
   assert.equal(agg.totalsByPais.Colombia, 2);
   assert.equal(agg.byDayByPais['2025-11'].Colombia, 1);
   assert.equal(agg.byDayByPais['2026-01'].Colombia, 1);
+});
+
+test('con un país en foco el gráfico deja su métrica y los leads de ese país', () => {
+  const rows = buildPaisChartRows({
+    days: [{ dateKey: '2026-06-01', dayLabel: '01', dayFull: '01/06' }],
+    byDayByPais: { '2026-06-01': { Colombia: 2, México: 5 } },
+    overlayByDayByPais: { '2026-06-01': { Colombia: 10, México: 20 } },
+    selectedPais: 'Colombia',
+    topPaises: [{ pais: 'México' }, { pais: 'Colombia' }],
+  });
+  assert.equal(rows[0].Colombia, 2);
+  assert.equal(rows[0][OVERLAY_LEADS_KEY], 10);
+  assert.equal(rows[0].México, undefined);
+});
+
+test('sin país en foco el gráfico sigue mostrando el top y otros', () => {
+  const rows = buildPaisChartRows({
+    days: [{ dateKey: '2026-06-01', dayLabel: '01', dayFull: '01/06' }],
+    byDayByPais: { '2026-06-01': { Colombia: 2, México: 5, Perú: 1 } },
+    topPaises: [{ pais: 'México' }, { pais: 'Colombia' }],
+    otrosPaises: [{ pais: 'Perú' }],
+  });
+  assert.equal(rows[0].México, 5);
+  assert.equal(rows[0].Colombia, 2);
+  assert.equal(rows[0].Otros, 1);
 });
 
 test('agregarPorPaisYDia agrupa vacíos como Sin país', () => {

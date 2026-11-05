@@ -47,6 +47,7 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
   const [loading, setLoading] = useState(false);
   const [loadingMom, setLoadingMom] = useState(false);
   const [vistaPais, setVistaPais] = useState('periodo');
+  const [paisEnFoco, setPaisEnFoco] = useState(null);
   const dateField = filtros.dateField === 'updated_at' ? 'updated_at' : 'created_at';
   const momRango = useMemo(() => rangoTodosLosMeses(), []);
 
@@ -137,6 +138,11 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
   );
 
   const tabProps = { vista: vistaPais, onVistaChange: setVistaPais };
+  const focoProps = {
+    selectedPais: paisEnFoco,
+    onPaisFocusChange: setPaisEnFoco,
+    overlayByDayByPais: leadsAgg.byDayByPais,
+  };
 
   return (
     <>
@@ -173,13 +179,16 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         pctMode="funnel"
         baselineByPais={leadsAgg.totalsByPais}
         previousLabel="Leads por país"
+        compareLabel="Sin contacto"
         {...tabProps}
+        {...focoProps}
         monthly={{
           days: months,
           totalsByPais: sinContactoMomAgg.totalsByPais,
           byDayByPais: sinContactoMomAgg.byDayByPais,
           total: sinContactoMomAgg.total,
           baselineByPais: leadsMomAgg.totalsByPais,
+          overlayByDayByPais: leadsMomAgg.byDayByPais,
           loading: loadingMom,
           subtitle: "Leads desde noviembre 2025 que hoy están en Sin contacto. El % es sobre el acumulado de Leads por país.",
           emptyLabel: "Sin leads en Sin contacto desde noviembre 2025.",
@@ -197,13 +206,16 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         pctMode="funnel"
         baselineByPais={leadsAgg.totalsByPais}
         previousLabel="Leads por país"
+        compareLabel="Gestionando"
         {...tabProps}
+        {...focoProps}
         monthly={{
           days: months,
           totalsByPais: gestionandoMomAgg.totalsByPais,
           byDayByPais: gestionandoMomAgg.byDayByPais,
           total: gestionandoMomAgg.total,
           baselineByPais: leadsMomAgg.totalsByPais,
+          overlayByDayByPais: leadsMomAgg.byDayByPais,
           loading: loadingMom,
           subtitle: "Leads desde noviembre 2025 que hoy están en gestión intermedia. El % es sobre el acumulado de Leads por país.",
           emptyLabel: "Sin leads en gestión desde noviembre 2025.",
@@ -222,7 +234,12 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         baselineByPais={leadsAgg.totalsByPais}
         previousLabel="Leads por país"
         monthlyBaselineByPais={leadsMomAgg.totalsByPais}
+        overlayByDayByPais={leadsAgg.byDayByPais}
+        monthlyOverlayByDayByPais={leadsMomAgg.byDayByPais}
+        compareLabel="Pitch"
         {...tabProps}
+        selectedPais={paisEnFoco}
+        onPaisFocusChange={setPaisEnFoco}
       />
       <PaisPorDiaChart
         title="Matrícula por país"
@@ -236,13 +253,16 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         pctMode="funnel"
         baselineByPais={leadsAgg.totalsByPais}
         previousLabel="Leads por país"
+        compareLabel="Matrícula"
         {...tabProps}
+        {...focoProps}
         monthly={{
           days: months,
           totalsByPais: matriculaMomAgg.totalsByPais,
           byDayByPais: matriculaMomAgg.byDayByPais,
           total: matriculaMomAgg.total,
           baselineByPais: leadsMomAgg.totalsByPais,
+          overlayByDayByPais: leadsMomAgg.byDayByPais,
           loading: loadingMom,
           subtitle: "Leads desde noviembre 2025 que hoy están en Matrícula. El % es sobre el acumulado de Leads por país.",
           emptyLabel: "Sin leads en Matrícula desde noviembre 2025.",
@@ -260,13 +280,16 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         pctMode="funnel"
         baselineByPais={leadsAgg.totalsByPais}
         previousLabel="Leads por país"
+        compareLabel="Descartados"
         {...tabProps}
+        {...focoProps}
         monthly={{
           days: months,
           totalsByPais: descartadosMomAgg.totalsByPais,
           byDayByPais: descartadosMomAgg.byDayByPais,
           total: descartadosMomAgg.total,
           baselineByPais: leadsMomAgg.totalsByPais,
+          overlayByDayByPais: leadsMomAgg.byDayByPais,
           loading: loadingMom,
           subtitle: "Leads desde noviembre 2025 que hoy están descartados. El % es sobre el acumulado de Leads por país.",
           emptyLabel: "Sin leads descartados desde noviembre 2025.",

@@ -88,6 +88,11 @@ export default function SlotFasePorPais({
   onTotales,
   vista = 'periodo',
   onVistaChange,
+  overlayByDayByPais = null,
+  monthlyOverlayByDayByPais = null,
+  selectedPais = null,
+  onPaisFocusChange,
+  compareLabel = '',
 }) {
   const [rows, setRows] = useState([]);
   const [momRows, setMomRows] = useState([]);
@@ -152,12 +157,17 @@ export default function SlotFasePorPais({
       previousLabel={previousLabel}
       vista={vista}
       onVistaChange={onVistaChange}
+      overlayByDayByPais={overlayByDayByPais}
+      selectedPais={selectedPais}
+      onPaisFocusChange={onPaisFocusChange}
+      compareLabel={compareLabel || nombreFase}
       monthly={rangoMom ? {
         days: months,
         totalsByPais: momAgg.totalsByPais,
         byDayByPais: momAgg.byDayByPais,
         total: momAgg.total,
         baselineByPais: monthlyBaselineByPais,
+        overlayByDayByPais: monthlyOverlayByDayByPais,
         loading: loadingMom,
         subtitle: `Leads que entraron a ${nombreFase} desde noviembre 2025. El % es sobre el acumulado de Leads por país.`,
         emptyLabel: `Sin leads que hayan entrado a ${nombreFase} desde noviembre 2025.`,

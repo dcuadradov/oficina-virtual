@@ -221,6 +221,8 @@ Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son indep
 De Sin contacto en adelante el % de cada país es sobre Leads por país, no sobre la tabla de arriba. Al lado del % va entre paréntesis cuántos leads de ese país hay en Leads por país, por ejemplo Colombia 101 32.4% (414). Esos porcentajes no suman 100%. Si un país no tiene leads, el % sale como —. Pitch cuenta la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando, Matrícula y Descartados miran en qué etapa está hoy.
 
 En esas seis gráficas hay dos pestañas y cambian juntas. **Periodo** es el día a día del mes, periodo o día marcado arriba. **Todos los meses** va de noviembre 2025 hasta hoy: el gráfico es mes a mes (Nov 25, Dic 25…) y la lista es el acumulado. Esa pestaña no usa el filtro de mes, periodo o día; país, comercial, ocupación, tags, fuente, género, edad y creación/actualización sí aplican.
+
+En Sin contacto, Gestionando, Pitch, Matrícula y Descartados por país se puede hacer clic en un país de la lista. Las cinco gráficas quedan en dos líneas: la continua es lo que mide esa gráfica en ese país y la punteada son los leads del mismo país. Cada eje tiene su escala para que se vean las dos. Otro clic, o la X del país, vuelve a todos. Leads por país no cambia.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.

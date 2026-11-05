@@ -26,6 +26,8 @@ export const ETAPAS_DESCARTADO = [
 
 export const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 export const COLOR_OTROS = '#94A3B8';
+export const COLOR_LEADS_OVERLAY = '#64748B';
+export const OVERLAY_LEADS_KEY = 'Leads';
 export const TOP_N = 5;
 
 export function paisKey(pais) {
@@ -150,4 +152,58 @@ export function sortedPaises({
       };
     })
     .sort((a, b) => b.count - a.count);
+}
+
+export function buildPaisChartRows({
+  days = [],
+  byDayByPais = {},
+  overlayByDayByPais = null,
+  selectedPais = null,
+  topPaises = [],
+  otrosPaises = [],
+} = {}) {
+  return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
+    const row = { day: dayLabel, dateKey, dayFull };
+    const byPais = byDayByPais?.[dateKey] || {};
+    if (selectedPais) {
+      row[selectedPais] = byPais[selectedPais] || 0;
+      if (overlayByDayByPais) {
+        row[OVERLAY_LEADS_KEY] = overlayByDayByPais[dateKey]?.[selectedPais] || 0;
+      }
+      return row;
+    }
+    topPaises.forEach((p) => { row[p.pais] = byPais[p.pais] || 0; });
+    if (otrosPaises.length) {
+      row.Otros = otrosPaises.reduce((acc, p) => acc + (byPais[p.pais] || 0), 0);
+    }
+    return row;
+  });
+}
+
+export function buildPaisLineDefs({
+  selectedPais = null,
+  showLeadsOverlay = false,
+  topPaises = [],
+  otrosPaises = [],
+  colorByPais = {},
+} = {}) {
+  if (selectedPais) {
+    const out = [{
+      key: selectedPais,
+      color: colorByPais[selectedPais] || LINE_COLORS[0],
+      yAxisId: 'metric',
+    }];
+    if (showLeadsOverlay) {
+      out.push({
+        key: OVERLAY_LEADS_KEY,
+        color: COLOR_LEADS_OVERLAY,
+        yAxisId: 'leads',
+        dashed: true,
+      });
+    }
+    return out;
+  }
+  const out = topPaises.map((p, i) => ({ key: p.pais, color: LINE_COLORS[i] }));
+  if (otrosPaises.length) out.push({ key: 'Otros', color: COLOR_OTROS });
+  return out;
 }

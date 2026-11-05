@@ -5,10 +5,14 @@ import {
 } from 'recharts';
 import { getCountryFlag } from '../../../../utils/countryFlags';
 import {
+  COLOR_LEADS_OVERLAY,
   COLOR_OTROS,
   LINE_COLORS,
+  OVERLAY_LEADS_KEY,
   SIN_PAIS,
   TOP_N,
+  buildPaisChartRows,
+  buildPaisLineDefs,
   sortedPaises,
 } from './paisPorDia';
 
@@ -42,6 +46,10 @@ export default function PaisPorDiaChart({
   monthly = null,
   vista = 'periodo',
   onVistaChange,
+  overlayByDayByPais = null,
+  selectedPais = null,
+  onPaisFocusChange,
+  compareLabel = '',
 }) {
   const serie = vista === 'meses' && monthly ? monthly : {
     days,
@@ -49,12 +57,16 @@ export default function PaisPorDiaChart({
     byDayByPais,
     total,
     baselineByPais,
+    overlayByDayByPais,
     loading,
     subtitle,
     emptyLabel,
   };
   const ejeMensual = vista === 'meses' && Boolean(monthly);
   const serieLoading = serie.loading ?? loading;
+  const overlay = serie.overlayByDayByPais ?? overlayByDayByPais;
+  const compareMode = Boolean(selectedPais && overlay);
+  const sePuedeFocar = typeof onPaisFocusChange === 'function';
 
   const ranked = useMemo(
     () => sortedPaises({
@@ -79,29 +91,28 @@ export default function PaisPorDiaChart({
     return map;
   }, [topPaises, otrosPaises]);
 
-  const chartData = useMemo(() => {
-    return (serie.days || []).map(({ dateKey, dayLabel, dayFull }) => {
-      const row = { day: dayLabel, dateKey, dayFull };
-      const byPais = serie.byDayByPais?.[dateKey] || {};
-      topPaises.forEach((p) => { row[p.pais] = byPais[p.pais] || 0; });
-      if (otrosPaises.length) {
-        row.Otros = otrosPaises.reduce((acc, p) => acc + (byPais[p.pais] || 0), 0);
-      }
-      return row;
-    });
-  }, [serie.days, serie.byDayByPais, topPaises, otrosPaises]);
+  const chartData = useMemo(() => buildPaisChartRows({
+    days: serie.days,
+    byDayByPais: serie.byDayByPais,
+    overlayByDayByPais: overlay,
+    selectedPais: compareMode ? selectedPais : null,
+    topPaises,
+    otrosPaises,
+  }), [serie.days, serie.byDayByPais, overlay, compareMode, selectedPais, topPaises, otrosPaises]);
 
-  const lineDefs = useMemo(() => {
-    const out = topPaises.map((p, i) => ({ key: p.pais, color: LINE_COLORS[i] }));
-    if (otrosPaises.length) out.push({ key: 'Otros', color: COLOR_OTROS });
-    return out;
-  }, [topPaises, otrosPaises]);
+  const lineDefs = useMemo(() => buildPaisLineDefs({
+    selectedPais: compareMode ? selectedPais : null,
+    showLeadsOverlay: compareMode,
+    topPaises,
+    otrosPaises,
+    colorByPais,
+  }), [compareMode, selectedPais, topPaises, otrosPaises, colorByPais]);
 
   const renderTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     const dayFull = payload[0]?.payload?.dayFull || label;
-    const items = payload
-      .filter((p) => p.value > 0)
+    const items = (compareMode ? payload : payload.filter((p) => p.value > 0))
+      .slice()
       .sort((a, b) => b.value - a.value);
     if (!items.length) return null;
     return (
@@ -144,19 +155,42 @@ export default function PaisPorDiaChart({
               {tab.label}
             </button>
           ))}
+          {compareMode && sePuedeFocar && (
+            <button
+              type="button"
+              onClick={() => onPaisFocusChange(null)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/15"
+              title="Volver a todos los países"
+            >
+              {selectedPais} ×
+            </button>
+          )}
           {serieLoading && <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>}
         </div>
       </div>
 
-      {!serie.total ? (
+      {!(serie.total || compareMode) ? (
         <div className="py-16 text-center text-sm text-slate-400">
           {serie.emptyLabel || emptyLabel}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          <div className="md:col-span-2 w-full h-[320px]">
+          <div className="md:col-span-2 w-full">
+            {compareMode && (
+              <div className="flex items-center gap-4 text-xs text-slate-600 mb-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: lineDefs[0]?.color }} />
+                  {compareLabel || selectedPais}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-4 border-t-2 border-dashed" style={{ borderColor: COLOR_LEADS_OVERLAY }} />
+                  Leads
+                </span>
+              </div>
+            )}
+            <div className="w-full h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
+              <LineChart data={chartData} margin={{ top: 10, right: compareMode ? 36 : 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                 <XAxis
                   dataKey="day"
@@ -171,22 +205,49 @@ export default function PaisPorDiaChart({
                   height={ejeMensual ? 52 : 30}
                   dy={ejeMensual ? 8 : 0}
                 />
-                <YAxis
-                  stroke="#94A3B8"
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  allowDecimals={false}
-                  width={32}
-                />
+                {compareMode ? (
+                  <>
+                    <YAxis
+                      yAxisId="metric"
+                      stroke="#94A3B8"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                      width={32}
+                    />
+                    <YAxis
+                      yAxisId="leads"
+                      orientation="right"
+                      stroke={COLOR_LEADS_OVERLAY}
+                      tick={{ fontSize: 11, fill: COLOR_LEADS_OVERLAY }}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                      width={36}
+                    />
+                  </>
+                ) : (
+                  <YAxis
+                    stroke="#94A3B8"
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    width={32}
+                  />
+                )}
                 <Tooltip content={renderTooltip} />
                 {lineDefs.map((ln) => (
                   <Line
                     key={ln.key}
                     type="monotone"
                     dataKey={ln.key}
+                    name={ln.key === OVERLAY_LEADS_KEY ? 'Leads' : ln.key}
+                    yAxisId={compareMode ? ln.yAxisId : undefined}
                     stroke={ln.color}
                     strokeWidth={2}
+                    strokeDasharray={ln.dashed ? '5 4' : undefined}
                     dot={ejeMensual ? { r: 3 } : false}
                     activeDot={{ r: 4 }}
                     isAnimationActive
@@ -196,33 +257,59 @@ export default function PaisPorDiaChart({
                 ))}
               </LineChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
           <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1 space-y-1">
-            {ranked.map((p) => (
-              <div
-                key={p.pais}
-                className="flex items-center gap-2 text-sm py-1 px-2 rounded-lg hover:bg-slate-50 transition-colors"
-                title={p.pais}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: colorByPais[p.pais] || COLOR_OTROS }}
-                />
-                <span className="text-base leading-none flex-shrink-0">{p.bandera}</span>
-                <span
-                  className={`flex-1 truncate text-xs ${p.pais === SIN_PAIS ? 'italic text-slate-500' : 'text-slate-700'}`}
+            {ranked.map((p) => {
+              const enfocado = selectedPais === p.pais;
+              const claseFila = `w-full flex items-center gap-2 text-sm py-1 px-2 rounded-lg transition-colors text-left ${
+                enfocado
+                  ? 'bg-[#1717AF]/10 ring-1 ring-[#1717AF]/25'
+                  : sePuedeFocar
+                    ? 'hover:bg-slate-50 cursor-pointer'
+                    : 'hover:bg-slate-50'
+              }`;
+              const contenido = (
+                <>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: colorByPais[p.pais] || COLOR_OTROS }}
+                  />
+                  <span className="text-base leading-none flex-shrink-0">{p.bandera}</span>
+                  <span
+                    className={`flex-1 truncate text-xs ${p.pais === SIN_PAIS ? 'italic text-slate-500' : 'text-slate-700'}`}
+                  >
+                    {p.pais}
+                  </span>
+                  <span className="text-slate-500 text-xs tabular-nums">
+                    {p.count.toLocaleString('es-CO')}
+                  </span>
+                  <span className="text-slate-800 font-semibold text-xs tabular-nums whitespace-nowrap text-right">
+                    {pctMode === 'funnel' ? formatPctConBase(p.pct, p.baselineCount) : formatPct(p.pct)}
+                  </span>
+                </>
+              );
+              if (!sePuedeFocar) {
+                return (
+                  <div key={p.pais} className={claseFila} title={p.pais}>
+                    {contenido}
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={p.pais}
+                  type="button"
+                  onClick={() => onPaisFocusChange(enfocado ? null : p.pais)}
+                  className={claseFila}
+                  title={enfocado ? 'Volver a todos los países' : `Ver ${p.pais} junto a sus leads`}
+                  aria-pressed={enfocado}
                 >
-                  {p.pais}
-                </span>
-                <span className="text-slate-500 text-xs tabular-nums">
-                  {p.count.toLocaleString('es-CO')}
-                </span>
-                <span className="text-slate-800 font-semibold text-xs tabular-nums whitespace-nowrap text-right">
-                  {pctMode === 'funnel' ? formatPctConBase(p.pct, p.baselineCount) : formatPct(p.pct)}
-                </span>
-              </div>
-            ))}
+                  {contenido}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -230,7 +317,14 @@ export default function PaisPorDiaChart({
       {ranked.length > 0 && serie.total > 0 && (
         <div className="mt-5 flex items-start gap-2 text-sm bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
           <Sparkles size={16} className="text-[#1717AF] mt-0.5 flex-shrink-0" />
-          {pctMode === 'funnel' ? (
+          {compareMode ? (
+            <p className="text-slate-600 leading-relaxed">
+              La línea continua es {compareLabel || 'esta métrica'} de{' '}
+              <span className="font-semibold text-slate-800">{selectedPais}</span>
+              . La punteada es <span className="font-semibold text-slate-800">leads</span> del mismo país.
+              {' '}Cada eje tiene su escala para que se vean las dos.
+            </p>
+          ) : pctMode === 'funnel' ? (
             <p className="text-slate-600 leading-relaxed">
               El % de cada país es sobre <span className="font-semibold text-slate-800">{previousLabel}</span>
               {topVolume ? (
