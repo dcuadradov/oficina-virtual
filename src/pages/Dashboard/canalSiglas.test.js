@@ -3,7 +3,10 @@ import { test } from 'node:test';
 import {
   OPCIONES_LLAMADA,
   OPCIONES_MENSAJE,
+  SIGLA_LLAMADA_DEFAULT,
+  SIGLA_MENSAJE_DEFAULT,
   camposCanal,
+  prefijoDetalleCanal,
   tieneSiglaCanal,
 } from './canalSiglas.js';
 
@@ -25,4 +28,25 @@ test('el payload deja null lo que no se eligió', () => {
   assert.deepEqual(camposCanal(null, 'MA.'), { llamada: null, mensaje: 'MA.' });
   assert.deepEqual(camposCanal('LA.', 'MC.'), { llamada: 'LA.', mensaje: 'MC.' });
   assert.deepEqual(camposCanal('', ''), { llamada: null, mensaje: null });
+});
+
+test('por defecto el mensaje es MNC. y la llamada LNC.', () => {
+  assert.equal(SIGLA_MENSAJE_DEFAULT, 'MNC.');
+  assert.equal(SIGLA_LLAMADA_DEFAULT, 'LNC.');
+  assert.ok(OPCIONES_MENSAJE.includes(SIGLA_MENSAJE_DEFAULT));
+  assert.ok(OPCIONES_LLAMADA.includes(SIGLA_LLAMADA_DEFAULT));
+});
+
+test('el detalle antepone mensaje y luego llamada entre paréntesis', () => {
+  assert.equal(
+    prefijoDetalleCanal('LNC.', 'MNC.'),
+    '(MNC. - LNC.) '
+  );
+  assert.equal(
+    `${prefijoDetalleCanal('LNC.', 'MNC.')}Llamar al doctor en horas de la tarde`,
+    '(MNC. - LNC.) Llamar al doctor en horas de la tarde'
+  );
+  assert.equal(prefijoDetalleCanal(null, 'MNC.'), '(MNC.) ');
+  assert.equal(prefijoDetalleCanal('LC.', null), '(LC.) ');
+  assert.equal(prefijoDetalleCanal(null, null), '');
 });
