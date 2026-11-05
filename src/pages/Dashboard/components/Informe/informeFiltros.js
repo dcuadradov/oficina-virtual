@@ -76,7 +76,7 @@ export function parseInformeDates({
 
 export const SIN_DATO = '__SIN__';
 
-const CAMPOS_CON_VACIO = new Set(['ocupacion', 'label', 'sexo', 'edad']);
+const CAMPOS_CON_VACIO = new Set(['ocupacion', 'label', 'fuente_dato', 'sexo', 'edad']);
 
 function quotePostgrest(value) {
   return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
@@ -102,6 +102,7 @@ export function applyLeadFilters(query, {
   selectedComercial = null,
   selectedOcupacion = [],
   selectedLabel = [],
+  selectedFuente = [],
   selectedSexo = [],
   selectedEdad = [],
 } = {}) {
@@ -114,6 +115,7 @@ export function applyLeadFilters(query, {
   if (selectedComercial) q = q.eq('comercial_email', selectedComercial);
   q = applyInIfAny(q, 'ocupacion', selectedOcupacion);
   q = applyInIfAny(q, 'label', selectedLabel);
+  q = applyInIfAny(q, 'fuente_dato', selectedFuente);
   q = applyInIfAny(q, 'sexo', selectedSexo);
   q = applyInIfAny(q, 'edad', selectedEdad);
   return q;
@@ -175,6 +177,7 @@ export function tieneFiltrosDeAtributo(filtros = {}) {
     || filtros.selectedComercial
     || (Array.isArray(filtros.selectedOcupacion) && filtros.selectedOcupacion.length > 0)
     || (Array.isArray(filtros.selectedLabel) && filtros.selectedLabel.length > 0)
+    || (Array.isArray(filtros.selectedFuente) && filtros.selectedFuente.length > 0)
     || (Array.isArray(filtros.selectedSexo) && filtros.selectedSexo.length > 0)
     || (Array.isArray(filtros.selectedEdad) && filtros.selectedEdad.length > 0),
   );

@@ -24,6 +24,7 @@ export default function Informe({
   const [selectedComercial, setSelectedComercial] = useState(null);
   const [selectedOcupacion, setSelectedOcupacion] = useState([]);
   const [selectedLabel, setSelectedLabel] = useState([]);
+  const [selectedFuente, setSelectedFuente] = useState([]);
   const [selectedSexo, setSelectedSexo] = useState([]);
   const [selectedEdad, setSelectedEdad] = useState([]);
   const [dateFilterField, setDateFilterField] = useState('created_at');
@@ -33,9 +34,10 @@ export default function Informe({
     pais: selectedPais,
     ocupacion: selectedOcupacion,
     label: selectedLabel,
+    fuente_dato: selectedFuente,
     sexo: selectedSexo,
     edad: selectedEdad,
-  }), [selectedPais, selectedOcupacion, selectedLabel, selectedSexo, selectedEdad]);
+  }), [selectedPais, selectedOcupacion, selectedLabel, selectedFuente, selectedSexo, selectedEdad]);
 
   const paisesDisponibles = useMemo(
     () => facetasCruzadas(facetRows, dimSelections, 'pais')
@@ -46,6 +48,7 @@ export default function Informe({
   const facetOptions = useMemo(() => ({
     ocupacion: facetasCruzadas(facetRows, dimSelections, 'ocupacion'),
     label: facetasCruzadas(facetRows, dimSelections, 'label'),
+    fuente_dato: facetasCruzadas(facetRows, dimSelections, 'fuente_dato'),
     sexo: facetasCruzadas(facetRows, dimSelections, 'sexo'),
     edad: facetasCruzadas(facetRows, dimSelections, 'edad'),
   }), [facetRows, dimSelections]);
@@ -63,9 +66,10 @@ export default function Informe({
     selectedComercial,
     selectedOcupacion,
     selectedLabel,
+    selectedFuente,
     selectedSexo,
     selectedEdad,
-  }), [rango, dateFilterField, selectedPais, selectedComercial, selectedOcupacion, selectedLabel, selectedSexo, selectedEdad]);
+  }), [rango, dateFilterField, selectedPais, selectedComercial, selectedOcupacion, selectedLabel, selectedFuente, selectedSexo, selectedEdad]);
 
   const handleMesChange = (mes) => {
     setSelectedMes(mes);
@@ -96,7 +100,7 @@ export default function Informe({
       let keep = true;
       while (keep) {
         const q = applyLeadFilters(
-          supabase.from('leads').select('pais, ocupacion, label, sexo, edad')
+          supabase.from('leads').select('pais, ocupacion, label, fuente_dato, sexo, edad')
             .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
           {
             fechaInicio,
@@ -124,6 +128,7 @@ export default function Informe({
   const handleFacetChange = (key, next) => {
     if (key === 'ocupacion') setSelectedOcupacion(next);
     else if (key === 'label') setSelectedLabel(next);
+    else if (key === 'fuente_dato') setSelectedFuente(next);
     else if (key === 'sexo') setSelectedSexo(next);
     else if (key === 'edad') setSelectedEdad(next);
   };
@@ -170,6 +175,7 @@ export default function Informe({
           value={{
             ocupacion: selectedOcupacion,
             label: selectedLabel,
+            fuente_dato: selectedFuente,
             sexo: selectedSexo,
             edad: selectedEdad,
           }}

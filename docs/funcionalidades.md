@@ -206,7 +206,7 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 
 ## 14. Informes mensuales
 
-Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son independientes de Gestión, pero el mes, el periodo y el día usan la misma lógica: el mes toma el rango configurado en Gestión, el periodo es martes a lunes y el día es un día puntual. También se puede filtrar por país (varios), por comercial, por ocupación, por fuente (el `label` del lead, no la procedencia del gráfico), por género, por rango de edad y por si la fecha es de creación o de actualización. Todos se concatenan: el lead entra si cumple todos los que estén marcados, y las listas se recortan con lo ya elegido. Si el campo viene vacío aparece como Sin ocupación, Sin fuente, Sin género o Sin dato. Los números de 2024 y 2025 están fijos y no se recortan con esos filtros.
+Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son independientes de Gestión, pero el mes, el periodo y el día usan la misma lógica: el mes toma el rango configurado en Gestión, el periodo es martes a lunes y el día es un día puntual. También se puede filtrar por país (varios), por comercial, por ocupación, por tags (los mismos de Gestión), por fuente (de dónde llegó el lead: el mismo de Gestión y del gráfico de procedencia), por género, por rango de edad y por si la fecha es de creación o de actualización. Todos se concatenan: el lead entra si cumple todos los que estén marcados, y las listas se recortan con lo ya elegido. Si el campo viene vacío aparece como Sin ocupación, Sin tag, Sin fuente, Sin género o Sin dato. Los números de 2024 y 2025 están fijos y no se recortan con esos filtros.
 
 - Leads creados en el mes.
 - Fuentes de donde vienen los leads.

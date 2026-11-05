@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Briefcase, Cake, Check, ChevronDown, Search, Tag, Users, X } from 'lucide-react';
+import { Briefcase, Cake, Check, ChevronDown, Globe, Search, Tag, Users, X } from 'lucide-react';
 import { formatoConteoLeads } from '../../paisFilter';
 import { SIN_DATO } from './informeFiltros';
 
@@ -14,11 +14,19 @@ const DIMS = [
   },
   {
     key: 'label',
+    label: 'Tags',
+    todos: 'Todos los tags',
+    placeholder: 'Buscar tag...',
+    sinLabel: 'Sin tag',
+    icon: Tag,
+  },
+  {
+    key: 'fuente_dato',
     label: 'Fuente',
     todos: 'Todas las fuentes',
     placeholder: 'Buscar fuente...',
     sinLabel: 'Sin fuente',
-    icon: Tag,
+    icon: Globe,
   },
   {
     key: 'sexo',

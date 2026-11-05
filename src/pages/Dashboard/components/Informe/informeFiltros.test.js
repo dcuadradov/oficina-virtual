@@ -63,7 +63,7 @@ test('parseInformeDates prioriza día, luego periodo, luego mes', () => {
   assert.equal(porMes.startDateLocal, '2026-11-04');
 });
 
-test('applyLeadFilters concatena país, comercial, ocupación, fuente, género y edad', () => {
+test('applyLeadFilters concatena país, comercial, ocupación, tags, fuente, género y edad', () => {
   const q = mockQuery();
   applyLeadFilters(q, {
     fechaInicio: '2026-06-01 05:00:00+00',
@@ -72,6 +72,7 @@ test('applyLeadFilters concatena país, comercial, ocupación, fuente, género y
     selectedComercial: 'ana@mdenglish.us',
     selectedOcupacion: ['Residente', 'Especialista'],
     selectedLabel: ['Top'],
+    selectedFuente: ['Facebook'],
     selectedSexo: ['Femenino'],
     selectedEdad: ['25-34'],
   });
@@ -82,6 +83,7 @@ test('applyLeadFilters concatena país, comercial, ocupación, fuente, género y
     ['eq', 'comercial_email', 'ana@mdenglish.us'],
     ['in', 'ocupacion', ['Residente', 'Especialista']],
     ['in', 'label', ['Top']],
+    ['in', 'fuente_dato', ['Facebook']],
     ['in', 'sexo', ['Femenino']],
     ['in', 'edad', ['25-34']],
   ]);
@@ -93,6 +95,7 @@ test('applyLeadFilters no aplica listas vacías', () => {
     selectedPais: [],
     selectedOcupacion: [],
     selectedLabel: [],
+    selectedFuente: [],
     selectedSexo: [],
     selectedEdad: [],
   });
@@ -111,14 +114,15 @@ test('applyLeadFilters incluye nulos cuando se marca Sin dato', () => {
 
 test('facetasCruzadas recorta opciones con los otros filtros y conserva lo ya marcado', () => {
   const rows = [
-    { pais: 'Colombia', ocupacion: 'Residente', label: 'Top', sexo: 'Femenino', edad: '25-34' },
-    { pais: 'Colombia', ocupacion: 'Estudiante', label: 'Low', sexo: 'Masculino', edad: '18-24' },
-    { pais: 'México', ocupacion: 'Residente', label: 'Top', sexo: 'Femenino', edad: '25-34' },
+    { pais: 'Colombia', ocupacion: 'Residente', label: 'Top', fuente_dato: 'Facebook', sexo: 'Femenino', edad: '25-34' },
+    { pais: 'Colombia', ocupacion: 'Estudiante', label: 'Low', fuente_dato: 'Instagram', sexo: 'Masculino', edad: '18-24' },
+    { pais: 'México', ocupacion: 'Residente', label: 'Top', fuente_dato: 'Facebook', sexo: 'Femenino', edad: '25-34' },
   ];
   const selections = {
     pais: ['Colombia'],
     ocupacion: ['Residente'],
     label: [],
+    fuente_dato: [],
     sexo: [],
     edad: [],
   };
@@ -129,6 +133,19 @@ test('facetasCruzadas recorta opciones con los otros filtros y conserva lo ya ma
   assert.deepEqual(facetasCruzadas(rows, selections, 'label'), [
     { value: 'Top', count: 1 },
   ]);
+  assert.deepEqual(facetasCruzadas(rows, selections, 'fuente_dato'), [
+    { value: 'Facebook', count: 1 },
+  ]);
   assert.equal(rowMatchesInformeDims(rows[0], selections), true);
   assert.equal(rowMatchesInformeDims(rows[1], selections), false);
+});
+
+test('applyLeadFilters incluye nulos de fuente_dato cuando se marca Sin fuente', () => {
+  const q = mockQuery();
+  applyLeadFilters(q, {
+    selectedFuente: [SIN_DATO, 'Facebook'],
+  });
+  assert.deepEqual(q.calls, [
+    ['or', 'fuente_dato.in.("Facebook"),fuente_dato.is.null,fuente_dato.eq.'],
+  ]);
 });

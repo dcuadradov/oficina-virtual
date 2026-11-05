@@ -71,6 +71,7 @@ export default function SlotFasePorPais({
               selectedComercial: filtros.selectedComercial,
               selectedOcupacion: filtros.selectedOcupacion,
               selectedLabel: filtros.selectedLabel,
+              selectedFuente: filtros.selectedFuente,
               selectedSexo: filtros.selectedSexo,
               selectedEdad: filtros.selectedEdad,
             },
