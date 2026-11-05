@@ -4,19 +4,18 @@ import { applyLeadFilters } from './informeFiltros';
 import {
   agregarPorPaisYDia,
   buildDayList,
+  ETAPAS_DESCARTADO,
+  ETAPAS_GESTIONANDO,
+  ETAPAS_MATRICULA,
+  ETAPAS_SIN_CONTACTO,
   filtrarPorEtapas,
 } from './paisPorDia';
 import PaisPorDiaChart from './PaisPorDiaChart';
 import SlotFasePorPais from './slots/SlotFasePorPais';
 
-const ETAPAS_SIN_CONTACTO = ['Sin contacto'];
-const ETAPAS_GESTIONANDO = ['Gestionando', 'Pendiente de agenda'];
-const ETAPAS_DESCARTADO = ['Descartado'];
-
 export default function InformePaisFunnel({ rango, filtros = {} }) {
   const [leadsRows, setLeadsRows] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [totalesPitch, setTotalesPitch] = useState({});
   const dateField = filtros.dateField === 'updated_at' ? 'updated_at' : 'created_at';
 
   useEffect(() => {
@@ -72,6 +71,10 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
     () => agregarPorPaisYDia(filtrarPorEtapas(leadsRows, ETAPAS_GESTIONANDO), dateField),
     [leadsRows, dateField],
   );
+  const matriculaAgg = useMemo(
+    () => agregarPorPaisYDia(filtrarPorEtapas(leadsRows, ETAPAS_MATRICULA), dateField),
+    [leadsRows, dateField],
+  );
   const descartadosAgg = useMemo(
     () => agregarPorPaisYDia(filtrarPorEtapas(leadsRows, ETAPAS_DESCARTADO), dateField),
     [leadsRows, dateField],
@@ -105,43 +108,44 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
       />
       <PaisPorDiaChart
         title="Gestionando por país"
-        subtitle="Leads del periodo que hoy están en Gestionando o Pendiente de agenda. El % de cada país es sobre Sin contacto por país."
-        emptyLabel="Sin leads en Gestionando en el periodo filtrado."
+        subtitle="Leads del periodo que hoy están en Gestionando, Pendiente de agenda, Listo para agendar, Agendado, Interés futuro, Reprogramar, Posible matrícula o Pago pendiente. El % de cada país es sobre Leads por país."
+        emptyLabel="Sin leads en gestión en el periodo filtrado."
         loading={loading}
         days={days}
         totalsByPais={gestionandoAgg.totalsByPais}
         byDayByPais={gestionandoAgg.byDayByPais}
         total={gestionandoAgg.total}
         pctMode="funnel"
-        baselineByPais={sinContactoAgg.totalsByPais}
-        previousLabel="Sin contacto por país"
+        baselineByPais={leadsAgg.totalsByPais}
+        previousLabel="Leads por país"
       />
       <SlotFasePorPais
         rango={rango}
         filtros={filtros}
         nombreFase="Pitch"
         title="Pitch por país"
-        subtitle="Leads que entraron a Pitch en el periodo. El % de cada país es sobre Gestionando por país."
+        subtitle="Leads que entraron a Pitch en el periodo. El % de cada país es sobre Leads por país."
         emptyLabel="Sin leads que hayan entrado a Pitch en el periodo filtrado."
         pctMode="funnel"
-        baselineByPais={gestionandoAgg.totalsByPais}
-        previousLabel="Gestionando por país"
-        onTotales={setTotalesPitch}
+        baselineByPais={leadsAgg.totalsByPais}
+        previousLabel="Leads por país"
       />
-      <SlotFasePorPais
-        rango={rango}
-        filtros={filtros}
-        nombreFase="Matrícula"
+      <PaisPorDiaChart
         title="Matrícula por país"
-        subtitle="Leads que entraron a Matrícula en el periodo. El % de cada país es sobre Pitch por país."
-        emptyLabel="Sin leads que hayan entrado a Matrícula en el periodo filtrado."
+        subtitle="Leads del periodo que hoy están en Matrícula. El % de cada país es sobre Leads por país."
+        emptyLabel="Sin leads en Matrícula en el periodo filtrado."
+        loading={loading}
+        days={days}
+        totalsByPais={matriculaAgg.totalsByPais}
+        byDayByPais={matriculaAgg.byDayByPais}
+        total={matriculaAgg.total}
         pctMode="funnel"
-        baselineByPais={totalesPitch}
-        previousLabel="Pitch por país"
+        baselineByPais={leadsAgg.totalsByPais}
+        previousLabel="Leads por país"
       />
       <PaisPorDiaChart
         title="Descartados por país"
-        subtitle="Leads del periodo que hoy están en Descartado. El % de cada país es sobre Leads por país."
+        subtitle="Leads del periodo que hoy están en Descartado, No se matriculó, Matrícula caída, Dejó de contestar, MINDTAP o Datos de contacto errados. El % de cada país es sobre Leads por país."
         emptyLabel="Sin leads descartados en el periodo filtrado."
         loading={loading}
         days={days}

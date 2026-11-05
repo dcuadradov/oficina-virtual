@@ -1,4 +1,29 @@
 export const SIN_PAIS = 'Sin país';
+
+export const ETAPAS_SIN_CONTACTO = ['Sin contacto'];
+
+export const ETAPAS_GESTIONANDO = [
+  'Gestionando',
+  'Pendiente de agenda',
+  'Listo para agendar',
+  'Agendado',
+  'Interés futuro',
+  'Reprogramar',
+  'Posible matrícula',
+  'Pago pendiente',
+];
+
+export const ETAPAS_MATRICULA = ['Matrícula'];
+
+export const ETAPAS_DESCARTADO = [
+  'Descartado',
+  'No se matriculó',
+  'Matrícula caída',
+  'Dejó de contestar',
+  'MINDTAP',
+  'Datos de contacto errados',
+];
+
 export const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 export const COLOR_OTROS = '#94A3B8';
 export const TOP_N = 5;
