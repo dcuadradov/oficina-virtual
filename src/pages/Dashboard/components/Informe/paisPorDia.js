@@ -27,7 +27,9 @@ export const ETAPAS_DESCARTADO = [
 export const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 export const COLOR_OTROS = '#94A3B8';
 export const COLOR_LEADS_OVERLAY = '#64748B';
+export const COLOR_LEADS_BAR = '#CBD5E1';
 export const OVERLAY_LEADS_KEY = 'Leads';
+export const COMPARE_PCT_KEY = 'pct';
 export const TOP_N = 5;
 
 export function paisKey(pais) {
@@ -58,8 +60,9 @@ export function buildDayList(startDateLocal, endDateLocal) {
 
 const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+export const MAX_MESES_GRAFICA = 12;
 
-export function buildMonthList(startYm, endYm) {
+export function buildMonthList(startYm, endYm, maxMonths = MAX_MESES_GRAFICA) {
   const months = [];
   if (!startYm || !endYm) return months;
   const [ys, ms] = startYm.split('-').map(Number);
@@ -78,6 +81,7 @@ export function buildMonthList(startYm, endYm) {
       y += 1;
     }
   }
+  if (maxMonths && months.length > maxMonths) return months.slice(-maxMonths);
   return months;
 }
 
@@ -191,13 +195,11 @@ export function buildPaisLineDefs({
     const out = [{
       key: selectedPais,
       color: colorByPais[selectedPais] || LINE_COLORS[0],
-      yAxisId: 'metric',
     }];
     if (showLeadsOverlay) {
       out.push({
         key: OVERLAY_LEADS_KEY,
         color: COLOR_LEADS_OVERLAY,
-        yAxisId: 'leads',
         dashed: true,
       });
     }
@@ -206,4 +208,25 @@ export function buildPaisLineDefs({
   const out = topPaises.map((p, i) => ({ key: p.pais, color: LINE_COLORS[i] }));
   if (otrosPaises.length) out.push({ key: 'Otros', color: COLOR_OTROS });
   return out;
+}
+
+export function buildPaisCompareMonthRows({
+  days = [],
+  byDayByPais = {},
+  overlayByDayByPais = {},
+  selectedPais = null,
+} = {}) {
+  if (!selectedPais) return [];
+  return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
+    const metric = byDayByPais?.[dateKey]?.[selectedPais] || 0;
+    const leads = overlayByDayByPais?.[dateKey]?.[selectedPais] || 0;
+    return {
+      day: dayLabel,
+      dateKey,
+      dayFull,
+      [OVERLAY_LEADS_KEY]: leads,
+      [selectedPais]: metric,
+      [COMPARE_PCT_KEY]: funnelPct(metric, leads),
+    };
+  });
 }

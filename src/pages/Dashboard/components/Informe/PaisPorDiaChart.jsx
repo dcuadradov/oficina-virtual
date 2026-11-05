@@ -1,17 +1,20 @@
 import { useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Bar, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { getCountryFlag } from '../../../../utils/countryFlags';
 import {
+  COLOR_LEADS_BAR,
   COLOR_LEADS_OVERLAY,
   COLOR_OTROS,
+  COMPARE_PCT_KEY,
   LINE_COLORS,
   OVERLAY_LEADS_KEY,
   SIN_PAIS,
   TOP_N,
   buildPaisChartRows,
+  buildPaisCompareMonthRows,
   buildPaisLineDefs,
   sortedPaises,
 } from './paisPorDia';
@@ -66,6 +69,7 @@ export default function PaisPorDiaChart({
   const serieLoading = serie.loading ?? loading;
   const overlay = serie.overlayByDayByPais ?? overlayByDayByPais;
   const compareMode = Boolean(selectedPais && overlay);
+  const tasaVsVolumen = compareMode && ejeMensual;
   const sePuedeFocar = typeof onPaisFocusChange === 'function';
 
   const ranked = useMemo(
@@ -90,19 +94,30 @@ export default function PaisPorDiaChart({
     otrosPaises.forEach((p) => { map[p.pais] = COLOR_OTROS; });
     return map;
   }, [topPaises, otrosPaises]);
+  const colorMetrica = colorByPais[selectedPais] || LINE_COLORS[0];
 
-  const chartData = useMemo(() => buildPaisChartRows({
-    days: serie.days,
-    byDayByPais: serie.byDayByPais,
-    overlayByDayByPais: overlay,
-    selectedPais: compareMode ? selectedPais : null,
-    topPaises,
-    otrosPaises,
-  }), [serie.days, serie.byDayByPais, overlay, compareMode, selectedPais, topPaises, otrosPaises]);
+  const chartData = useMemo(() => {
+    if (tasaVsVolumen) {
+      return buildPaisCompareMonthRows({
+        days: serie.days,
+        byDayByPais: serie.byDayByPais,
+        overlayByDayByPais: overlay,
+        selectedPais,
+      });
+    }
+    return buildPaisChartRows({
+      days: serie.days,
+      byDayByPais: serie.byDayByPais,
+      overlayByDayByPais: overlay,
+      selectedPais: compareMode ? selectedPais : null,
+      topPaises,
+      otrosPaises,
+    });
+  }, [tasaVsVolumen, serie.days, serie.byDayByPais, overlay, compareMode, selectedPais, topPaises, otrosPaises]);
 
   const lineDefs = useMemo(() => buildPaisLineDefs({
     selectedPais: compareMode ? selectedPais : null,
-    showLeadsOverlay: compareMode,
+    showLeadsOverlay: compareMode && !tasaVsVolumen,
     topPaises,
     otrosPaises,
     colorByPais,
@@ -110,7 +125,33 @@ export default function PaisPorDiaChart({
 
   const renderTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
-    const dayFull = payload[0]?.payload?.dayFull || label;
+    const row = payload[0]?.payload;
+    const dayFull = row?.dayFull || label;
+    if (tasaVsVolumen) {
+      return (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs min-w-[170px]">
+          <div className="text-slate-500 mb-1.5">{dayFull}</div>
+          <div className="flex items-center justify-between gap-4 py-0.5">
+            <span className="text-slate-700">Leads</span>
+            <span className="font-semibold text-slate-800 tabular-nums">
+              {(row[OVERLAY_LEADS_KEY] || 0).toLocaleString('es-CO')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-0.5">
+            <span className="text-slate-700">{compareLabel || selectedPais}</span>
+            <span className="font-semibold text-slate-800 tabular-nums">
+              {(row[selectedPais] || 0).toLocaleString('es-CO')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-0.5">
+            <span className="text-slate-700">Conversión</span>
+            <span className="font-semibold text-slate-800 tabular-nums">
+              {formatPct(row[COMPARE_PCT_KEY])}
+            </span>
+          </div>
+        </div>
+      );
+    }
     const items = (compareMode ? payload : payload.filter((p) => p.value > 0))
       .slice()
       .sort((a, b) => b.value - a.value);
@@ -178,84 +219,137 @@ export default function PaisPorDiaChart({
           <div className="md:col-span-2 w-full">
             {compareMode && (
               <div className="flex items-center gap-4 text-xs text-slate-600 mb-2">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: lineDefs[0]?.color }} />
-                  {compareLabel || selectedPais}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 border-t-2 border-dashed" style={{ borderColor: COLOR_LEADS_OVERLAY }} />
-                  Leads
-                </span>
+                {tasaVsVolumen ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-2.5 rounded-sm" style={{ backgroundColor: COLOR_LEADS_BAR }} />
+                      Leads
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: colorMetrica }} />
+                      {compareLabel || selectedPais} %
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: colorMetrica }} />
+                      {compareLabel || selectedPais}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 border-t-2 border-dashed" style={{ borderColor: COLOR_LEADS_OVERLAY }} />
+                      Leads
+                    </span>
+                  </>
+                )}
               </div>
             )}
             <div className="w-full h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: compareMode ? 36 : 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  stroke="#94A3B8"
-                  tick={{ fontSize: ejeMensual ? 10 : 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval={ejeMensual ? 0 : 'preserveStartEnd'}
-                  minTickGap={ejeMensual ? 0 : 12}
-                  angle={ejeMensual ? -40 : 0}
-                  textAnchor={ejeMensual ? 'end' : 'middle'}
-                  height={ejeMensual ? 52 : 30}
-                  dy={ejeMensual ? 8 : 0}
-                />
-                {compareMode ? (
-                  <>
-                    <YAxis
-                      yAxisId="metric"
-                      stroke="#94A3B8"
-                      tick={{ fontSize: 11 }}
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                      width={32}
-                    />
-                    <YAxis
-                      yAxisId="leads"
-                      orientation="right"
-                      stroke={COLOR_LEADS_OVERLAY}
-                      tick={{ fontSize: 11, fill: COLOR_LEADS_OVERLAY }}
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                      width={36}
-                    />
-                  </>
-                ) : (
+              {tasaVsVolumen ? (
+                <ComposedChart key={`${selectedPais}-tasa`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#94A3B8"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={0}
+                    minTickGap={0}
+                    angle={-40}
+                    textAnchor="end"
+                    height={52}
+                    dy={8}
+                  />
+                  <YAxis
+                    yAxisId="leads"
+                    stroke="#94A3B8"
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    width={36}
+                  />
+                  <YAxis
+                    yAxisId="pct"
+                    orientation="right"
+                    stroke={colorMetrica}
+                    tick={{ fontSize: 11, fill: colorMetrica }}
+                    tickFormatter={(value) => `${value}%`}
+                    tickLine={false}
+                    axisLine={false}
+                    width={40}
+                  />
+                  <Tooltip content={renderTooltip} />
+                  <Bar
+                    yAxisId="leads"
+                    dataKey={OVERLAY_LEADS_KEY}
+                    name="Leads"
+                    fill={COLOR_LEADS_BAR}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={28}
+                    isAnimationActive
+                    animationDuration={700}
+                  />
+                  <Line
+                    yAxisId="pct"
+                    type="monotone"
+                    dataKey={COMPARE_PCT_KEY}
+                    name={`${compareLabel || selectedPais} %`}
+                    stroke={colorMetrica}
+                    strokeWidth={2}
+                    connectNulls={false}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 4 }}
+                    isAnimationActive
+                    animationDuration={900}
+                    animationEasing="ease-out"
+                  />
+                </ComposedChart>
+              ) : (
+                <LineChart key={`${selectedPais || 'all'}-${vista}`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#94A3B8"
+                    tick={{ fontSize: ejeMensual ? 10 : 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={ejeMensual ? 0 : 'preserveStartEnd'}
+                    minTickGap={ejeMensual ? 0 : 12}
+                    angle={ejeMensual ? -40 : 0}
+                    textAnchor={ejeMensual ? 'end' : 'middle'}
+                    height={ejeMensual ? 52 : 30}
+                    dy={ejeMensual ? 8 : 0}
+                  />
                   <YAxis
                     stroke="#94A3B8"
                     tick={{ fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     allowDecimals={false}
-                    width={32}
+                    width={compareMode ? 36 : 32}
                   />
-                )}
-                <Tooltip content={renderTooltip} />
-                {lineDefs.map((ln) => (
-                  <Line
-                    key={ln.key}
-                    type="monotone"
-                    dataKey={ln.key}
-                    name={ln.key === OVERLAY_LEADS_KEY ? 'Leads' : ln.key}
-                    yAxisId={compareMode ? ln.yAxisId : undefined}
-                    stroke={ln.color}
-                    strokeWidth={2}
-                    strokeDasharray={ln.dashed ? '5 4' : undefined}
-                    dot={ejeMensual ? { r: 3 } : false}
-                    activeDot={{ r: 4 }}
-                    isAnimationActive
-                    animationDuration={900}
-                    animationEasing="ease-out"
-                  />
-                ))}
-              </LineChart>
+                  <Tooltip content={renderTooltip} />
+                  {lineDefs.map((ln) => (
+                    <Line
+                      key={ln.key}
+                      type="monotone"
+                      dataKey={ln.key}
+                      name={ln.key === OVERLAY_LEADS_KEY ? 'Leads' : ln.key}
+                      stroke={ln.color}
+                      strokeWidth={2}
+                      strokeDasharray={ln.dashed ? '5 4' : undefined}
+                      dot={ejeMensual ? { r: 3 } : false}
+                      activeDot={{ r: 4 }}
+                      isAnimationActive
+                      animationDuration={900}
+                      animationEasing="ease-out"
+                    />
+                  ))}
+                </LineChart>
+              )}
             </ResponsiveContainer>
             </div>
           </div>
@@ -317,12 +411,19 @@ export default function PaisPorDiaChart({
       {ranked.length > 0 && serie.total > 0 && (
         <div className="mt-5 flex items-start gap-2 text-sm bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
           <Sparkles size={16} className="text-[#1717AF] mt-0.5 flex-shrink-0" />
-          {compareMode ? (
+          {tasaVsVolumen ? (
+            <p className="text-slate-600 leading-relaxed">
+              Las barras son los leads de{' '}
+              <span className="font-semibold text-slate-800">{selectedPais}</span>
+              {' '}cada mes. La línea es el % de {compareLabel || 'esta métrica'} sobre esos leads.
+              {' '}Si el volumen baja y el % se sostiene, no se cayó la conversión.
+            </p>
+          ) : compareMode ? (
             <p className="text-slate-600 leading-relaxed">
               La línea continua es {compareLabel || 'esta métrica'} de{' '}
               <span className="font-semibold text-slate-800">{selectedPais}</span>
               . La punteada es <span className="font-semibold text-slate-800">leads</span> del mismo país.
-              {' '}Cada eje tiene su escala para que se vean las dos.
+              {' '}El eje es el volumen de leads.
             </p>
           ) : pctMode === 'funnel' ? (
             <p className="text-slate-600 leading-relaxed">
