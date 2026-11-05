@@ -48,7 +48,7 @@ import { supabase } from '../../../supabaseClient';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
 import WhatsAppWebButton from './WhatsAppWebButton';
-import { OPCIONES_LLAMADA, OPCIONES_MENSAJE, camposCanal, tieneSiglaCanal as haySiglaCanal } from '../canalSiglas';
+import { OPCIONES_LLAMADA, OPCIONES_MENSAJE, SIGLA_LLAMADA_DEFAULT, SIGLA_MENSAJE_DEFAULT, camposCanal, prefijoDetalleCanal, tieneSiglaCanal as haySiglaCanal } from '../canalSiglas';
 import { listPresentationRuns } from '../../../lib/presentation/runs';
 
 /**
@@ -670,8 +670,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const [loadingCategorias, setLoadingCategorias] = useState(false);
   const [categoriaDropdownOpen, setCategoriaDropdownOpen] = useState(false);
   const [categoriaBusqueda, setCategoriaBusqueda] = useState('');
-  const [siglaLlamada, setSiglaLlamada] = useState(null);
-  const [siglaMensaje, setSiglaMensaje] = useState(null);
+  const [siglaLlamada, setSiglaLlamada] = useState(SIGLA_LLAMADA_DEFAULT);
+  const [siglaMensaje, setSiglaMensaje] = useState(SIGLA_MENSAJE_DEFAULT);
   const [siglaDropdownOpen, setSiglaDropdownOpen] = useState(null);
   
   // Filtros de comentarios
@@ -2605,8 +2605,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setRecordatorios(prev => [comentarioConNombre, ...prev]);
       setNuevoMensaje('');
       setCategoriaSeleccionada('Otro'); // Reset a default
-      setSiglaLlamada(null);
-      setSiglaMensaje(null);
+      setSiglaLlamada(SIGLA_LLAMADA_DEFAULT);
+      setSiglaMensaje(SIGLA_MENSAJE_DEFAULT);
       setSiglaDropdownOpen(null);
       
       // Toast de éxito (unificado si Respond respondió ok)
@@ -2644,8 +2644,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setHasMoreRecordatorios(true);
       setFiltroEtapa(null);
       setFiltroFase(null);
-      setSiglaLlamada(null);
-      setSiglaMensaje(null);
+      setSiglaLlamada(SIGLA_LLAMADA_DEFAULT);
+      setSiglaMensaje(SIGLA_MENSAJE_DEFAULT);
       setSiglaDropdownOpen(null);
       fetchRecordatorios(0, true);
       
@@ -2802,8 +2802,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setPeriodoInput('AM');
       setTextoRecordatorio('');
       setErrorRecordatorio(null);
-      setSiglaLlamada(null);
-      setSiglaMensaje(null);
+      setSiglaLlamada(SIGLA_LLAMADA_DEFAULT);
+      setSiglaMensaje(SIGLA_MENSAJE_DEFAULT);
       setSiglaDropdownOpen(null);
       setSubTabRecordatorio('programar'); // Siempre iniciar en "Programar"
       
@@ -3110,8 +3110,8 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       setHoraInput('09');
       setMinutoInput('00');
       setPeriodoInput('AM');
-      setSiglaLlamada(null);
-      setSiglaMensaje(null);
+      setSiglaLlamada(SIGLA_LLAMADA_DEFAULT);
+      setSiglaMensaje(SIGLA_MENSAJE_DEFAULT);
       setSiglaDropdownOpen(null);
       fetchRecordatoriosCalendario();
       fetchRecordatorioActivo(); // Actualizar estado de recordatorio activo
@@ -5247,7 +5247,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                 <span className="font-semibold text-slate-600">Categoría: </span>
                                 <span className="text-[#1717AF]">{comentario.categoria || 'Otro'}</span>
                                 <span className="font-semibold text-slate-600 ml-2">Detalle: </span>
-                                {comentario.texto}
+                                {prefijoDetalleCanal(comentario.llamada, comentario.mensaje)}{comentario.texto}
                               </p>
                             </div>
                             
