@@ -93,6 +93,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
 - Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA.) y/o del mensaje de WhatsApp (MC., MNC., MA.). Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
 - Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial el Detalle sale como `(MNC. - LNC.)` y después el texto.
+- Si el seguimiento nació de un Recordatorio, el Detalle también muestra esas siglas delante de la observación. Se leen de `recordatorios` cuando el comentario no las trae (el disparador de la base suele copiar solo el texto).
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
 - Los seguimientos quedan marcados según de dónde salieron: gestión normal, resultado de pitch o recordatorio.
 
@@ -101,7 +102,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 ## 7. Recordatorios que programa el comercial
 
 - Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y una nota del motivo.
-- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento muestra esas siglas en el Detalle.
+- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento (Detalle) y el historial de Recordatorio las muestran delante del texto / observación, también en recordatorios que ya estaban guardados.
 - Al programarlo, el lead queda marcado como gestionado.
 - Se puede ver el historial de recordatorios con su estado: programado, vencido o cancelado.
 - Se puede ver todos los recordatorios en un calendario, con colores distintos para los vencidos, los de hoy y los que vienen.

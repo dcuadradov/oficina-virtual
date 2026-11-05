@@ -48,7 +48,7 @@ import { supabase } from '../../../supabaseClient';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
 import WhatsAppWebButton from './WhatsAppWebButton';
-import { OPCIONES_LLAMADA, OPCIONES_MENSAJE, SIGLA_LLAMADA_DEFAULT, SIGLA_MENSAJE_DEFAULT, camposCanal, prefijoDetalleCanal, tieneSiglaCanal as haySiglaCanal } from '../canalSiglas';
+import { OPCIONES_LLAMADA, OPCIONES_MENSAJE, SIGLA_LLAMADA_DEFAULT, SIGLA_MENSAJE_DEFAULT, camposCanal, enriquecerComentarioConCanal, tieneSiglaCanal as haySiglaCanal, textoDetalleConCanal } from '../canalSiglas';
 import { listPresentationRuns } from '../../../lib/presentation/runs';
 
 /**
@@ -2454,23 +2454,35 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       const from = page * RECORDATORIOS_PER_PAGE;
       const to = from + RECORDATORIOS_PER_PAGE - 1;
       
-      // Traer comentarios con el nombre del autor desde la tabla usuarios
-      const { data, error } = await supabase
-        .from('comentarios')
-        .select(`
-          *,
-          usuarios:autor_email (nombre)
-        `, { count: 'exact' })
-        .eq('lead_id', lead.card_id)
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      // Traer comentarios con el nombre del autor desde la tabla usuarios.
+      // El trigger que copia un recordatorio a comentarios no siempre lleva
+      // llamada/mensaje: se cruzan con recordatorios para pintar el Detalle.
+      const [{ data, error }, { data: recs }] = await Promise.all([
+        supabase
+          .from('comentarios')
+          .select(`
+            *,
+            usuarios:autor_email (nombre)
+          `, { count: 'exact' })
+          .eq('lead_id', lead.card_id)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+        supabase
+          .from('recordatorios')
+          .select('id, observacion, llamada, mensaje, created_at')
+          .eq('lead_id', lead.card_id),
+      ]);
       
       if (error) throw error;
+
+      const comentarios = (data || []).map((comentario) =>
+        enriquecerComentarioConCanal(comentario, recs || [])
+      );
       
       if (reset) {
-        setRecordatorios(data || []);
+        setRecordatorios(comentarios);
       } else {
-        setRecordatorios(prev => [...prev, ...(data || [])]);
+        setRecordatorios(prev => [...prev, ...comentarios]);
       }
       
       setRecordatoriosPage(page);
@@ -3041,6 +3053,30 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         .insert([nuevoRecordatorioData]);
       
       if (errorRecordatorioInsert) throw errorRecordatorioInsert;
+
+      // El trigger crea el comentario con la observación, pero no copia
+      // llamada/mensaje. Se escriben en el comentario recién creado.
+      try {
+        const observacion = nuevoRecordatorioData.observacion;
+        const { data: comentariosRec } = await supabase
+          .from('comentarios')
+          .select('id, origen, llamada, mensaje')
+          .eq('lead_id', lead.card_id)
+          .eq('texto', observacion)
+          .order('created_at', { ascending: false })
+          .limit(8);
+        const destino = (comentariosRec || []).find((c) =>
+          /recordatorio/i.test(c.origen || '') && !c.llamada && !c.mensaje
+        ) || (comentariosRec || []).find((c) => /recordatorio/i.test(c.origen || '')) || comentariosRec?.[0];
+        if (destino?.id) {
+          await supabase
+            .from('comentarios')
+            .update(camposCanal(siglaLlamada, siglaMensaje))
+            .eq('id', destino.id);
+        }
+      } catch (copyErr) {
+        console.error('Error copiando canal al comentario del recordatorio:', copyErr);
+      }
       
       // 3. Contar recordatorios del lead en la fase actual
       const { count: conteoFaseActual, error: errorConteo } = await supabase
@@ -5247,7 +5283,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                 <span className="font-semibold text-slate-600">Categoría: </span>
                                 <span className="text-[#1717AF]">{comentario.categoria || 'Otro'}</span>
                                 <span className="font-semibold text-slate-600 ml-2">Detalle: </span>
-                                {prefijoDetalleCanal(comentario.llamada, comentario.mensaje)}{comentario.texto}
+                                {textoDetalleConCanal(comentario.texto, comentario.llamada, comentario.mensaje)}
                               </p>
                             </div>
                             
@@ -5514,7 +5550,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       
                                       {/* Observación */}
                                       <p className="text-sm text-slate-500 line-clamp-2">
-                                        {rec.observacion || 'Sin observación'}
+                                        {textoDetalleConCanal(rec.observacion || 'Sin observación', rec.llamada, rec.mensaje)}
                                       </p>
                                     </div>
                                     

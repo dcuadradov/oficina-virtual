@@ -6,7 +6,11 @@ import {
   SIGLA_LLAMADA_DEFAULT,
   SIGLA_MENSAJE_DEFAULT,
   camposCanal,
+  enriquecerComentarioConCanal,
+  encontrarRecordatorioDeComentario,
+  origenEsRecordatorio,
   prefijoDetalleCanal,
+  textoDetalleConCanal,
   tieneSiglaCanal,
 } from './canalSiglas.js';
 
@@ -49,4 +53,76 @@ test('el detalle antepone mensaje y luego llamada entre paréntesis', () => {
   assert.equal(prefijoDetalleCanal(null, 'MNC.'), '(MNC.) ');
   assert.equal(prefijoDetalleCanal('LC.', null), '(LC.) ');
   assert.equal(prefijoDetalleCanal(null, null), '');
+});
+
+test('el detalle concatena el prefijo con el texto de comentarios o de recordatorios', () => {
+  assert.equal(
+    textoDetalleConCanal('Llamar al doctor en horas de la tarde', 'LNC.', 'MNC.'),
+    '(MNC. - LNC.) Llamar al doctor en horas de la tarde'
+  );
+  assert.equal(textoDetalleConCanal('Sin observación', null, null), 'Sin observación');
+});
+
+test('el origen Recordatorio se reconoce aunque cambie mayúsculas', () => {
+  assert.equal(origenEsRecordatorio('Recordatorio'), true);
+  assert.equal(origenEsRecordatorio('recordatorio'), true);
+  assert.equal(origenEsRecordatorio('Seguimiento'), false);
+});
+
+test('si el comentario no trae siglas, se toman de recordatorios.observacion', () => {
+  const comentario = {
+    texto: 'Llamar al doctor en horas de la tarde',
+    origen: 'Recordatorio',
+    created_at: '2026-11-05T15:00:00.000Z',
+    llamada: null,
+    mensaje: null,
+  };
+  const rec = {
+    observacion: 'Llamar al doctor en horas de la tarde',
+    llamada: 'LNC.',
+    mensaje: 'MNC.',
+    created_at: '2026-11-05T15:00:01.000Z',
+  };
+  const enriquecido = enriquecerComentarioConCanal(comentario, [rec]);
+  assert.equal(encontrarRecordatorioDeComentario(comentario, [rec]), rec);
+  assert.equal(enriquecido.llamada, 'LNC.');
+  assert.equal(enriquecido.mensaje, 'MNC.');
+  assert.equal(
+    textoDetalleConCanal(enriquecido.texto, enriquecido.llamada, enriquecido.mensaje),
+    '(MNC. - LNC.) Llamar al doctor en horas de la tarde'
+  );
+});
+
+test('si el comentario ya tiene siglas, no se pisan con las del recordatorio', () => {
+  const comentario = {
+    texto: 'Seguimiento propio',
+    origen: 'Seguimiento',
+    llamada: 'LC.',
+    mensaje: 'MC.',
+  };
+  const rec = {
+    observacion: 'Seguimiento propio',
+    llamada: 'LA.',
+    mensaje: 'MA.',
+    created_at: '2026-11-05T15:00:00.000Z',
+  };
+  assert.deepEqual(enriquecerComentarioConCanal(comentario, [rec]), comentario);
+});
+
+test('un seguimiento viejo no hereda siglas de un recordatorio con el mismo texto', () => {
+  const comentario = {
+    texto: 'Llamar mañana',
+    origen: 'Seguimiento',
+    created_at: '2026-10-01T12:00:00.000Z',
+    llamada: null,
+    mensaje: null,
+  };
+  const rec = {
+    observacion: 'Llamar mañana',
+    llamada: 'LNC.',
+    mensaje: 'MNC.',
+    created_at: '2026-11-05T15:00:00.000Z',
+  };
+  assert.equal(encontrarRecordatorioDeComentario(comentario, [rec]), null);
+  assert.deepEqual(enriquecerComentarioConCanal(comentario, [rec]), comentario);
 });
