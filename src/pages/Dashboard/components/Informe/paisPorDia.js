@@ -29,6 +29,7 @@ export const COLOR_OTROS = '#94A3B8';
 export const COLOR_LEADS_OVERLAY = '#64748B';
 export const COLOR_LEADS_BAR = '#CBD5E1';
 export const OVERLAY_LEADS_KEY = 'Leads';
+export const COMPARE_METRIC_KEY = 'metrica';
 export const COMPARE_PCT_KEY = 'pct';
 export const TOP_N = 5;
 
@@ -135,6 +136,31 @@ export function agregarPorPaisYMes(rows, dateField) {
   return agregarPorPais(rows, dateField, monthKeyUtcMinus5);
 }
 
+export function paisesEnFoco({ selectedPaises, selectedPais } = {}) {
+  if (Array.isArray(selectedPaises)) return selectedPaises.filter(Boolean);
+  if (Array.isArray(selectedPais)) return selectedPais.filter(Boolean);
+  if (selectedPais) return [selectedPais];
+  return [];
+}
+
+export function sumByPaises(byPais = {}, paises = []) {
+  return (paises || []).reduce((acc, pais) => acc + (byPais?.[pais] || 0), 0);
+}
+
+export function etiquetaPaises(paises = []) {
+  if (!paises.length) return '';
+  if (paises.length === 1) return paises[0];
+  if (paises.length === 2) return `${paises[0]} + ${paises[1]}`;
+  return `${paises.length} países`;
+}
+
+export function togglePaisSeleccionado(selected = [], pais) {
+  if (!pais) return selected;
+  return selected.includes(pais)
+    ? selected.filter((item) => item !== pais)
+    : [...selected, pais];
+}
+
 export function sortedPaises({
   totalsByPais = {},
   total = 0,
@@ -163,16 +189,18 @@ export function buildPaisChartRows({
   byDayByPais = {},
   overlayByDayByPais = null,
   selectedPais = null,
+  selectedPaises = null,
   topPaises = [],
   otrosPaises = [],
 } = {}) {
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
   return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
     const row = { day: dayLabel, dateKey, dayFull };
     const byPais = byDayByPais?.[dateKey] || {};
-    if (selectedPais) {
-      row[selectedPais] = byPais[selectedPais] || 0;
+    if (foco.length) {
+      row[COMPARE_METRIC_KEY] = sumByPaises(byPais, foco);
       if (overlayByDayByPais) {
-        row[OVERLAY_LEADS_KEY] = overlayByDayByPais[dateKey]?.[selectedPais] || 0;
+        row[OVERLAY_LEADS_KEY] = sumByPaises(overlayByDayByPais[dateKey], foco);
       }
       return row;
     }
@@ -186,15 +214,17 @@ export function buildPaisChartRows({
 
 export function buildPaisLineDefs({
   selectedPais = null,
+  selectedPaises = null,
   showLeadsOverlay = false,
   topPaises = [],
   otrosPaises = [],
   colorByPais = {},
 } = {}) {
-  if (selectedPais) {
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  if (foco.length) {
     const out = [{
-      key: selectedPais,
-      color: colorByPais[selectedPais] || LINE_COLORS[0],
+      key: COMPARE_METRIC_KEY,
+      color: colorByPais[foco[0]] || LINE_COLORS[0],
     }];
     if (showLeadsOverlay) {
       out.push({
@@ -215,17 +245,19 @@ export function buildPaisCompareMonthRows({
   byDayByPais = {},
   overlayByDayByPais = {},
   selectedPais = null,
+  selectedPaises = null,
 } = {}) {
-  if (!selectedPais) return [];
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  if (!foco.length) return [];
   return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
-    const metric = byDayByPais?.[dateKey]?.[selectedPais] || 0;
-    const leads = overlayByDayByPais?.[dateKey]?.[selectedPais] || 0;
+    const metric = sumByPaises(byDayByPais?.[dateKey], foco);
+    const leads = sumByPaises(overlayByDayByPais?.[dateKey], foco);
     return {
       day: dayLabel,
       dateKey,
       dayFull,
       [OVERLAY_LEADS_KEY]: leads,
-      [selectedPais]: metric,
+      [COMPARE_METRIC_KEY]: metric,
       [COMPARE_PCT_KEY]: funnelPct(metric, leads),
     };
   });

@@ -91,6 +91,7 @@ export default function SlotFasePorPais({
   overlayByDayByPais = null,
   monthlyOverlayByDayByPais = null,
   selectedPais = null,
+  selectedPaises = null,
   onPaisFocusChange,
   compareLabel = '',
 }) {
@@ -159,6 +160,7 @@ export default function SlotFasePorPais({
       onVistaChange={onVistaChange}
       overlayByDayByPais={overlayByDayByPais}
       selectedPais={selectedPais}
+      selectedPaises={selectedPaises}
       onPaisFocusChange={onPaisFocusChange}
       compareLabel={compareLabel || nombreFase}
       monthly={rangoMom ? {

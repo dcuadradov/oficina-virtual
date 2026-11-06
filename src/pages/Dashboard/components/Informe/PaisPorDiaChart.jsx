@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import {
   Bar, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -8,6 +8,7 @@ import {
   COLOR_LEADS_BAR,
   COLOR_LEADS_OVERLAY,
   COLOR_OTROS,
+  COMPARE_METRIC_KEY,
   COMPARE_PCT_KEY,
   LINE_COLORS,
   OVERLAY_LEADS_KEY,
@@ -16,7 +17,10 @@ import {
   buildPaisChartRows,
   buildPaisCompareMonthRows,
   buildPaisLineDefs,
+  etiquetaPaises,
+  paisesEnFoco,
   sortedPaises,
+  togglePaisSeleccionado,
 } from './paisPorDia';
 
 function formatPct(pct) {
@@ -27,6 +31,21 @@ function formatPct(pct) {
 function formatPctConBase(pct, baselineCount) {
   if (pct == null || Number.isNaN(pct)) return '—';
   return `${pct.toFixed(1)}% (${(baselineCount || 0).toLocaleString('es-CO')})`;
+}
+
+function CheckBox({ checked, indeterminate = false }) {
+  return (
+    <span
+      className={`flex items-center justify-center w-3.5 h-3.5 rounded border flex-shrink-0 ${
+        checked || indeterminate
+          ? 'bg-[#1717AF] border-[#1717AF] text-white'
+          : 'bg-white border-slate-300'
+      }`}
+    >
+      {checked && <Check size={10} strokeWidth={3} />}
+      {!checked && indeterminate && <span className="block w-2 h-0.5 bg-white rounded-full" />}
+    </span>
+  );
 }
 
 const VISTAS = [
@@ -51,6 +70,7 @@ export default function PaisPorDiaChart({
   onVistaChange,
   overlayByDayByPais = null,
   selectedPais = null,
+  selectedPaises = null,
   onPaisFocusChange,
   compareLabel = '',
 }) {
@@ -68,9 +88,13 @@ export default function PaisPorDiaChart({
   const ejeMensual = vista === 'meses' && Boolean(monthly);
   const serieLoading = serie.loading ?? loading;
   const overlay = serie.overlayByDayByPais ?? overlayByDayByPais;
-  const compareMode = Boolean(selectedPais && overlay);
-  const tasaVsVolumen = compareMode && ejeMensual;
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  const etiquetaFoco = etiquetaPaises(foco);
+  const compareMode = foco.length > 0;
+  const mostrarLeads = Boolean(compareMode && overlay);
+  const tasaVsVolumen = mostrarLeads && ejeMensual;
   const sePuedeFocar = typeof onPaisFocusChange === 'function';
+  const metricLabel = compareLabel || etiquetaFoco || 'Métrica';
 
   const ranked = useMemo(
     () => sortedPaises({
@@ -87,6 +111,9 @@ export default function PaisPorDiaChart({
 
   const topPaises = useMemo(() => ranked.slice(0, TOP_N), [ranked]);
   const otrosPaises = useMemo(() => ranked.slice(TOP_N), [ranked]);
+  const idsLista = useMemo(() => ranked.map((p) => p.pais), [ranked]);
+  const todosMarcados = idsLista.length > 0 && idsLista.every((id) => foco.includes(id));
+  const algunosMarcados = foco.length > 0 && !todosMarcados;
 
   const colorByPais = useMemo(() => {
     const map = {};
@@ -94,7 +121,7 @@ export default function PaisPorDiaChart({
     otrosPaises.forEach((p) => { map[p.pais] = COLOR_OTROS; });
     return map;
   }, [topPaises, otrosPaises]);
-  const colorMetrica = colorByPais[selectedPais] || LINE_COLORS[0];
+  const colorMetrica = colorByPais[foco[0]] || LINE_COLORS[0];
 
   const chartData = useMemo(() => {
     if (tasaVsVolumen) {
@@ -102,26 +129,32 @@ export default function PaisPorDiaChart({
         days: serie.days,
         byDayByPais: serie.byDayByPais,
         overlayByDayByPais: overlay,
-        selectedPais,
+        selectedPaises: foco,
       });
     }
     return buildPaisChartRows({
       days: serie.days,
       byDayByPais: serie.byDayByPais,
-      overlayByDayByPais: overlay,
-      selectedPais: compareMode ? selectedPais : null,
+      overlayByDayByPais: mostrarLeads ? overlay : null,
+      selectedPaises: foco,
       topPaises,
       otrosPaises,
     });
-  }, [tasaVsVolumen, serie.days, serie.byDayByPais, overlay, compareMode, selectedPais, topPaises, otrosPaises]);
+  }, [tasaVsVolumen, serie.days, serie.byDayByPais, overlay, mostrarLeads, foco, topPaises, otrosPaises]);
 
   const lineDefs = useMemo(() => buildPaisLineDefs({
-    selectedPais: compareMode ? selectedPais : null,
-    showLeadsOverlay: compareMode && !tasaVsVolumen,
+    selectedPaises: foco,
+    showLeadsOverlay: mostrarLeads && !tasaVsVolumen,
     topPaises,
     otrosPaises,
     colorByPais,
-  }), [compareMode, selectedPais, topPaises, otrosPaises, colorByPais]);
+  }), [foco, mostrarLeads, tasaVsVolumen, topPaises, otrosPaises, colorByPais]);
+
+  const lineName = (key) => {
+    if (key === OVERLAY_LEADS_KEY) return 'Leads';
+    if (key === COMPARE_METRIC_KEY) return metricLabel;
+    return key;
+  };
 
   const renderTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
@@ -138,9 +171,9 @@ export default function PaisPorDiaChart({
             </span>
           </div>
           <div className="flex items-center justify-between gap-4 py-0.5">
-            <span className="text-slate-700">{compareLabel || selectedPais}</span>
+            <span className="text-slate-700">{metricLabel}</span>
             <span className="font-semibold text-slate-800 tabular-nums">
-              {(row[selectedPais] || 0).toLocaleString('es-CO')}
+              {(row[COMPARE_METRIC_KEY] || 0).toLocaleString('es-CO')}
             </span>
           </div>
           <div className="flex items-center justify-between gap-4 py-0.5">
@@ -162,7 +195,7 @@ export default function PaisPorDiaChart({
         {items.map((it) => (
           <div key={it.dataKey} className="flex items-center gap-2 py-0.5">
             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: it.color }} />
-            <span className="text-slate-700 flex-1 truncate">{it.dataKey}</span>
+            <span className="text-slate-700 flex-1 truncate">{lineName(it.dataKey)}</span>
             <span className="font-semibold text-slate-800 tabular-nums">{it.value}</span>
           </div>
         ))}
@@ -173,6 +206,10 @@ export default function PaisPorDiaChart({
   const top3Share = ranked.slice(0, 3).reduce((a, p) => a + p.sharePct, 0);
   const top3Count = Math.min(3, ranked.length);
   const topVolume = ranked[0];
+
+  const setFoco = (next) => onPaisFocusChange?.(next);
+  const togglePais = (pais) => setFoco(togglePaisSeleccionado(foco, pais));
+  const toggleTodos = () => setFoco(todosMarcados ? [] : idsLista);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
@@ -199,11 +236,11 @@ export default function PaisPorDiaChart({
           {compareMode && sePuedeFocar && (
             <button
               type="button"
-              onClick={() => onPaisFocusChange(null)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/15"
+              onClick={() => setFoco([])}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1717AF]/10 text-[#1717AF] hover:bg-[#1717AF]/15 max-w-[180px] truncate"
               title="Volver a todos los países"
             >
-              {selectedPais} ×
+              {etiquetaFoco} ×
             </button>
           )}
           {serieLoading && <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>}
@@ -227,27 +264,32 @@ export default function PaisPorDiaChart({
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: colorMetrica }} />
-                      {compareLabel || selectedPais} %
+                      {metricLabel} %
                     </span>
                   </>
-                ) : (
+                ) : mostrarLeads ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: colorMetrica }} />
-                      {compareLabel || selectedPais}
+                      {metricLabel}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-4 border-t-2 border-dashed" style={{ borderColor: COLOR_LEADS_OVERLAY }} />
                       Leads
                     </span>
                   </>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: colorMetrica }} />
+                    {etiquetaFoco}
+                  </span>
                 )}
               </div>
             )}
             <div className="w-full h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               {tasaVsVolumen ? (
-                <ComposedChart key={`${selectedPais}-tasa`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 18 }}>
+                <ComposedChart key={`${etiquetaFoco}-tasa`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 18 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                   <XAxis
                     dataKey="day"
@@ -296,7 +338,7 @@ export default function PaisPorDiaChart({
                     yAxisId="pct"
                     type="monotone"
                     dataKey={COMPARE_PCT_KEY}
-                    name={`${compareLabel || selectedPais} %`}
+                    name={`${metricLabel} %`}
                     stroke={colorMetrica}
                     strokeWidth={2}
                     connectNulls={false}
@@ -308,7 +350,7 @@ export default function PaisPorDiaChart({
                   />
                 </ComposedChart>
               ) : (
-                <LineChart key={`${selectedPais || 'all'}-${vista}`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
+                <LineChart key={`${etiquetaFoco || 'all'}-${vista}`} data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: ejeMensual ? 18 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                   <XAxis
                     dataKey="day"
@@ -337,7 +379,7 @@ export default function PaisPorDiaChart({
                       key={ln.key}
                       type="monotone"
                       dataKey={ln.key}
-                      name={ln.key === OVERLAY_LEADS_KEY ? 'Leads' : ln.key}
+                      name={lineName(ln.key)}
                       stroke={ln.color}
                       strokeWidth={2}
                       strokeDasharray={ln.dashed ? '5 4' : undefined}
@@ -354,11 +396,26 @@ export default function PaisPorDiaChart({
             </div>
           </div>
 
-          <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1 space-y-1">
+          <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1">
+            {sePuedeFocar && ranked.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleTodos}
+                className="sticky top-0 z-10 w-full flex items-center gap-2 text-sm py-1.5 px-2 mb-1 rounded-lg bg-white border-b border-slate-100 hover:bg-slate-50"
+                title={todosMarcados ? 'Quitar todos' : 'Marcar todos'}
+              >
+                <CheckBox checked={todosMarcados} indeterminate={algunosMarcados} />
+                <span className="flex-1 truncate text-xs font-medium text-slate-700 text-left">Todos</span>
+                <span className="text-slate-400 text-xs tabular-nums">
+                  {ranked.length}
+                </span>
+              </button>
+            )}
+            <div className="space-y-1">
             {ranked.map((p) => {
-              const enfocado = selectedPais === p.pais;
+              const marcado = foco.includes(p.pais);
               const claseFila = `w-full flex items-center gap-2 text-sm py-1 px-2 rounded-lg transition-colors text-left ${
-                enfocado
+                marcado
                   ? 'bg-[#1717AF]/10 ring-1 ring-[#1717AF]/25'
                   : sePuedeFocar
                     ? 'hover:bg-slate-50 cursor-pointer'
@@ -366,6 +423,7 @@ export default function PaisPorDiaChart({
               }`;
               const contenido = (
                 <>
+                  {sePuedeFocar && <CheckBox checked={marcado} />}
                   <span
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: colorByPais[p.pais] || COLOR_OTROS }}
@@ -395,15 +453,16 @@ export default function PaisPorDiaChart({
                 <button
                   key={p.pais}
                   type="button"
-                  onClick={() => onPaisFocusChange(enfocado ? null : p.pais)}
+                  onClick={() => togglePais(p.pais)}
                   className={claseFila}
-                  title={enfocado ? 'Volver a todos los países' : `Ver ${p.pais} junto a sus leads`}
-                  aria-pressed={enfocado}
+                  title={marcado ? `Quitar ${p.pais}` : `Sumar ${p.pais}`}
+                  aria-pressed={marcado}
                 >
                   {contenido}
                 </button>
               );
             })}
+            </div>
           </div>
         </div>
       )}
@@ -414,16 +473,21 @@ export default function PaisPorDiaChart({
           {tasaVsVolumen ? (
             <p className="text-slate-600 leading-relaxed">
               Las barras son los leads de{' '}
-              <span className="font-semibold text-slate-800">{selectedPais}</span>
-              {' '}cada mes. La línea es el % de {compareLabel || 'esta métrica'} sobre esos leads.
+              <span className="font-semibold text-slate-800">{etiquetaFoco}</span>
+              {' '}cada mes. La línea es el % de {metricLabel} sobre esos leads.
               {' '}Si el volumen baja y el % se sostiene, no se cayó la conversión.
+            </p>
+          ) : compareMode && mostrarLeads ? (
+            <p className="text-slate-600 leading-relaxed">
+              La línea continua es {metricLabel} de{' '}
+              <span className="font-semibold text-slate-800">{etiquetaFoco}</span>
+              . La punteada es <span className="font-semibold text-slate-800">leads</span> del mismo grupo.
+              {' '}El eje es el volumen de leads.
             </p>
           ) : compareMode ? (
             <p className="text-slate-600 leading-relaxed">
-              La línea continua es {compareLabel || 'esta métrica'} de{' '}
-              <span className="font-semibold text-slate-800">{selectedPais}</span>
-              . La punteada es <span className="font-semibold text-slate-800">leads</span> del mismo país.
-              {' '}El eje es el volumen de leads.
+              La línea es el volumen combinado de{' '}
+              <span className="font-semibold text-slate-800">{etiquetaFoco}</span>.
             </p>
           ) : pctMode === 'funnel' ? (
             <p className="text-slate-600 leading-relaxed">

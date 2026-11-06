@@ -1587,6 +1587,7 @@ export default function Dashboard() {
           </button>
           </div>
         </div>
+        <div id="dashboard-header-filters" />
       </header>
 
       {/* --- CONTENIDO PRINCIPAL --- */}

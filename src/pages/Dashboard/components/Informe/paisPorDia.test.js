@@ -6,8 +6,12 @@ import {
   buildMonthList,
   buildPaisChartRows,
   buildPaisCompareMonthRows,
+  COMPARE_METRIC_KEY,
   COMPARE_PCT_KEY,
+  etiquetaPaises,
   OVERLAY_LEADS_KEY,
+  sumByPaises,
+  togglePaisSeleccionado,
   ETAPAS_DESCARTADO,
   ETAPAS_GESTIONANDO,
   ETAPAS_MATRICULA,
@@ -161,9 +165,37 @@ test('con un país en foco el gráfico deja su métrica y los leads de ese país
     selectedPais: 'Colombia',
     topPaises: [{ pais: 'México' }, { pais: 'Colombia' }],
   });
-  assert.equal(rows[0].Colombia, 2);
+  assert.equal(rows[0][COMPARE_METRIC_KEY], 2);
   assert.equal(rows[0][OVERLAY_LEADS_KEY], 10);
   assert.equal(rows[0].México, undefined);
+});
+
+test('varios países en foco se combinan en una sola serie', () => {
+  const rows = buildPaisChartRows({
+    days: [{ dateKey: '2026-06-01', dayLabel: '01', dayFull: '01/06' }],
+    byDayByPais: { '2026-06-01': { Colombia: 2, México: 5, Perú: 1 } },
+    overlayByDayByPais: { '2026-06-01': { Colombia: 10, México: 20, Perú: 4 } },
+    selectedPaises: ['Colombia', 'México'],
+  });
+  assert.equal(rows[0][COMPARE_METRIC_KEY], 7);
+  assert.equal(rows[0][OVERLAY_LEADS_KEY], 30);
+  assert.equal(etiquetaPaises(['Colombia', 'México']), 'Colombia + México');
+  assert.equal(etiquetaPaises(['Colombia', 'México', 'Perú']), '3 países');
+  assert.deepEqual(togglePaisSeleccionado(['Colombia'], 'México'), ['Colombia', 'México']);
+  assert.deepEqual(togglePaisSeleccionado(['Colombia', 'México'], 'Colombia'), ['México']);
+  assert.equal(sumByPaises({ Colombia: 2, México: 5 }, ['Colombia', 'México']), 7);
+});
+
+test('mes a mes varios países combinan leads y métrica antes del %', () => {
+  const rows = buildPaisCompareMonthRows({
+    days: [{ dateKey: '2026-02', dayLabel: 'Feb 26', dayFull: 'Febrero 2026' }],
+    byDayByPais: { '2026-02': { Colombia: 10, México: 30 } },
+    overlayByDayByPais: { '2026-02': { Colombia: 100, México: 300 } },
+    selectedPaises: ['Colombia', 'México'],
+  });
+  assert.equal(rows[0][COMPARE_METRIC_KEY], 40);
+  assert.equal(rows[0][OVERLAY_LEADS_KEY], 400);
+  assert.equal(rows[0][COMPARE_PCT_KEY], 10);
 });
 
 test('mes a mes el % es matrículas sobre leads de ese mes, no la cantidad', () => {
@@ -189,7 +221,7 @@ test('mes a mes el % es matrículas sobre leads de ese mes, no la cantidad', () 
     selectedPais: 'Colombia',
   });
   assert.equal(rows[0][OVERLAY_LEADS_KEY], 800);
-  assert.equal(rows[0].Colombia, 80);
+  assert.equal(rows[0][COMPARE_METRIC_KEY], 80);
   assert.equal(rows[0][COMPARE_PCT_KEY], 10);
   assert.equal(rows[1][COMPARE_PCT_KEY], 5);
   assert.equal(rows[2][COMPARE_PCT_KEY], 10);

@@ -47,7 +47,7 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
   const [loading, setLoading] = useState(false);
   const [loadingMom, setLoadingMom] = useState(false);
   const [vistaPais, setVistaPais] = useState('periodo');
-  const [paisEnFoco, setPaisEnFoco] = useState(null);
+  const [paisesEnFoco, setPaisesEnFoco] = useState([]);
   const dateField = filtros.dateField === 'updated_at' ? 'updated_at' : 'created_at';
   const momRango = useMemo(() => rangoTodosLosMeses(), []);
 
@@ -138,9 +138,12 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
   );
 
   const tabProps = { vista: vistaPais, onVistaChange: setVistaPais };
+  const focoLista = {
+    selectedPaises: paisesEnFoco,
+    onPaisFocusChange: setPaisesEnFoco,
+  };
   const focoProps = {
-    selectedPais: paisEnFoco,
-    onPaisFocusChange: setPaisEnFoco,
+    ...focoLista,
     overlayByDayByPais: leadsAgg.byDayByPais,
   };
 
@@ -157,6 +160,7 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         total={leadsAgg.total}
         pctMode="share"
         {...tabProps}
+        {...focoLista}
         monthly={{
           days: months,
           totalsByPais: leadsMomAgg.totalsByPais,
@@ -238,8 +242,8 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         monthlyOverlayByDayByPais={leadsMomAgg.byDayByPais}
         compareLabel="Pitch"
         {...tabProps}
-        selectedPais={paisEnFoco}
-        onPaisFocusChange={setPaisEnFoco}
+        selectedPaises={paisesEnFoco}
+        onPaisFocusChange={setPaisesEnFoco}
       />
       <PaisPorDiaChart
         title="Matrícula por país"

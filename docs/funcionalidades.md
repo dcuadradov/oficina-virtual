@@ -42,6 +42,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar por tipo de gestión de WhatsApp: los que se atienden por Respond.io y los que se atienden desde el WhatsApp del comercial.
 - Se puede filtrar por los que tienen novedades sin leer, los que tienen ventana de WhatsApp abierta y los que tienen recordatorio activo.
 - Se puede limpiar todos los filtros de un golpe.
+- Si se baja por la página y el header tapa los filtros, esos mismos filtros se meten en el header para poder cambiarlos sin volver arriba.
 - En **Gestión**, el botón **Copiar contactos** abre un recuadro con WhatsApp y correo. Copia todos los leads que cumplen los filtros, no solo la página visible. Junto a cada opción va cuántos hay: el número y el correo pueden no coincidir si a un lead le falta uno de los dos. El correo sale listo para pegar en el campo Para de Gmail. El teléfono sale internacional y pegado, por ejemplo +573173588591. La consulta va de a 1.000 y se detiene a los 15.000 para no recargar el portal.
 
 ---
@@ -222,7 +223,9 @@ De Sin contacto en adelante el % de cada país es sobre Leads por país, no sobr
 
 En esas seis gráficas hay dos pestañas y cambian juntas. **Periodo** es el día a día del mes, periodo o día marcado arriba. **Todos los meses** va de noviembre 2025 hasta hoy: el gráfico es mes a mes, máximo 12 meses (los más recientes), y la lista es el acumulado. Esa pestaña no usa el filtro de mes, periodo o día; país, comercial, ocupación, tags, fuente, género, edad y creación/actualización sí aplican.
 
-En Sin contacto, Gestionando, Pitch, Matrícula y Descartados por país se puede hacer clic en un país de la lista. Las cinco gráficas se sincronizan. En **Periodo** se ven las cantidades de ese país y de sus leads. En **Todos los meses** las barras son los leads de ese país cada mes y la línea es el % de la métrica sobre esos leads (si cayeron las matrículas porque hubo menos leads, se ve en las barras; si con los mismos leads se convierte más, sube la línea). Otro clic, o la X del país, vuelve a todos. Leads por país no cambia.
+En las seis (Leads, Sin contacto, Gestionando, Pitch, Matrícula y Descartados) cada país tiene un checkbox, y arriba está **Todos**. Lo que se marque se combina en una sola serie y las seis gráficas se sincronizan. Un país es su línea; varios se suman. En las de funnel, **Periodo** muestra esa métrica junto a sus leads; **Todos los meses** pone barras de leads y la línea de % sobre esos leads. En Leads por país solo se ve el volumen combinado. La X del país (o desmarcar Todos) vuelve a la vista de siempre.
+
+Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se meten en el header para poder cambiarlos sin volver arriba.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.
