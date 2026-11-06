@@ -3,7 +3,10 @@ import { test } from 'node:test';
 import {
   addOneDay,
   applyLeadFilters,
+  etiquetaMes,
+  etiquetaRangoComercial,
   facetasCruzadas,
+  indexMonthConfigs,
   parseInformeDates,
   rangoDeMes,
   rangoTodosLosMeses,
@@ -38,6 +41,33 @@ test('rangoDeMes usa la config comercial de Gestión', () => {
   assert.equal(rango.fechaFin, '2026-12-02 05:00:00+00');
   assert.equal(rango.startDateLocal, '2026-11-04');
   assert.equal(rango.endDateLocal, '2026-12-01');
+});
+
+test('octubre 2026 usa el rango comercial 29 sep – 2 nov, no el mes calendario', () => {
+  const rango = rangoDeMes(
+    { '2026-10': { fecha_inicio: '2026-09-29', fecha_fin: '2026-11-02' } },
+    '2026-10',
+  );
+  assert.equal(rango.fechaInicio, '2026-09-29 05:00:00+00');
+  assert.equal(rango.fechaFin, '2026-11-03 05:00:00+00');
+  assert.equal(rango.startDateLocal, '2026-09-29');
+  assert.equal(rango.endDateLocal, '2026-11-02');
+  assert.equal(etiquetaRangoComercial(rango), '29 sep 2026 – 2 nov 2026');
+  assert.equal(etiquetaMes('2026-10'), 'Octubre 2026');
+});
+
+test('indexMonthConfigs entiende mes fecha y timestamps de Postgres', () => {
+  const map = indexMonthConfigs([
+    {
+      mes: '2026-10-01',
+      fecha_inicio: '2026-09-29T00:00:00+00:00',
+      fecha_fin: '2026-11-02T00:00:00+00:00',
+    },
+  ]);
+  const rango = rangoDeMes(map, '2026-10');
+  assert.equal(rango.startDateLocal, '2026-09-29');
+  assert.equal(rango.endDateLocal, '2026-11-02');
+  assert.equal(rango.fechaInicio, '2026-09-29 05:00:00+00');
 });
 
 test('parseInformeDates prioriza día, luego periodo, luego mes', () => {

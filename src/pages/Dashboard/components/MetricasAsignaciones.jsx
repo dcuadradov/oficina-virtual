@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import { rangoDeMes } from './Informe/informeFiltros';
 
 export default function MetricasAsignaciones({
   selectedComercial,
@@ -40,28 +41,9 @@ export default function MetricasAsignaciones({
       fechaInicio = `${inicio} 05:00:00+00`;
       fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
-      const [año, mes] = selectedMes.split('-');
-      const config = monthConfigs[selectedMes];
-
-      if (config) {
-        fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-        if (config.fecha_fin) {
-          const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-          const finMasUno = new Date(yF, mF - 1, dF + 1);
-          const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
-          fechaFin = `${fechaFinMasUno} 05:00:00+00`;
-        } else {
-          const now = new Date();
-          const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
-          fechaFin = `${fechaManana} 05:00:00+00`;
-        }
-      } else {
-        const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
-        const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
-        fechaInicio = `${año}-${mes}-01 05:00:00+00`;
-        fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
-      }
+      const rango = rangoDeMes(monthConfigs, selectedMes);
+      fechaInicio = rango?.fechaInicio ?? null;
+      fechaFin = rango?.fechaFin ?? null;
     }
 
     return { fechaInicio, fechaFin };

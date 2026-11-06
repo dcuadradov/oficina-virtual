@@ -785,6 +785,9 @@ const DashboardFilters = ({
               setPeriodoOpen(false);
               setPaisOpen(false);
             }}
+            title={monthConfigs[selectedMes]?.fecha_inicio
+              ? `${monthConfigs[selectedMes].fecha_inicio} → ${monthConfigs[selectedMes].fecha_fin || 'hoy'}`
+              : undefined}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedMes
                 ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'

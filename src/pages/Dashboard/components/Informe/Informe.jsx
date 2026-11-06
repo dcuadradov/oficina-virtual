@@ -9,7 +9,15 @@ import Slot05_LeadsPorOcupacion from './slots/Slot05_LeadsPorOcupacion';
 import Slot06_MatriculasMes from './slots/Slot06_MatriculasMes';
 import Slot07_MatriculasPorOcupacion from './slots/Slot07_MatriculasPorOcupacion';
 import InformeFacetFilters from './InformeFacetFilters';
-import { applyLeadFilters, facetasCruzadas, getCurrentMonthKey, parseInformeDates } from './informeFiltros';
+import {
+  applyLeadFilters,
+  etiquetaMes,
+  etiquetaRangoComercial,
+  facetasCruzadas,
+  getCurrentMonthKey,
+  indexMonthConfigs,
+  parseInformeDates,
+} from './informeFiltros';
 
 export default function Informe({
   monthConfigs,
@@ -29,6 +37,7 @@ export default function Informe({
   const [selectedEdad, setSelectedEdad] = useState([]);
   const [dateFilterField, setDateFilterField] = useState('created_at');
   const [facetRows, setFacetRows] = useState([]);
+  const [fetchedConfigs, setFetchedConfigs] = useState(null);
 
   const dimSelections = useMemo(() => ({
     pais: selectedPais,
@@ -53,10 +62,43 @@ export default function Informe({
     edad: facetasCruzadas(facetRows, dimSelections, 'edad'),
   }), [facetRows, dimSelections]);
 
-  const rango = useMemo(
-    () => parseInformeDates({ selectedDia, selectedPeriodo, selectedMes, monthConfigs }),
-    [selectedDia, selectedPeriodo, selectedMes, monthConfigs],
+  useEffect(() => {
+    let cancelled = false;
+    const cargar = async () => {
+      const { data, error } = await supabase
+        .from('config_meses')
+        .select('mes, fecha_inicio, fecha_fin');
+      if (cancelled) return;
+      if (error) {
+        console.error('Error cargando config_meses del informe:', error.message);
+        setFetchedConfigs({});
+        return;
+      }
+      setFetchedConfigs(indexMonthConfigs(data));
+    };
+    cargar();
+    return () => { cancelled = true; };
+  }, []);
+
+  const configsMes = useMemo(
+    () => ({ ...fetchedConfigs, ...indexMonthConfigs(monthConfigs) }),
+    [fetchedConfigs, monthConfigs],
   );
+  const configsListos = fetchedConfigs !== null
+    || Object.keys(indexMonthConfigs(monthConfigs)).length > 0;
+
+  const rango = useMemo(() => {
+    if (selectedMes && !selectedDia && !selectedPeriodo && !configsListos) {
+      return { fechaInicio: null, fechaFin: null, startDateLocal: null, endDateLocal: null };
+    }
+    return parseInformeDates({
+      selectedDia,
+      selectedPeriodo,
+      selectedMes,
+      monthConfigs: configsMes,
+    });
+  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos]);
+  const rangoEtiqueta = etiquetaRangoComercial(rango);
 
   const filtros = useMemo(() => ({
     fechaInicio: rango.fechaInicio,
@@ -91,8 +133,9 @@ export default function Informe({
 
   const fetchFacetas = useCallback(async () => {
     try {
+      if (selectedMes && !selectedDia && !selectedPeriodo && !configsListos) return;
       const { fechaInicio, fechaFin } = parseInformeDates({
-        selectedDia, selectedPeriodo, selectedMes, monthConfigs,
+        selectedDia, selectedPeriodo, selectedMes, monthConfigs: configsMes,
       });
       const pages = [];
       let from = 0;
@@ -119,7 +162,7 @@ export default function Informe({
     } catch (error) {
       console.error('Error cargando facetas del informe:', error);
     }
-  }, [selectedDia, selectedPeriodo, selectedMes, monthConfigs, dateFilterField, selectedComercial]);
+  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos, dateFilterField, selectedComercial]);
 
   useEffect(() => {
     fetchFacetas();
@@ -133,14 +176,16 @@ export default function Informe({
     else if (key === 'edad') setSelectedEdad(next);
   };
 
-  const slotProps = { rango, filtros, selectedMes, monthConfigs };
+  const slotProps = { rango, filtros, selectedMes, monthConfigs: configsMes };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Informe</h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Los tiempos usan la misma configuración de mes, periodo y día que Gestión.
+          {rangoEtiqueta && selectedMes && !selectedDia && !selectedPeriodo
+            ? `${etiquetaMes(selectedMes)} cuenta ${rangoEtiqueta}. Es el rango comercial de Gestión, no el mes calendario.`
+            : 'Los tiempos usan la misma configuración de mes, periodo y día que Gestión.'}
         </p>
       </div>
 
@@ -167,7 +212,7 @@ export default function Informe({
         dateFilterField={dateFilterField}
         onDateFilterFieldChange={setDateFilterField}
         puedeVerTodos
-        monthConfigs={monthConfigs}
+        monthConfigs={configsMes}
         onSaveMonthConfig={onSaveMonthConfig}
         onRefreshComerciales={onRefreshComerciales}
       >
