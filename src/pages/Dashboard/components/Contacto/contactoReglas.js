@@ -1,0 +1,293 @@
+export const CANAL_LLAMADA = 'llamada';
+export const CANAL_MENSAJE = 'mensaje';
+
+export const RESULTADO_LNC = 'LNC.';
+export const RESULTADO_LC = 'LC.';
+export const RESULTADO_LA = 'LA.';
+export const RESULTADO_MNC = 'MNC.';
+export const RESULTADO_MC = 'MC.';
+export const RESULTADO_MA = 'MA.';
+
+export const PRIORIDAD_RESULTADO = {
+  [RESULTADO_LNC]: 1,
+  [RESULTADO_LC]: 2,
+  [RESULTADO_LA]: 3,
+  [RESULTADO_MNC]: 1,
+  [RESULTADO_MC]: 2,
+  [RESULTADO_MA]: 3,
+};
+
+export const HORAS_HEATMAP = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+export const DIAS_SEMANA = [
+  { id: 1, label: 'Lun' },
+  { id: 2, label: 'Mar' },
+  { id: 3, label: 'Mié' },
+  { id: 4, label: 'Jue' },
+  { id: 5, label: 'Vie' },
+  { id: 6, label: 'Sáb' },
+  { id: 7, label: 'Dom' },
+];
+
+export function prioridadResultado(sigla) {
+  return PRIORIDAD_RESULTADO[sigla] || 0;
+}
+
+export function canalDeResultado(sigla) {
+  if (sigla === RESULTADO_LNC || sigla === RESULTADO_LC || sigla === RESULTADO_LA) return CANAL_LLAMADA;
+  if (sigla === RESULTADO_MNC || sigla === RESULTADO_MC || sigla === RESULTADO_MA) return CANAL_MENSAJE;
+  return null;
+}
+
+export function partirSeguimiento({ llamada, mensaje } = {}) {
+  const intentos = [];
+  if (llamada) intentos.push({ canal: CANAL_LLAMADA, resultado: llamada });
+  if (mensaje) intentos.push({ canal: CANAL_MENSAJE, resultado: mensaje });
+  return intentos;
+}
+
+export function esContestacion(resultado) {
+  return resultado === RESULTADO_LC
+    || resultado === RESULTADO_LA
+    || resultado === RESULTADO_MC
+    || resultado === RESULTADO_MA;
+}
+
+export function esEfectiva(resultado) {
+  return resultado === RESULTADO_LA || resultado === RESULTADO_MA;
+}
+
+export function esNoContesto(resultado) {
+  return resultado === RESULTADO_LNC || resultado === RESULTADO_MNC;
+}
+
+export function resultadoDelDia(intentos = []) {
+  if (!Array.isArray(intentos) || intentos.length === 0) return null;
+  return intentos.reduce((best, item) => {
+    if (!item?.resultado) return best;
+    if (!best) return item;
+    const pItem = prioridadResultado(item.resultado);
+    const pBest = prioridadResultado(best.resultado);
+    if (pItem > pBest) return item;
+    return best;
+  }, null);
+}
+
+export function diariosDesdeIntentos(intentos = []) {
+  const grupos = new Map();
+  for (const intento of intentos) {
+    if (!intento?.lead_id || !intento?.canal || !intento?.resultado || !intento?.fecha) continue;
+    const key = `${intento.fecha}|${intento.lead_id}|${intento.canal}`;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(intento);
+  }
+  return [...grupos.values()].map((items) => {
+    const ganador = resultadoDelDia(items);
+    const seguimientos = new Set(items.map((item) => item.seguimiento_id).filter(Boolean));
+    return {
+      fecha: ganador.fecha,
+      lead_id: ganador.lead_id,
+      canal: ganador.canal,
+      resultado: ganador.resultado,
+      autor_email: ganador.autor_email,
+      intentos: items.length,
+      seguimientos: seguimientos.size,
+    };
+  });
+}
+
+export function consolidarPorPersonaCanal(diarios = []) {
+  const map = new Map();
+  for (const row of diarios) {
+    if (!row?.lead_id || !row?.canal) continue;
+    const key = `${row.lead_id}|${row.canal}`;
+    const prev = map.get(key);
+    if (!prev || prioridadResultado(row.resultado) > prioridadResultado(prev.resultado)) {
+      map.set(key, row);
+    }
+  }
+  return [...map.values()];
+}
+
+export function conteoCanal(diarios = [], canal) {
+  const consolidado = consolidarPorPersonaCanal(diarios).filter((row) => row.canal === canal);
+  const total = consolidado.length;
+  const noContestaron = consolidado.filter((row) => esNoContesto(row.resultado)).length;
+  const contestaronSolo = consolidado.filter((row) => (
+    row.resultado === RESULTADO_LC || row.resultado === RESULTADO_MC
+  )).length;
+  const efectivas = consolidado.filter((row) => esEfectiva(row.resultado)).length;
+  const contestaronIncluye = contestaronSolo + efectivas;
+  return {
+    canal,
+    personas: total,
+    noContestaron,
+    contestaronSolo,
+    efectivas,
+    contestaronIncluye,
+    pctNo: total ? (noContestaron / total) * 100 : 0,
+    pctContestoSolo: total ? (contestaronSolo / total) * 100 : 0,
+    pctEfectivas: total ? (efectivas / total) * 100 : 0,
+    pctContestaron: total ? (contestaronIncluye / total) * 100 : 0,
+  };
+}
+
+export function kpisContacto(diarios = [], intentos = []) {
+  const people = new Set(diarios.map((row) => row.lead_id).filter(Boolean));
+  const peopleLlamada = new Set(
+    diarios.filter((row) => row.canal === CANAL_LLAMADA).map((row) => row.lead_id),
+  );
+  const peopleMensaje = new Set(
+    diarios.filter((row) => row.canal === CANAL_MENSAJE).map((row) => row.lead_id),
+  );
+  const consolidado = consolidarPorPersonaCanal(diarios);
+  const contestaron = new Set(
+    consolidado.filter((row) => esContestacion(row.resultado)).map((row) => row.lead_id),
+  );
+  const efectivas = new Set(
+    consolidado.filter((row) => esEfectiva(row.resultado)).map((row) => row.lead_id),
+  );
+  const agendaronLlamada = new Set(
+    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esEfectiva(row.resultado)).map((row) => row.lead_id),
+  );
+  const agendaronMensaje = new Set(
+    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esEfectiva(row.resultado)).map((row) => row.lead_id),
+  );
+  const seguimientos = new Set(intentos.map((item) => item.seguimiento_id).filter(Boolean));
+  const personas = people.size;
+  return {
+    personas,
+    personasLlamada: peopleLlamada.size,
+    personasMensaje: peopleMensaje.size,
+    contestaron: contestaron.size,
+    pctContestacion: personas ? (contestaron.size / personas) * 100 : 0,
+    efectivas: efectivas.size,
+    pctEfectividad: personas ? (efectivas.size / personas) * 100 : 0,
+    agendamientos: efectivas.size,
+    agendaronLlamada: agendaronLlamada.size,
+    agendaronMensaje: agendaronMensaje.size,
+    seguimientos: seguimientos.size,
+    seguimientosPorPersona: personas ? seguimientos.size / personas : 0,
+  };
+}
+
+export function intensidadPorPersonaDia(intentos = []) {
+  const grupos = new Map();
+  for (const intento of intentos) {
+    if (!intento?.lead_id || !intento?.fecha) continue;
+    const key = `${intento.fecha}|${intento.lead_id}`;
+    if (!grupos.has(key)) {
+      grupos.set(key, {
+        fecha: intento.fecha,
+        lead_id: intento.lead_id,
+        seguimientos: new Set(),
+        contestó: false,
+        efectiva: false,
+      });
+    }
+    const grupo = grupos.get(key);
+    if (intento.seguimiento_id) grupo.seguimientos.add(intento.seguimiento_id);
+    if (esContestacion(intento.resultado)) grupo.contestó = true;
+    if (esEfectiva(intento.resultado)) grupo.efectiva = true;
+  }
+  return [...grupos.values()].map((grupo) => ({
+    fecha: grupo.fecha,
+    lead_id: grupo.lead_id,
+    seguimientos: grupo.seguimientos.size,
+    contestó: grupo.contestó,
+    efectiva: grupo.efectiva,
+  }));
+}
+
+export function cubetasIntensidad(intentos = []) {
+  const vacio = { personasDia: 0, contestaron: 0, pctContestacion: 0 };
+  const cubetas = {
+    1: { ...vacio, id: '1', label: '1 seguimiento' },
+    2: { ...vacio, id: '2', label: '2 seguimientos' },
+    '3+': { ...vacio, id: '3+', label: '3 o más' },
+  };
+  for (const row of intensidadPorPersonaDia(intentos)) {
+    const key = row.seguimientos >= 3 ? '3+' : String(Math.max(row.seguimientos, 1));
+    if (!cubetas[key]) continue;
+    cubetas[key].personasDia += 1;
+    if (row.contestó) cubetas[key].contestaron += 1;
+  }
+  for (const cubeta of Object.values(cubetas)) {
+    cubeta.pctContestacion = cubeta.personasDia
+      ? (cubeta.contestaron / cubeta.personasDia) * 100
+      : 0;
+  }
+  return [cubetas['1'], cubetas['2'], cubetas['3+']];
+}
+
+function horaHeatmap(hora) {
+  const n = Number(hora);
+  if (!Number.isFinite(n)) return HORAS_HEATMAP[0];
+  if (n < HORAS_HEATMAP[0]) return HORAS_HEATMAP[0];
+  if (n > HORAS_HEATMAP[HORAS_HEATMAP.length - 1]) return HORAS_HEATMAP[HORAS_HEATMAP.length - 1];
+  return n;
+}
+
+export function filtraIntentosHeatmap(intentos = [], { pestana = 'contestaron', canal = 'ambos' } = {}) {
+  return intentos.filter((item) => {
+    if (canal !== 'ambos' && item.canal !== canal) return false;
+    if (pestana === 'agendaron') return esEfectiva(item.resultado);
+    if (pestana === 'no_contestaron') return esNoContesto(item.resultado);
+    return esContestacion(item.resultado);
+  });
+}
+
+export function celdasHeatmap(intentos = [], opts = {}) {
+  const filtrados = filtraIntentosHeatmap(intentos, opts);
+  const map = new Map();
+  for (const item of filtrados) {
+    const hora = horaHeatmap(item.hora);
+    const dia = Number(item.dia_semana) || 1;
+    const key = `${dia}|${hora}`;
+    if (!map.has(key)) {
+      map.set(key, { dia, hora, intentos: 0, personas: new Set() });
+    }
+    const cell = map.get(key);
+    cell.intentos += 1;
+    if (item.lead_id) cell.personas.add(item.lead_id);
+  }
+  return HORAS_HEATMAP.flatMap((hora) => DIAS_SEMANA.map((dia) => {
+    const cell = map.get(`${dia.id}|${hora}`);
+    return {
+      dia: dia.id,
+      hora,
+      intentos: cell?.intentos || 0,
+      personas: cell ? cell.personas.size : 0,
+      leadIds: cell ? [...cell.personas] : [],
+    };
+  }));
+}
+
+export function rankingComerciales(intentos = [], comerciales = []) {
+  const byAutor = new Map();
+  const nombreDe = (email) => {
+    const hit = comerciales.find((c) => c.email === email);
+    return hit?.nombre || email?.split('@')[0] || email || 'Sin autor';
+  };
+  for (const intento of intentos) {
+    const email = intento.autor_email;
+    if (!email) continue;
+    if (!byAutor.has(email)) byAutor.set(email, []);
+    byAutor.get(email).push(intento);
+  }
+  const rows = [...byAutor.entries()].map(([email, items]) => {
+    const diariosAutor = diariosDesdeIntentos(items);
+    const kpis = kpisContacto(diariosAutor, items);
+    return {
+      email,
+      nombre: nombreDe(email),
+      ...kpis,
+    };
+  });
+  rows.sort((a, b) => b.personas - a.personas || b.pctContestacion - a.pctContestacion);
+  return rows;
+}
+
+export function pct(n) {
+  if (n == null || Number.isNaN(n)) return '0%';
+  return `${n.toFixed(n >= 10 || n === 0 ? 0 : 1)}%`;
+}

@@ -22,8 +22,9 @@ import CopyContactsModal from './components/CopyContactsModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
 import MetricasPerformance from './components/MetricasPerformance';
 import Informe from './components/Informe/Informe';
+import Contacto from './components/Contacto/Contacto';
 import { indexMonthConfigs, rangoDeMes } from './components/Informe/informeFiltros';
-import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2, Copy } from 'lucide-react';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2, Copy, Phone } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -1656,6 +1657,19 @@ export default function Dashboard() {
                   Informe
                 </button>
               )}
+              {!esSetter && (
+                <button
+                  onClick={() => setActiveView('contacto')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'contacto'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Phone size={18} />
+                  Contacto
+                </button>
+              )}
             </div>
 
             {/* CONTENIDO SEGÚN TAB ACTIVO */}
@@ -2057,6 +2071,16 @@ export default function Dashboard() {
                 onSaveMonthConfig={handleSaveMonthConfig}
                 comerciales={comerciales}
                 onRefreshComerciales={fetchComerciales}
+              />
+            ) : activeView === 'contacto' && !esSetter ? (
+              <Contacto
+                monthConfigs={monthConfigs}
+                onSaveMonthConfig={handleSaveMonthConfig}
+                comerciales={comerciales}
+                onRefreshComerciales={fetchComerciales}
+                puedeVerTodos={puedeVerTodos}
+                userEmail={userEmail}
+                onOpenLead={handleOpenLeadFromNotification}
               />
             ) : null}
           </div>

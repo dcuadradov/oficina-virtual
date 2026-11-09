@@ -1,0 +1,66 @@
+import { CalendarCheck, PhoneCall, Target, UserCheck, Users } from 'lucide-react';
+import { pct } from './contactoReglas';
+
+function Card({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+          {label}
+        </span>
+        <Icon size={14} className="text-[#1717AF]/70 flex-shrink-0" />
+      </div>
+      <p className="text-2xl font-bold text-[#1717AF]">{value}</p>
+      <p className="text-[11px] text-slate-400 mt-1 leading-tight">{sub}</p>
+    </div>
+  );
+}
+
+export default function ContactoKpis({ kpis, loading }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-[108px] rounded-2xl bg-slate-100 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  const n = (v) => (v || 0).toLocaleString('es-CO');
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <Card
+        icon={Users}
+        label="Personas contactadas"
+        value={n(kpis.personas)}
+        sub={`${n(kpis.personasLlamada)} por llamada · ${n(kpis.personasMensaje)} por WhatsApp`}
+      />
+      <Card
+        icon={UserCheck}
+        label="Contestación"
+        value={pct(kpis.pctContestacion)}
+        sub={`${n(kpis.contestaron)} de ${n(kpis.personas)} levantaron o respondieron`}
+      />
+      <Card
+        icon={Target}
+        label="Efectividad"
+        value={pct(kpis.pctEfectividad)}
+        sub={`${n(kpis.efectivas)} de ${n(kpis.personas)} agendaron`}
+      />
+      <Card
+        icon={CalendarCheck}
+        label="Agendamientos"
+        value={n(kpis.agendamientos)}
+        sub={`${n(kpis.agendaronLlamada)} por llamada · ${n(kpis.agendaronMensaje)} por WhatsApp`}
+      />
+      <Card
+        icon={PhoneCall}
+        label="Seguimientos / persona"
+        value={(kpis.seguimientosPorPersona || 0).toFixed(1)}
+        sub={`${n(kpis.seguimientos)} seguimientos · ${n(kpis.personas)} personas`}
+      />
+    </div>
+  );
+}

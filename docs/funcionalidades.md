@@ -232,17 +232,33 @@ Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se m
 
 ---
 
-## 15. Quién ve qué
+## 15. Contacto
 
-| Rol | Alcance |
-|-----|---------|
-| Comercial | Solo sus leads. Sus propias métricas de conversión. |
-| Setter | Solo las etapas que le corresponden. En la agenda de pitch, los que él mismo agendó. Sin métricas ni informes. |
-| Supervisor | Todos los leads, filtro por comercial, asignaciones del equipo e informes mensuales. Puede definir las fechas de inicio y fin de un mes comercial. |
+Tab después de Informe. Lo ven comercial y supervisor (como Métricas); el setter no. Si `puede_ver_todos` es true, hay selector de comercial; si es false, solo se ve lo propio. El comercial del filtro es **quién contactó**, no el dueño del lead.
+
+Mide personas, no intentos. Tres seguimientos al mismo lead el mismo día son una persona. Si cada seguimiento fue llamada y mensaje, hay 6 intentos y 3 seguimientos. La fecha es cuándo lo registraron (Colombia), no la fecha programada del recordatorio.
+
+El resultado del día no es el último intento: gana el más cerca del agendamiento. Llamada: LA > LC > LNC. WhatsApp: MA > MC > MNC. Los tres tramos de cada canal (no contestaron, contestaron, efectivas) suman las personas de ese canal. En la frase de abajo, “contestaron” incluye a quienes agendaron.
+
+Los números salen de `comentarios.llamada` / `comentarios.mensaje`. Si el recordatorio no dejó comentario con sigla, se usa `recordatorios`. Un job a medianoche Colombia (`fn_contacto_materializar`, pg_cron 05:00 UTC) arma `contacto_intento` (cada intento con hora) y `contacto_diario` (la persona del día). Hay datos desde el 4 nov 2026, cuando nacieron las siglas.
+
+Arriba: personas contactadas, contestación, efectividad, agendamientos (personas distintas; si agendó por llamada y WhatsApp cuenta 1) y seguimientos por persona. Luego las barras de llamada y WhatsApp, tres cubetas (1 / 2 / 3 o más seguimientos ese día, con su % de contestación) y un heatmap hora × día de la semana, con pestañas Contestaron / Agendaron / No contestaron y toggle Llamada / WhatsApp / Ambos. El país y el resto de filtros recortan el mapa: México + Llamada + Contestaron muestra a qué hora contestan por teléfono. Clic en un tramo, una cubeta o una celda abre esas personas.
+
+Los filtros son independientes de Gestión e Informe. Mes, periodo y día usan el rango comercial. País, ocupación, tags, fuente, género y edad recortan al lead. No hay toggle Creación/Actualización: la fecha es la del contacto. Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
 
 ---
 
-## 16. Con qué se conecta
+## 16. Quién ve qué
+
+| Rol | Alcance |
+|-----|---------|
+| Comercial | Solo sus leads. Sus propias métricas de conversión y su propia contactación. |
+| Setter | Solo las etapas que le corresponden. En la agenda de pitch, los que él mismo agendó. Sin métricas, informes ni Contacto. |
+| Supervisor | Todos los leads, filtro por comercial, asignaciones del equipo, informes mensuales y Contacto del equipo (quién contactó). Puede definir las fechas de inicio y fin de un mes comercial. |
+
+---
+
+## 17. Con qué se conecta
 
 | Herramienta | Para qué |
 |-------------|----------|
@@ -258,7 +274,7 @@ Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se m
 
 ---
 
-## 17. Dos cosas que conviene saber desde el principio
+## 18. Dos cosas que conviene saber desde el principio
 
 **Casi toda la configuración vive en la base, no en el código.** Formularios, etapas, tags, tipos de notificación y catálogo de planes salen de tablas de configuración. Por eso una funcionalidad puede "no aparecer" o "no hacer nada" en un ambiente solo porque falta una fila, sin que haya ningún error en el código.
 
@@ -266,7 +282,7 @@ Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se m
 
 ---
 
-## 18. CMS del blog público
+## 19. CMS del blog público
 
 - Se entra desde el inicio, con la tarjeta **CMS Blog página WEB MD**.
 - Se puede crear un artículo en borrador y publicarlo cuando esté listo.
@@ -279,7 +295,7 @@ Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se m
 
 ---
 
-## 19. Lo que no existe hoy
+## 20. Lo que no existe hoy
 
 - Exportar leads, métricas o informes a Excel, CSV o PDF.
 - Chat de WhatsApp dentro del portal (por fuera se abre Respond.io o WhatsApp Web).
