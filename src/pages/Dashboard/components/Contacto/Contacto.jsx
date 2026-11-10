@@ -13,12 +13,15 @@ import {
   rowMatchesInformeDims,
 } from '../Informe/informeFiltros';
 import ContactoCanalBars from './ContactoCanalBars';
+import ContactoCohorteFilter from './ContactoCohorteFilter';
 import ContactoHeatmap from './ContactoHeatmap';
 import ContactoKpis from './ContactoKpis';
 import ContactoLeadList from './ContactoLeadList';
 import {
   CANAL_LLAMADA,
   CANAL_MENSAJE,
+  COHORTE_NUEVOS,
+  COHORTE_TODOS,
   celdasHeatmap,
   conteoCanal,
   cubetasIntensidad,
@@ -27,14 +30,17 @@ import {
   esEfectiva,
   esNoContesto,
   filtraIntentosHeatmap,
+  filtraIntentosPorCohorte,
   kpisContacto,
   pct,
   rankingComerciales,
+  slaContacto,
   consolidarPorPersonaCanal,
 } from './contactoReglas';
 
 const PAGE_SIZE = 1000;
 const LEAD_IN_SIZE = 100;
+const INTENTO_COLS = 'fecha, hora, dia_semana, lead_id, seguimiento_id, canal, resultado, autor_email';
 
 function fechaColombiaHoy(now = new Date()) {
   const local = new Date(now.getTime() - 5 * 60 * 60 * 1000);
@@ -65,7 +71,7 @@ async function fetchLeadsByIds(ids) {
     const chunk = unique.slice(i, i + LEAD_IN_SIZE);
     const { data, error } = await supabase
       .from('leads')
-      .select('card_id, nombre, pais, ocupacion, label, fuente_dato, sexo, edad')
+      .select('card_id, nombre, pais, ocupacion, label, fuente_dato, sexo, edad, created_at')
       .in('card_id', chunk);
     if (error) throw error;
     rows.push(...(data || []));
@@ -104,6 +110,7 @@ export default function Contacto({
   const [errorMsg, setErrorMsg] = useState(null);
   const [pestanaHeatmap, setPestanaHeatmap] = useState('contestaron');
   const [canalHeatmap, setCanalHeatmap] = useState('llamada');
+  const [cohorte, setCohorte] = useState(COHORTE_TODOS);
   const [lista, setLista] = useState(null);
 
   const dimSelections = useMemo(() => ({
@@ -177,17 +184,24 @@ export default function Contacto({
         }
       }
 
-      const intentos = await fetchPaged((from, to) => {
+      const buildIntentos = (cols) => (from, to) => {
         let q = supabase
           .from('contacto_intento')
-          .select('fecha, hora, dia_semana, lead_id, seguimiento_id, canal, resultado, autor_email')
+          .select(cols)
           .gte('fecha', startDateLocal)
           .lte('fecha', endDateLocal)
           .order('fecha', { ascending: true })
           .range(from, to);
         if (autorFiltro) q = q.eq('autor_email', autorFiltro);
         return q;
-      });
+      };
+      let intentos;
+      try {
+        intentos = await fetchPaged(buildIntentos(`${INTENTO_COLS}, intentado_at`));
+      } catch (error) {
+        if (!String(error.message || '').includes('intentado_at')) throw error;
+        intentos = await fetchPaged(buildIntentos(INTENTO_COLS));
+      }
 
       const leads = await fetchLeadsByIds(intentos.map((i) => i.lead_id));
       const map = {};
@@ -208,11 +222,22 @@ export default function Contacto({
     fetchDatos();
   }, [fetchDatos]);
 
+  const intentosCohorte = useMemo(
+    () => filtraIntentosPorCohorte(
+      intentosRaw,
+      leadMap,
+      cohorte,
+      rango.startDateLocal,
+      rango.endDateLocal,
+    ),
+    [intentosRaw, leadMap, cohorte, rango.startDateLocal, rango.endDateLocal],
+  );
+
   const facetRows = useMemo(
-    () => [...new Set(intentosRaw.map((i) => i.lead_id))]
+    () => [...new Set(intentosCohorte.map((i) => i.lead_id))]
       .map((id) => leadMap[id])
       .filter(Boolean),
-    [intentosRaw, leadMap],
+    [intentosCohorte, leadMap],
   );
 
   const paisesDisponibles = useMemo(
@@ -229,7 +254,7 @@ export default function Contacto({
     edad: facetasCruzadas(facetRows, dimSelections, 'edad'),
   }), [facetRows, dimSelections]);
 
-  const intentos = useMemo(() => intentosRaw.filter((intento) => {
+  const intentos = useMemo(() => intentosCohorte.filter((intento) => {
     const lead = leadMap[intento.lead_id];
     if (!lead) {
       return !selectedPais.length
@@ -240,7 +265,7 @@ export default function Contacto({
         && !selectedEdad.length;
     }
     return rowMatchesInformeDims(lead, dimSelections);
-  }), [intentosRaw, leadMap, dimSelections, selectedPais, selectedOcupacion, selectedLabel, selectedFuente, selectedSexo, selectedEdad]);
+  }), [intentosCohorte, leadMap, dimSelections, selectedPais, selectedOcupacion, selectedLabel, selectedFuente, selectedSexo, selectedEdad]);
 
   const diarios = useMemo(() => diariosDesdeIntentos(intentos), [intentos]);
   const kpis = useMemo(() => kpisContacto(diarios, intentos), [diarios, intentos]);
@@ -254,6 +279,10 @@ export default function Contacto({
   const ranking = useMemo(
     () => rankingComerciales(intentos, comerciales),
     [intentos, comerciales],
+  );
+  const sla = useMemo(
+    () => (cohorte === COHORTE_NUEVOS ? slaContacto(intentos, leadMap) : null),
+    [cohorte, intentos, leadMap],
   );
 
   const handleMesChange = (mes) => {
@@ -392,6 +421,7 @@ export default function Contacto({
         monthConfigs={configsMes}
         onSaveMonthConfig={onSaveMonthConfig}
         onRefreshComerciales={onRefreshComerciales}
+        startChildren={<ContactoCohorteFilter value={cohorte} onChange={setCohorte} />}
       >
         <InformeFacetFilters
           value={{
@@ -412,7 +442,7 @@ export default function Contacto({
         </p>
       )}
 
-      <ContactoKpis kpis={kpis} loading={loading} />
+      <ContactoKpis kpis={kpis} loading={loading} sla={sla} />
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
@@ -420,7 +450,9 @@ export default function Contacto({
         </div>
       ) : vacio ? (
         <div className="bg-white rounded-2xl border border-slate-100 py-16 text-center text-sm text-slate-400">
-          No hay contactos con resultado en este rango. Las siglas empiezan el 4 nov 2026.
+          {cohorte === COHORTE_TODOS
+            ? 'No hay contactos con resultado en este rango. Las siglas empiezan el 4 nov 2026.'
+            : 'No hay personas en este recorte. Probá Todos o el otro estado del filtro.'}
         </div>
       ) : (
         <>

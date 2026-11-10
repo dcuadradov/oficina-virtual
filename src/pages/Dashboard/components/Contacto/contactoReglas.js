@@ -291,3 +291,126 @@ export function pct(n) {
   if (n == null || Number.isNaN(n)) return '0%';
   return `${n.toFixed(n >= 10 || n === 0 ? 0 : 1)}%`;
 }
+
+export const COHORTE_TODOS = 'todos';
+export const COHORTE_NUEVOS = 'nuevos';
+export const COHORTE_GESTION = 'gestion';
+
+export const COHORTE_OPCIONES = [
+  { id: COHORTE_TODOS, label: 'Todos' },
+  { id: COHORTE_NUEVOS, label: 'Nuevos' },
+  { id: COHORTE_GESTION, label: 'En gestión' },
+];
+
+export const HORA_SLA_DESDE = 9;
+export const HORA_SLA_HASTA = 21;
+const TZ_COLOMBIA = 'America/Bogota';
+
+export function partesColombia(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_COLOMBIA,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return {
+    fecha: `${get('year')}-${get('month')}-${get('day')}`,
+    hora: Number(get('hour')),
+    minuto: Number(get('minute')),
+  };
+}
+
+export function fechaCreacionColombia(createdAt) {
+  return partesColombia(createdAt)?.fecha || null;
+}
+
+export function creadoEnHorarioSla(createdAt) {
+  const partes = partesColombia(createdAt);
+  if (!partes) return false;
+  const minutes = partes.hora * 60 + partes.minuto;
+  return minutes >= HORA_SLA_DESDE * 60 && minutes <= HORA_SLA_HASTA * 60;
+}
+
+export function cohorteDelLead(createdAt, startDateLocal, endDateLocal) {
+  const fecha = fechaCreacionColombia(createdAt);
+  if (!fecha || !startDateLocal || !endDateLocal) return COHORTE_GESTION;
+  if (fecha >= startDateLocal && fecha <= endDateLocal) return COHORTE_NUEVOS;
+  return COHORTE_GESTION;
+}
+
+export function filtraIntentosPorCohorte(
+  intentos = [],
+  leadMap = {},
+  cohorte = COHORTE_TODOS,
+  startDateLocal,
+  endDateLocal,
+) {
+  if (cohorte === COHORTE_TODOS) return intentos;
+  return intentos.filter((intento) => {
+    const lead = leadMap[intento.lead_id];
+    return cohorteDelLead(lead?.created_at, startDateLocal, endDateLocal) === cohorte;
+  });
+}
+
+export function instanteIntento(intento) {
+  if (intento?.intentado_at) {
+    const t = new Date(intento.intentado_at).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  if (!intento?.fecha || intento.hora == null || intento.hora === '') return null;
+  const hora = String(Math.min(23, Math.max(0, Number(intento.hora)))).padStart(2, '0');
+  const t = Date.parse(`${intento.fecha}T${hora}:00:00-05:00`);
+  return Number.isNaN(t) ? null : t;
+}
+
+export function slaContacto(intentos = [], leadMap = {}) {
+  const firstByLead = new Map();
+  for (const intento of intentos) {
+    if (!intento?.lead_id) continue;
+    const t = instanteIntento(intento);
+    if (t == null) continue;
+    const prev = firstByLead.get(intento.lead_id);
+    if (prev == null || t < prev) firstByLead.set(intento.lead_id, t);
+  }
+  const duraciones = [];
+  let personasEnHorario = 0;
+  for (const [leadId, firstTs] of firstByLead) {
+    const createdAt = leadMap[leadId]?.created_at;
+    if (!createdAt) continue;
+    if (!creadoEnHorarioSla(createdAt)) continue;
+    personasEnHorario += 1;
+    const createdTs = new Date(createdAt).getTime();
+    if (Number.isNaN(createdTs)) continue;
+    duraciones.push(Math.max(0, firstTs - createdTs));
+  }
+  return {
+    avgMs: duraciones.length
+      ? duraciones.reduce((sum, ms) => sum + ms, 0) / duraciones.length
+      : null,
+    personasSla: duraciones.length,
+    personasEnHorario,
+  };
+}
+
+export function formatoDuracion(ms) {
+  if (ms == null || Number.isNaN(ms)) return '—';
+  const minutes = Math.max(0, ms) / 60000;
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  if (hours < 24) {
+    return hours >= 10 || hours === Math.round(hours)
+      ? `${Math.round(hours)} h`
+      : `${hours.toFixed(1)} h`;
+  }
+  const days = hours / 24;
+  return days >= 10 || days === Math.round(days)
+    ? `${Math.round(days)} días`
+    : `${days.toFixed(1)} días`;
+}

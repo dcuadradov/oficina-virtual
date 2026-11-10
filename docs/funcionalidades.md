@@ -244,7 +244,9 @@ Los números salen de `comentarios.llamada` / `comentarios.mensaje`. Si el recor
 
 Arriba: personas contactadas, contestación, efectividad, agendamientos (personas distintas; si agendó por llamada y WhatsApp cuenta 1) y seguimientos por persona. Luego las barras de llamada y WhatsApp, tres cubetas (1 / 2 / 3 o más seguimientos ese día, con su % de contestación) y un heatmap hora × día de la semana, con pestañas Contestaron / Agendaron / No contestaron y toggle Llamada / WhatsApp / Ambos. El país y el resto de filtros recortan el mapa: México + Llamada + Contestaron muestra a qué hora contestan por teléfono. Clic en un tramo, una cubeta o una celda abre esas personas.
 
-Los filtros son independientes de Gestión e Informe. Mes, periodo y día usan el rango comercial. País, ocupación, tags, fuente, género y edad recortan al lead. No hay toggle Creación/Actualización: la fecha es la del contacto. Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
+Los filtros son independientes de Gestión e Informe. Mes, periodo y día usan el rango comercial. País, ocupación, tags, fuente, género y edad recortan al lead. No hay toggle Creación/Actualización: la fecha es la del contacto.
+
+Hay un filtro más, **Todos / Nuevos / En gestión**, al lado de Todos los días. Parte a las personas que se contactaron en el rango según `leads.created_at` (hora Colombia): Nuevos = creados en el mismo rango; En gestión = creados antes. En Nuevos aparece **Tiempo a contacto**: promedio hasta el primer intento, solo con leads creados entre las 9:00 y las 21:00 Colombia (un lead de las 2:00 no entra al promedio). Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
 
 ---
 

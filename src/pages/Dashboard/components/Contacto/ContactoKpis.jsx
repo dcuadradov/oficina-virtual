@@ -1,5 +1,5 @@
-import { CalendarCheck, PhoneCall, Target, UserCheck, Users } from 'lucide-react';
-import { pct } from './contactoReglas';
+import { CalendarCheck, Clock, PhoneCall, Target, UserCheck, Users } from 'lucide-react';
+import { formatoDuracion, pct } from './contactoReglas';
 
 function Card({ icon: Icon, label, value, sub }) {
   return (
@@ -16,11 +16,13 @@ function Card({ icon: Icon, label, value, sub }) {
   );
 }
 
-export default function ContactoKpis({ kpis, loading }) {
+export default function ContactoKpis({ kpis, loading, sla = null }) {
+  const mostrarSla = Boolean(sla);
   if (loading) {
+    const nCards = mostrarSla ? 6 : 5;
     return (
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className={`grid grid-cols-2 gap-3 ${mostrarSla ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-5'}`}>
+        {Array.from({ length: nCards }).map((_, i) => (
           <div key={i} className="h-[108px] rounded-2xl bg-slate-100 animate-pulse" />
         ))}
       </div>
@@ -30,7 +32,15 @@ export default function ContactoKpis({ kpis, loading }) {
   const n = (v) => (v || 0).toLocaleString('es-CO');
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className={`grid grid-cols-2 gap-3 ${mostrarSla ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-5'}`}>
+      {mostrarSla && (
+        <Card
+          icon={Clock}
+          label="Tiempo a contacto"
+          value={formatoDuracion(sla.avgMs)}
+          sub={`${n(sla.personasSla)} de ${n(kpis.personas)} creados 9:00–21:00`}
+        />
+      )}
       <Card
         icon={Users}
         label="Personas contactadas"

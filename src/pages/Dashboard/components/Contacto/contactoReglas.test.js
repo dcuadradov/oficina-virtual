@@ -3,14 +3,22 @@ import { test } from 'node:test';
 import {
   CANAL_LLAMADA,
   CANAL_MENSAJE,
+  COHORTE_GESTION,
+  COHORTE_NUEVOS,
+  COHORTE_TODOS,
   celdasHeatmap,
+  cohorteDelLead,
   conteoCanal,
+  creadoEnHorarioSla,
   cubetasIntensidad,
   diariosDesdeIntentos,
+  filtraIntentosPorCohorte,
+  formatoDuracion,
   kpisContacto,
   partirSeguimiento,
   rankingComerciales,
   resultadoDelDia,
+  slaContacto,
 } from './contactoReglas.js';
 
 test('partirSeguimiento abre un seguimiento en 0, 1 o 2 intentos', () => {
@@ -230,6 +238,58 @@ test('el filtro de comercial re-rankea solo con los intentos de esa persona', ()
   const kpisTodos = kpisContacto(diariosDesdeIntentos(intentos), intentos);
   assert.equal(kpisTodos.agendamientos, 1);
   assert.equal(kpisTodos.personas, 1);
+});
+
+test('9:00 y 21:00 Colombia entran al SLA; 2:00 y 21:01 no', () => {
+  assert.equal(creadoEnHorarioSla('2026-11-08T14:00:00.000Z'), true); // 9:00
+  assert.equal(creadoEnHorarioSla('2026-11-09T02:00:00.000Z'), true); // 21:00 del 8
+  assert.equal(creadoEnHorarioSla('2026-11-08T07:00:00.000Z'), false); // 2:00
+  assert.equal(creadoEnHorarioSla('2026-11-09T02:01:00.000Z'), false); // 21:01
+});
+
+test('nuevos son los creados en el rango; el resto es en gestión', () => {
+  assert.equal(cohorteDelLead('2026-11-08T15:00:00.000Z', '2026-11-08', '2026-11-08'), COHORTE_NUEVOS);
+  assert.equal(cohorteDelLead('2026-11-07T15:00:00.000Z', '2026-11-08', '2026-11-08'), COHORTE_GESTION);
+  assert.equal(cohorteDelLead('2026-11-08T15:00:00.000Z', '2026-11-01', '2026-11-30'), COHORTE_NUEVOS);
+});
+
+test('el filtro de cohorte parte las personas contactadas', () => {
+  const intentos = [
+    { fecha: '2026-11-08', lead_id: 'nuevo', seguimiento_id: '1', canal: CANAL_LLAMADA, resultado: 'LC.', hora: 10 },
+    { fecha: '2026-11-08', lead_id: 'viejo', seguimiento_id: '2', canal: CANAL_LLAMADA, resultado: 'LNC.', hora: 11 },
+  ];
+  const leadMap = {
+    nuevo: { created_at: '2026-11-08T15:00:00.000Z' },
+    viejo: { created_at: '2026-11-01T15:00:00.000Z' },
+  };
+  const nuevos = filtraIntentosPorCohorte(intentos, leadMap, COHORTE_NUEVOS, '2026-11-08', '2026-11-08');
+  const gestion = filtraIntentosPorCohorte(intentos, leadMap, COHORTE_GESTION, '2026-11-08', '2026-11-08');
+  const todos = filtraIntentosPorCohorte(intentos, leadMap, COHORTE_TODOS, '2026-11-08', '2026-11-08');
+  assert.deepEqual(nuevos.map((i) => i.lead_id), ['nuevo']);
+  assert.deepEqual(gestion.map((i) => i.lead_id), ['viejo']);
+  assert.equal(todos.length, 2);
+});
+
+test('SLA ignora las 2 am y promedia el resto', () => {
+  const intentos = [
+    {
+      lead_id: 'madrugada', fecha: '2026-11-08', hora: 9, canal: CANAL_LLAMADA, resultado: 'LNC.',
+      intentado_at: '2026-11-08T14:30:00.000Z',
+    },
+    {
+      lead_id: 'manana', fecha: '2026-11-08', hora: 11, canal: CANAL_LLAMADA, resultado: 'LC.',
+      intentado_at: '2026-11-08T16:00:00.000Z',
+    },
+  ];
+  const leadMap = {
+    madrugada: { created_at: '2026-11-08T07:00:00.000Z' }, // 2:00 Colombia
+    manana: { created_at: '2026-11-08T15:00:00.000Z' }, // 10:00 Colombia, contacto 11:00
+  };
+  const sla = slaContacto(intentos, leadMap);
+  assert.equal(sla.personasEnHorario, 1);
+  assert.equal(sla.personasSla, 1);
+  assert.equal(sla.avgMs, 60 * 60 * 1000);
+  assert.equal(formatoDuracion(sla.avgMs), '1 h');
 });
 
 test('heatmap agendaron ignora LC y pega horas fuera de 7–21', () => {

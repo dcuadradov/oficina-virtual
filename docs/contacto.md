@@ -48,3 +48,11 @@ Ventana de fechas: `p_desde` y `p_hasta` inclusive, en `America/Bogota` (`05:00:
 `src/pages/Dashboard/components/Contacto/`. Las reglas (prioridad, KPIs, barras, cubetas, heatmap, ranking) viven en `contactoReglas.js` y se cubren con `contactoReglas.test.js`.
 
 Filtros independientes de Gestión e Informe. Mes / periodo / día usan `config_meses`. País, ocupación, tags, fuente, género y edad recortan al lead. No hay Creación/Actualización: la fecha es la del contacto.
+
+## Nuevos / En gestión
+
+Dropdown al lado de Todos los días: **Todos** (default), **Nuevos**, **En gestión**. El reloj es `leads.created_at` en `America/Bogota`, no `fecha_asignacion` (esa columna se pisa al reasignar y no nace en todos los leads).
+
+- Nuevos: contactados en el rango y creados en el mismo rango.
+- En gestión: contactados en el rango y creados antes.
+- Tiempo a contacto (solo en Nuevos): primer `intentado_at` menos `created_at`. Solo entran leads creados entre 9:00 y 21:00 inclusive. Columna `contacto_intento.intentado_at`: migración `db/migrations/2026-11-10_contacto_intentado_at.sql` y volver a materializar.

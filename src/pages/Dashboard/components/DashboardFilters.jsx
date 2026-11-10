@@ -184,6 +184,8 @@ const DashboardFilters = ({
   // Filtros extra que se renderizan al final de la 2ª fila, fluyendo en el
   // mismo contenedor que los demás filtros (e.g. dimensiones de Mis Pitch).
   children = null,
+  // Filtros que van en la 1ª fila, al lado del día.
+  startChildren = null,
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -1124,6 +1126,8 @@ const DashboardFilters = ({
           )}
         </div>
       )}
+
+      {startChildren}
 
       {/* Toggle Creación / Actualización */}
       {showDateFilterToggle && onDateFilterFieldChange && (
