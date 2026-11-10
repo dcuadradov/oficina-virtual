@@ -27,6 +27,7 @@ import {
   cubetasIntensidad,
   detallePrimerContacto,
   diariosDesdeIntentos,
+  intentosDesdeSeguimientos,
   esContestacion,
   esEfectiva,
   esNoContesto,
@@ -90,6 +91,32 @@ async function hydrateIntentadoAt(intentos) {
   });
 }
 
+async function fetchSeguimientosDeLeads(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const comentarios = [];
+  const recordatorios = [];
+  for (let i = 0; i < unique.length; i += LEAD_IN_SIZE) {
+    const chunk = unique.slice(i, i + LEAD_IN_SIZE);
+    const [coms, recs] = await Promise.all([
+      fetchPaged((from, to) => supabase
+        .from('comentarios')
+        .select('id, lead_id, created_at, llamada, mensaje, texto, origen, autor_email')
+        .in('lead_id', chunk)
+        .order('created_at', { ascending: true })
+        .range(from, to)),
+      fetchPaged((from, to) => supabase
+        .from('recordatorios')
+        .select('id, lead_id, created_at, llamada, mensaje, observacion, creado_por')
+        .in('lead_id', chunk)
+        .order('created_at', { ascending: true })
+        .range(from, to)),
+    ]);
+    comentarios.push(...coms);
+    recordatorios.push(...recs);
+  }
+  return { comentarios, recordatorios };
+}
+
 async function fetchLeadsByIds(ids) {
   const unique = [...new Set(ids.filter(Boolean))];
   const rows = [];
@@ -131,6 +158,7 @@ export default function Contacto({
   const [selectedEdad, setSelectedEdad] = useState([]);
   const [fetchedConfigs, setFetchedConfigs] = useState(null);
   const [intentosRaw, setIntentosRaw] = useState([]);
+  const [intentosFuente, setIntentosFuente] = useState([]);
   const [leadMap, setLeadMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -234,12 +262,23 @@ export default function Contacto({
       const leads = await fetchLeadsByIds(intentos.map((i) => i.lead_id));
       const map = {};
       leads.forEach((lead) => { map[lead.card_id] = lead; });
+      let fuente = [];
+      try {
+        const { comentarios, recordatorios } = await fetchSeguimientosDeLeads(
+          intentos.map((i) => i.lead_id),
+        );
+        fuente = intentosDesdeSeguimientos(comentarios, recordatorios);
+      } catch (fuenteError) {
+        console.warn('[Contacto] no se pudieron leer seguimientos para el primer contacto:', fuenteError.message);
+      }
       setLeadMap(map);
       setIntentosRaw(intentos);
+      setIntentosFuente(fuente);
     } catch (error) {
       console.error('Error cargando Contacto:', error.message);
       setErrorMsg(error.message);
       setIntentosRaw([]);
+      setIntentosFuente([]);
       setLeadMap({});
     } finally {
       setLoading(false);
@@ -308,9 +347,15 @@ export default function Contacto({
     () => rankingComerciales(intentos, comerciales),
     [intentos, comerciales],
   );
+  const intentosPrimerContacto = useMemo(() => {
+    const ids = new Set(intentos.map((intento) => intento.lead_id));
+    const fuente = intentosFuente.filter((intento) => ids.has(intento.lead_id));
+    return fuente.length ? fuente : intentos;
+  }, [intentos, intentosFuente]);
+
   const sla = useMemo(
-    () => (cohorte === COHORTE_NUEVOS ? slaContacto(intentos, leadMap) : null),
-    [cohorte, intentos, leadMap],
+    () => (cohorte === COHORTE_NUEVOS ? slaContacto(intentosPrimerContacto, leadMap) : null),
+    [cohorte, intentosPrimerContacto, leadMap],
   );
 
   const handleMesChange = (mes) => {
@@ -366,7 +411,7 @@ export default function Contacto({
       return esEfectiva(row.resultado);
     });
     const primerByLead = {};
-    detallePrimerContacto(intentos, leadMap, { canal }).forEach((row) => {
+    detallePrimerContacto(intentosPrimerContacto, leadMap).forEach((row) => {
       primerByLead[row.lead_id] = row;
     });
     const extra = {};
@@ -377,7 +422,8 @@ export default function Contacto({
         createdAt: primer.createdAt || leadMap[row.lead_id]?.created_at,
         primerAt: primer.primerAt,
         duracionMs: primer.duracionMs,
-        resultado: row.resultado,
+        autor_email: primer.autor_email || row.autor_email,
+        resultado: primer.resultado || row.resultado,
       };
     });
     const tituloCanal = canal === CANAL_LLAMADA ? 'Llamadas' : 'WhatsApp';

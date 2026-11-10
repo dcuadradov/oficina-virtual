@@ -1,3 +1,9 @@
+import {
+  enriquecerComentarioConCanal,
+  encontrarRecordatorioDeComentario,
+  tieneSiglaCanal,
+} from '../../canalSiglas.js';
+
 export const CANAL_LLAMADA = 'llamada';
 export const CANAL_MENSAJE = 'mensaje';
 
@@ -357,6 +363,93 @@ export function filtraIntentosPorCohorte(
     const lead = leadMap[intento.lead_id];
     return cohorteDelLead(lead?.created_at, startDateLocal, endDateLocal) === cohorte;
   });
+}
+
+function recordatorioParaComentario(comentario, recordatorios = []) {
+  const cercano = encontrarRecordatorioDeComentario(comentario, recordatorios);
+  if (cercano) return cercano;
+  const texto = String(comentario.texto || '').trim();
+  const t = new Date(comentario.created_at).getTime();
+  if (!texto || Number.isNaN(t)) return null;
+  const candidatos = recordatorios.filter((r) => {
+    if (String(r.lead_id) !== String(comentario.lead_id)) return false;
+    if (String(r.observacion || '').trim() !== texto) return false;
+    if (!tieneSiglaCanal(r.llamada, r.mensaje)) return false;
+    const rt = new Date(r.created_at).getTime();
+    if (Number.isNaN(rt)) return false;
+    return rt <= t + 60_000;
+  });
+  if (!candidatos.length) return null;
+  return candidatos.reduce((best, r) => {
+    const d = Math.abs(new Date(r.created_at).getTime() - t);
+    const dBest = Math.abs(new Date(best.created_at).getTime() - t);
+    return d < dBest ? r : best;
+  });
+}
+
+function heredarSiglasDeRecordatorio(comentario, recordatorios = []) {
+  const ya = enriquecerComentarioConCanal(comentario, recordatorios);
+  if (tieneSiglaCanal(ya.llamada, ya.mensaje)) return ya;
+  const rec = recordatorioParaComentario(comentario, recordatorios);
+  if (!rec || !tieneSiglaCanal(rec.llamada, rec.mensaje)) return ya;
+  return {
+    ...comentario,
+    llamada: rec.llamada || comentario.llamada || null,
+    mensaje: rec.mensaje || comentario.mensaje || null,
+  };
+}
+
+export function intentosDesdeSeguimientos(comentarios = [], recordatorios = []) {
+  const recs = recordatorios || [];
+  const usados = new Set();
+  const intentos = [];
+
+  const pushPartes = ({ created_at, lead_id, seguimiento_id, autor_email, llamada, mensaje }) => {
+    const partes = partesColombia(created_at);
+    if (!partes || !lead_id) return;
+    for (const p of partirSeguimiento({ llamada, mensaje })) {
+      if (prioridadResultado(p.resultado) <= 0) continue;
+      intentos.push({
+        fecha: partes.fecha,
+        hora: partes.hora,
+        lead_id: String(lead_id),
+        seguimiento_id: String(seguimiento_id),
+        canal: p.canal,
+        resultado: p.resultado,
+        autor_email,
+        intentado_at: created_at,
+      });
+    }
+  };
+
+  for (const crudo of comentarios) {
+    const c = heredarSiglasDeRecordatorio(crudo, recs);
+    const rec = recordatorioParaComentario(c, recs);
+    if (rec?.id != null) usados.add(String(rec.id));
+    if (!tieneSiglaCanal(c.llamada, c.mensaje)) continue;
+    pushPartes({
+      created_at: c.created_at,
+      lead_id: c.lead_id,
+      seguimiento_id: c.id,
+      autor_email: c.autor_email,
+      llamada: c.llamada,
+      mensaje: c.mensaje,
+    });
+  }
+
+  for (const r of recs) {
+    if (r?.id != null && usados.has(String(r.id))) continue;
+    if (!tieneSiglaCanal(r.llamada, r.mensaje)) continue;
+    pushPartes({
+      created_at: r.created_at,
+      lead_id: r.lead_id,
+      seguimiento_id: r.id,
+      autor_email: r.creado_por || r.autor_email,
+      llamada: r.llamada,
+      mensaje: r.mensaje,
+    });
+  }
+  return intentos;
 }
 
 export function instanteIntento(intento) {

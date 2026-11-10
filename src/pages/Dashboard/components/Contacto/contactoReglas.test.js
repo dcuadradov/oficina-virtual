@@ -14,6 +14,7 @@ import {
   detallePrimerContacto,
   detalleSlaContacto,
   diariosDesdeIntentos,
+  intentosDesdeSeguimientos,
   filtraIntentosPorCohorte,
   formatoDuracion,
   formatoHoraColombia,
@@ -312,6 +313,71 @@ test('creación 19:21 y seguimiento 19:40 no se redondean a 0 min', () => {
   assert.equal(formatoHoraColombia(detalle[0].createdAt), '9 nov 19:21');
   assert.equal(formatoHoraColombia(detalle[0].primerAt), '9 nov 19:40');
   assert.equal(detalle[0].duracionMs, 19 * 60 * 1000);
+});
+
+test('el primer seguimiento es el comentario de las 18:50, no el LC del día siguiente', () => {
+  const created = '2026-11-08T16:42:00.000Z'; // 8 nov 11:42 Colombia
+  const comentarios = [
+    {
+      id: 'c1',
+      lead_id: '160005936',
+      created_at: '2026-11-08T23:50:00.000Z', // 8 nov 18:50
+      llamada: 'LNC.',
+      mensaje: null,
+      texto: 'Primer seguimiento',
+      autor_email: 'otro@mdenglish.us',
+    },
+    {
+      id: 'c2',
+      lead_id: '160005936',
+      created_at: '2026-11-09T17:06:00.000Z', // 9 nov 12:06
+      llamada: 'LC.',
+      mensaje: null,
+      texto: 'Contestó',
+      autor_email: 'rosnely@mdenglish.us',
+    },
+  ];
+  const intentos = intentosDesdeSeguimientos(comentarios, []);
+  const detalle = detalleSlaContacto(intentos, { 160005936: { created_at: created } });
+  assert.equal(detalle.length, 1);
+  assert.equal(formatoHoraColombia(detalle[0].primerAt), '8 nov 18:50');
+  assert.equal(detalle[0].resultado, 'LNC.');
+  assert.equal(formatoDuracion(detalle[0].duracionMs), '7.1 h');
+});
+
+test('un comentario sin sigla hereda la del recordatorio y usa la hora del comentario', () => {
+  const created = '2026-11-08T16:42:00.000Z';
+  const comentarios = [{
+    id: 'c1',
+    lead_id: '160005936',
+    created_at: '2026-11-08T23:50:00.000Z',
+    llamada: null,
+    mensaje: null,
+    texto: 'Llamar al doctor',
+    origen: 'Seguimiento',
+    autor_email: 'rosnely@mdenglish.us',
+  }, {
+    id: 'c2',
+    lead_id: '160005936',
+    created_at: '2026-11-09T17:06:00.000Z',
+    llamada: 'LC.',
+    mensaje: null,
+    texto: 'Contestó',
+    autor_email: 'rosnely@mdenglish.us',
+  }];
+  const recordatorios = [{
+    id: 'r1',
+    lead_id: '160005936',
+    created_at: '2026-11-08T17:00:00.000Z', // 12:00 Colombia, después de crear el lead
+    llamada: 'LNC.',
+    mensaje: null,
+    observacion: 'Llamar al doctor',
+    creado_por: 'rosnely@mdenglish.us',
+  }];
+  const intentos = intentosDesdeSeguimientos(comentarios, recordatorios);
+  const detalle = detalleSlaContacto(intentos, { 160005936: { created_at: created } });
+  assert.equal(formatoHoraColombia(detalle[0].primerAt), '8 nov 18:50');
+  assert.equal(detalle[0].resultado, 'LNC.');
 });
 
 test('primer contacto por canal no mezcla WhatsApp con la llamada', () => {
