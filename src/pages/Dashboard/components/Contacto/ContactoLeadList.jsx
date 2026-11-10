@@ -1,10 +1,29 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import { formatoDuracion, formatoHoraColombia } from './contactoReglas';
+import {
+  esContestacion,
+  esEfectiva,
+  formatoDuracion,
+  formatoHoraColombia,
+} from './contactoReglas';
+
+function SiglaBadge({ resultado }) {
+  if (!resultado) return <span className="text-[11px] text-slate-300">—</span>;
+  const color = esEfectiva(resultado)
+    ? 'bg-emerald-50 text-emerald-700'
+    : esContestacion(resultado)
+      ? 'bg-indigo-50 text-[#1717AF]'
+      : 'bg-slate-100 text-slate-600';
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[2.75rem] px-1.5 py-0.5 rounded text-[11px] font-semibold ${color}`}>
+      {resultado}
+    </span>
+  );
+}
 
 export default function ContactoLeadList({ titulo, filas = [], onClose, onOpenLead }) {
   const boxRef = useRef(null);
-  const conSla = filas.some((fila) => fila.createdAt && fila.primerAt);
+  const conSla = filas.some((fila) => fila.createdAt || fila.primerAt);
 
   useEffect(() => {
     boxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -34,6 +53,7 @@ export default function ContactoLeadList({ titulo, filas = [], onClose, onOpenLe
               <span className="flex-1">Lead</span>
               <span className="w-[108px] flex-shrink-0">Creación</span>
               <span className="w-[108px] flex-shrink-0">Primer seguimiento</span>
+              <span className="w-12 flex-shrink-0 text-center">Sigla</span>
               <span className="w-16 flex-shrink-0 text-right">Tiempo</span>
             </div>
           )}
@@ -50,13 +70,14 @@ export default function ContactoLeadList({ titulo, filas = [], onClose, onOpenLe
                   {fila.autorNombre || fila.autor_email || 'Sin autor'}
                   {fila.hora != null && !fila.createdAt ? ` · ${fila.hora}:00` : ''}
                 </p>
-                {fila.createdAt && fila.primerAt && (
+                {conSla && (
                   <p className="sm:hidden text-[11px] text-slate-400 mt-0.5">
                     {formatoHoraColombia(fila.createdAt)} → {formatoHoraColombia(fila.primerAt)}
+                    {fila.resultado ? ` · ${fila.resultado}` : ''}
                   </p>
                 )}
               </div>
-              {fila.createdAt && fila.primerAt ? (
+              {conSla ? (
                 <>
                   <span className="hidden sm:block w-[108px] flex-shrink-0 text-[11px] text-slate-500 tabular-nums">
                     {formatoHoraColombia(fila.createdAt)}
@@ -64,13 +85,16 @@ export default function ContactoLeadList({ titulo, filas = [], onClose, onOpenLe
                   <span className="hidden sm:block w-[108px] flex-shrink-0 text-[11px] text-slate-500 tabular-nums">
                     {formatoHoraColombia(fila.primerAt)}
                   </span>
+                  <span className="hidden sm:flex w-12 flex-shrink-0 justify-center">
+                    <SiglaBadge resultado={fila.resultado} />
+                  </span>
                   <span className="w-16 flex-shrink-0 text-[11px] font-medium text-slate-700 tabular-nums text-right">
                     {formatoDuracion(fila.duracionMs)}
                   </span>
                 </>
               ) : (
-                <span className="text-[11px] font-medium text-slate-500 tabular-nums flex-shrink-0">
-                  {fila.resultado || ''}
+                <span className="flex-shrink-0">
+                  <SiglaBadge resultado={fila.resultado} />
                 </span>
               )}
             </button>

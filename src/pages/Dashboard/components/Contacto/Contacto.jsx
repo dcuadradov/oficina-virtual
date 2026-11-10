@@ -25,6 +25,7 @@ import {
   celdasHeatmap,
   conteoCanal,
   cubetasIntensidad,
+  detallePrimerContacto,
   diariosDesdeIntentos,
   esContestacion,
   esEfectiva,
@@ -364,13 +365,28 @@ export default function Contacto({
       if (segmento === 'contesto') return row.resultado === 'LC.' || row.resultado === 'MC.';
       return esEfectiva(row.resultado);
     });
+    const primerByLead = {};
+    detallePrimerContacto(intentos, leadMap, { canal }).forEach((row) => {
+      primerByLead[row.lead_id] = row;
+    });
     const extra = {};
-    match.forEach((row) => { extra[row.lead_id] = row; });
+    match.forEach((row) => {
+      const primer = primerByLead[row.lead_id] || {};
+      extra[row.lead_id] = {
+        ...row,
+        createdAt: primer.createdAt || leadMap[row.lead_id]?.created_at,
+        primerAt: primer.primerAt,
+        duracionMs: primer.duracionMs,
+        resultado: row.resultado,
+      };
+    });
     const tituloCanal = canal === CANAL_LLAMADA ? 'Llamadas' : 'WhatsApp';
     const tituloSeg = segmento === 'no' ? 'No contestaron' : segmento === 'contesto' ? 'Contestaron' : 'Efectivas';
+    const filas = filasDesdeLeads(match.map((row) => row.lead_id), extra)
+      .sort((a, b) => (b.duracionMs ?? -1) - (a.duracionMs ?? -1));
     setLista({
       titulo: `${tituloSeg} · ${tituloCanal}`,
-      filas: filasDesdeLeads(match.map((row) => row.lead_id), extra),
+      filas,
     });
   };
 

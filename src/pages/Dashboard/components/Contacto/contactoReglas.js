@@ -370,10 +370,11 @@ export function instanteIntento(intento) {
   return Number.isNaN(t) ? null : t;
 }
 
-export function detalleSlaContacto(intentos = [], leadMap = {}) {
+export function detallePrimerContacto(intentos = [], leadMap = {}, { canal = null, horarioSla = false } = {}) {
   const byLead = new Map();
   for (const intento of intentos) {
     if (!intento?.lead_id) continue;
+    if (canal && intento.canal !== canal) continue;
     const t = instanteIntento(intento);
     if (t == null) continue;
     if (!byLead.has(intento.lead_id)) byLead.set(intento.lead_id, []);
@@ -382,7 +383,8 @@ export function detalleSlaContacto(intentos = [], leadMap = {}) {
   const filas = [];
   for (const [leadId, items] of byLead) {
     const createdAt = leadMap[leadId]?.created_at;
-    if (!createdAt || !creadoEnHorarioSla(createdAt)) continue;
+    if (!createdAt) continue;
+    if (horarioSla && !creadoEnHorarioSla(createdAt)) continue;
     const createdTs = new Date(createdAt).getTime();
     if (Number.isNaN(createdTs)) continue;
     const despues = items
@@ -401,6 +403,10 @@ export function detalleSlaContacto(intentos = [], leadMap = {}) {
   }
   filas.sort((a, b) => b.duracionMs - a.duracionMs);
   return filas;
+}
+
+export function detalleSlaContacto(intentos = [], leadMap = {}) {
+  return detallePrimerContacto(intentos, leadMap, { horarioSla: true });
 }
 
 export function slaContacto(intentos = [], leadMap = {}) {

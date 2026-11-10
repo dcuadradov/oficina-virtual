@@ -11,6 +11,7 @@ import {
   conteoCanal,
   creadoEnHorarioSla,
   cubetasIntensidad,
+  detallePrimerContacto,
   detalleSlaContacto,
   diariosDesdeIntentos,
   filtraIntentosPorCohorte,
@@ -298,6 +299,7 @@ test('SLA ignora las 2 am y promedia el resto', () => {
   assert.equal(detalle[0].duracionMs, 60 * 60 * 1000);
   assert.equal(formatoHoraColombia(detalle[0].createdAt), '8 nov 10:00');
   assert.equal(formatoHoraColombia(detalle[0].primerAt), '8 nov 11:00');
+  assert.equal(detalle[0].resultado, 'LC.');
 });
 
 test('creación 19:21 y seguimiento 19:40 no se redondean a 0 min', () => {
@@ -310,6 +312,27 @@ test('creación 19:21 y seguimiento 19:40 no se redondean a 0 min', () => {
   assert.equal(formatoHoraColombia(detalle[0].createdAt), '9 nov 19:21');
   assert.equal(formatoHoraColombia(detalle[0].primerAt), '9 nov 19:40');
   assert.equal(detalle[0].duracionMs, 19 * 60 * 1000);
+});
+
+test('primer contacto por canal no mezcla WhatsApp con la llamada', () => {
+  const created = '2026-11-08T15:00:00.000Z';
+  const intentos = [
+    {
+      lead_id: 'x', fecha: '2026-11-08', hora: 10, canal: CANAL_MENSAJE, resultado: 'MNC.',
+      intentado_at: '2026-11-08T15:10:00.000Z',
+    },
+    {
+      lead_id: 'x', fecha: '2026-11-08', hora: 12, canal: CANAL_LLAMADA, resultado: 'LC.',
+      intentado_at: '2026-11-08T17:00:00.000Z',
+    },
+  ];
+  const leadMap = { x: { created_at: created } };
+  const llamada = detallePrimerContacto(intentos, leadMap, { canal: CANAL_LLAMADA });
+  const mensaje = detallePrimerContacto(intentos, leadMap, { canal: CANAL_MENSAJE });
+  assert.equal(llamada[0].resultado, 'LC.');
+  assert.equal(llamada[0].duracionMs, 2 * 60 * 60 * 1000);
+  assert.equal(mensaje[0].resultado, 'MNC.');
+  assert.equal(mensaje[0].duracionMs, 10 * 60 * 1000);
 });
 
 test('la hora en punto anterior a la creación no cuenta como 0 min', () => {
