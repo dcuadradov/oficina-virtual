@@ -24,6 +24,11 @@ export const PRIORIDAD_RESULTADO = {
 };
 
 export const HORAS_HEATMAP = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+export const PESTANAS_HEATMAP = [
+  { id: 'contestaron', label: 'Contestaron', short: 'Cont.' },
+  { id: 'agendaron', label: 'Agendaron', short: 'Agend.' },
+  { id: 'no_contestaron', label: 'No contestaron', short: 'No cont.' },
+];
 export const DIAS_SEMANA = [
   { id: 1, label: 'Lun' },
   { id: 2, label: 'Mar' },
@@ -266,6 +271,14 @@ export function celdasHeatmap(intentos = [], opts = {}) {
       leadIds: cell ? [...cell.personas] : [],
     };
   }));
+}
+
+export function capasHeatmap(intentos = [], { canal = 'ambos' } = {}) {
+  return PESTANAS_HEATMAP.map((pestana) => {
+    const celdas = celdasHeatmap(intentos, { pestana: pestana.id, canal });
+    const max = Math.max(1, ...celdas.map((cell) => cell.intentos || 0));
+    return { ...pestana, celdas, max };
+  });
 }
 
 export function rankingComerciales(intentos = [], comerciales = []) {

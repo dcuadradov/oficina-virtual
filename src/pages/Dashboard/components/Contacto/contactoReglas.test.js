@@ -6,6 +6,7 @@ import {
   COHORTE_GESTION,
   COHORTE_NUEVOS,
   COHORTE_TODOS,
+  capasHeatmap,
   celdasHeatmap,
   cohorteDelLead,
   conteoCanal,
@@ -408,6 +409,34 @@ test('la hora en punto anterior a la creación no cuenta como 0 min', () => {
   }];
   const detalle = detalleSlaContacto(intentos, { x: { created_at: created } });
   assert.equal(detalle.length, 0);
+});
+
+test('el heatmap combinado pone las tres capas en el mismo día', () => {
+  const intentos = [
+    {
+      fecha: '2026-11-10', lead_id: 'a', seguimiento_id: '1', canal: CANAL_LLAMADA,
+      resultado: 'LNC.', hora: 9, dia_semana: 2,
+    },
+    {
+      fecha: '2026-11-10', lead_id: 'b', seguimiento_id: '2', canal: CANAL_LLAMADA,
+      resultado: 'LC.', hora: 13, dia_semana: 2,
+    },
+    {
+      fecha: '2026-11-10', lead_id: 'c', seguimiento_id: '3', canal: CANAL_LLAMADA,
+      resultado: 'LA.', hora: 13, dia_semana: 2,
+    },
+  ];
+  const capas = capasHeatmap(intentos, { canal: CANAL_LLAMADA });
+  assert.deepEqual(capas.map((c) => c.id), ['contestaron', 'agendaron', 'no_contestaron']);
+  const cont = capas[0].celdas.find((c) => c.dia === 2 && c.hora === 13);
+  const agend = capas[1].celdas.find((c) => c.dia === 2 && c.hora === 13);
+  const noCont9 = capas[2].celdas.find((c) => c.dia === 2 && c.hora === 9);
+  const noCont13 = capas[2].celdas.find((c) => c.dia === 2 && c.hora === 13);
+  assert.equal(cont.intentos, 2);
+  assert.equal(agend.intentos, 1);
+  assert.equal(noCont9.intentos, 1);
+  assert.equal(noCont13.intentos, 0);
+  assert.equal(capas[0].celdas.find((c) => c.dia === 2 && c.hora === 9).intentos, 0);
 });
 
 test('heatmap agendaron ignora LC y pega horas fuera de 7–21', () => {

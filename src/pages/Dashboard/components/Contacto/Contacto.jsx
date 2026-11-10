@@ -22,7 +22,7 @@ import {
   CANAL_MENSAJE,
   COHORTE_NUEVOS,
   COHORTE_TODOS,
-  celdasHeatmap,
+  capasHeatmap,
   conteoCanal,
   cubetasIntensidad,
   detallePrimerContacto,
@@ -162,7 +162,6 @@ export default function Contacto({
   const [leadMap, setLeadMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [pestanaHeatmap, setPestanaHeatmap] = useState('contestaron');
   const [canalHeatmap, setCanalHeatmap] = useState('llamada');
   const [cohorte, setCohorte] = useState(COHORTE_TODOS);
   const [lista, setLista] = useState(null);
@@ -339,9 +338,9 @@ export default function Contacto({
   const barraLlamada = useMemo(() => conteoCanal(diarios, CANAL_LLAMADA), [diarios]);
   const barraMensaje = useMemo(() => conteoCanal(diarios, CANAL_MENSAJE), [diarios]);
   const cubetas = useMemo(() => cubetasIntensidad(intentos), [intentos]);
-  const heatmap = useMemo(
-    () => celdasHeatmap(intentos, { pestana: pestanaHeatmap, canal: canalHeatmap }),
-    [intentos, pestanaHeatmap, canalHeatmap],
+  const heatmapCapas = useMemo(
+    () => capasHeatmap(intentos, { canal: canalHeatmap }),
+    [intentos, canalHeatmap],
   );
   const ranking = useMemo(
     () => rankingComerciales(intentos, comerciales),
@@ -461,7 +460,7 @@ export default function Contacto({
   const abrirCelda = (cell) => {
     const extra = {};
     const deCelda = filtraIntentosHeatmap(intentos, {
-      pestana: pestanaHeatmap,
+      pestana: cell.pestana,
       canal: canalHeatmap,
     }).filter((intento) => {
       const hora = Math.min(21, Math.max(7, Number(intento.hora)));
@@ -469,8 +468,9 @@ export default function Contacto({
     });
     deCelda.forEach((intento) => { extra[intento.lead_id] = intento; });
     const dia = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][cell.dia];
+    const capa = heatmapCapas.find((c) => c.id === cell.pestana);
     setLista({
-      titulo: `${dia} ${cell.hora}:00`,
+      titulo: `${dia} ${cell.hora}:00 · ${capa?.label || ''}`.trim(),
       filas: filasDesdeLeads(deCelda.map((i) => i.lead_id), extra),
     });
   };
@@ -588,10 +588,8 @@ export default function Contacto({
           </div>
 
           <ContactoHeatmap
-            celdas={heatmap}
-            pestana={pestanaHeatmap}
+            capas={heatmapCapas}
             canal={canalHeatmap}
-            onPestana={setPestanaHeatmap}
             onCanal={setCanalHeatmap}
             onCelda={abrirCelda}
           />
