@@ -65,18 +65,31 @@ export default function ContactoHeatmap({
             </tr>
           </thead>
           {DIAS_SEMANA.map((dia) => (
-            <tbody key={dia.id}>
+            <tbody
+              key={dia.id}
+              className={
+                dia.id % 2 === 0
+                  ? '[&>tr:not(:last-child)>td]:bg-slate-50/80'
+                  : undefined
+              }
+            >
               {capasVisibles.map((capa, i) => (
                 <tr key={`${dia.id}-${capa.id}`}>
                   {i === 0 && (
                     <td
                       rowSpan={capasVisibles.length}
-                      className="text-[11px] font-medium text-slate-600 pr-1 align-middle"
+                      className={`text-[11px] font-medium text-slate-600 pl-2 pr-1 align-middle border-l-2 ${
+                        dia.id % 2 === 0 ? 'border-slate-200' : 'border-slate-100'
+                      }`}
                     >
                       {dia.label}
                     </td>
                   )}
-                  <td className="text-[9px] text-slate-400 pr-1 whitespace-nowrap align-middle">
+                  <td
+                    className={`text-[9px] text-slate-400 pr-1 whitespace-nowrap align-middle ${
+                      i === 0 ? 'pt-1.5' : i === capasVisibles.length - 1 ? 'pb-1.5' : ''
+                    }`}
+                  >
                     {capa.short}
                   </td>
                   {HORAS_HEATMAP.map((hora) => {
@@ -84,7 +97,12 @@ export default function ContactoHeatmap({
                     const intentos = cell?.intentos || 0;
                     const intensidad = intentos / (capa.max || 1);
                     return (
-                      <td key={`${dia.id}-${capa.id}-${hora}`} className={i === 0 ? 'pt-1.5' : undefined}>
+                      <td
+                        key={`${dia.id}-${capa.id}-${hora}`}
+                        className={
+                          i === 0 ? 'pt-1.5' : i === capasVisibles.length - 1 ? 'pb-1.5' : undefined
+                        }
+                      >
                         <button
                           type="button"
                           disabled={!intentos}
@@ -102,6 +120,14 @@ export default function ContactoHeatmap({
                   })}
                 </tr>
               ))}
+              <tr>
+                <td
+                  colSpan={2 + HORAS_HEATMAP.length}
+                  className="p-0 h-2"
+                >
+                  <div className="h-px bg-slate-200 mx-0.5" />
+                </td>
+              </tr>
             </tbody>
           ))}
         </table>
