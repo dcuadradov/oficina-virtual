@@ -11,9 +11,11 @@ import {
   conteoCanal,
   creadoEnHorarioSla,
   cubetasIntensidad,
+  detalleSlaContacto,
   diariosDesdeIntentos,
   filtraIntentosPorCohorte,
   formatoDuracion,
+  formatoHoraColombia,
   kpisContacto,
   partirSeguimiento,
   rankingComerciales,
@@ -290,6 +292,12 @@ test('SLA ignora las 2 am y promedia el resto', () => {
   assert.equal(sla.personasSla, 1);
   assert.equal(sla.avgMs, 60 * 60 * 1000);
   assert.equal(formatoDuracion(sla.avgMs), '1 h');
+  const detalle = detalleSlaContacto(intentos, leadMap);
+  assert.equal(detalle.length, 1);
+  assert.equal(detalle[0].lead_id, 'manana');
+  assert.equal(detalle[0].duracionMs, 60 * 60 * 1000);
+  assert.equal(formatoHoraColombia(detalle[0].createdAt), '8 nov 10:00');
+  assert.equal(formatoHoraColombia(detalle[0].primerAt), '8 nov 11:00');
 });
 
 test('heatmap agendaron ignora LC y pega horas fuera de 7–21', () => {

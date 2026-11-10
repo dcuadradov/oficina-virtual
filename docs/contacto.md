@@ -55,4 +55,4 @@ Dropdown al lado de Todos los días: **Todos** (default), **Nuevos**, **En gesti
 
 - Nuevos: contactados en el rango y creados en el mismo rango.
 - En gestión: contactados en el rango y creados antes.
-- Tiempo a contacto (solo en Nuevos): primer `intentado_at` menos `created_at`. Solo entran leads creados entre 9:00 y 21:00 inclusive. Columna `contacto_intento.intentado_at`: migración `db/migrations/2026-11-10_contacto_intentado_at.sql` y volver a materializar.
+- Tiempo a contacto (solo en Nuevos): primer `intentado_at` menos `created_at`. Solo entran leads creados entre 9:00 y 21:00 inclusive. Clic en el KPI abre la lista de esos leads (creación, primer seguimiento, duración), de mayor a menor tiempo. Columna `contacto_intento.intentado_at`: migración `db/migrations/2026-11-10_contacto_intentado_at.sql` y volver a materializar.

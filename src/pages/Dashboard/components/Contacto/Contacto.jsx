@@ -314,7 +314,19 @@ export default function Contacto({
         hora: extra.hora,
         fecha: extra.fecha,
         resultado: extra.resultado,
+        createdAt: extra.createdAt,
+        primerAt: extra.primerAt,
+        duracionMs: extra.duracionMs,
       };
+    });
+  };
+
+  const abrirSla = () => {
+    const extra = {};
+    (sla?.filas || []).forEach((row) => { extra[row.lead_id] = row; });
+    setLista({
+      titulo: 'Tiempo a contacto',
+      filas: filasDesdeLeads((sla?.filas || []).map((row) => row.lead_id), extra),
     });
   };
 
@@ -442,7 +454,12 @@ export default function Contacto({
         </p>
       )}
 
-      <ContactoKpis kpis={kpis} loading={loading} sla={sla} />
+      <ContactoKpis
+        kpis={kpis}
+        loading={loading}
+        sla={sla}
+        onSla={abrirSla}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-slate-400 gap-2">

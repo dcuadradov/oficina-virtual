@@ -370,33 +370,54 @@ export function instanteIntento(intento) {
   return Number.isNaN(t) ? null : t;
 }
 
-export function slaContacto(intentos = [], leadMap = {}) {
+export function detalleSlaContacto(intentos = [], leadMap = {}) {
   const firstByLead = new Map();
   for (const intento of intentos) {
     if (!intento?.lead_id) continue;
     const t = instanteIntento(intento);
     if (t == null) continue;
     const prev = firstByLead.get(intento.lead_id);
-    if (prev == null || t < prev) firstByLead.set(intento.lead_id, t);
+    if (prev == null || t < prev.t) firstByLead.set(intento.lead_id, { t, intento });
   }
-  const duraciones = [];
-  let personasEnHorario = 0;
-  for (const [leadId, firstTs] of firstByLead) {
+  const filas = [];
+  for (const [leadId, { t, intento }] of firstByLead) {
     const createdAt = leadMap[leadId]?.created_at;
-    if (!createdAt) continue;
-    if (!creadoEnHorarioSla(createdAt)) continue;
-    personasEnHorario += 1;
+    if (!createdAt || !creadoEnHorarioSla(createdAt)) continue;
     const createdTs = new Date(createdAt).getTime();
     if (Number.isNaN(createdTs)) continue;
-    duraciones.push(Math.max(0, firstTs - createdTs));
+    filas.push({
+      lead_id: leadId,
+      createdAt,
+      primerAt: intento.intentado_at || new Date(t).toISOString(),
+      autor_email: intento.autor_email,
+      resultado: intento.resultado,
+      duracionMs: Math.max(0, t - createdTs),
+    });
   }
+  filas.sort((a, b) => b.duracionMs - a.duracionMs);
+  return filas;
+}
+
+export function slaContacto(intentos = [], leadMap = {}) {
+  const filas = detalleSlaContacto(intentos, leadMap);
   return {
-    avgMs: duraciones.length
-      ? duraciones.reduce((sum, ms) => sum + ms, 0) / duraciones.length
+    avgMs: filas.length
+      ? filas.reduce((sum, row) => sum + row.duracionMs, 0) / filas.length
       : null,
-    personasSla: duraciones.length,
-    personasEnHorario,
+    personasSla: filas.length,
+    personasEnHorario: filas.length,
+    filas,
   };
+}
+
+export function formatoHoraColombia(iso) {
+  const partes = partesColombia(iso);
+  if (!partes) return '—';
+  const [, month, day] = partes.fecha.split('-');
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const hh = String(partes.hora).padStart(2, '0');
+  const mm = String(partes.minuto).padStart(2, '0');
+  return `${Number(day)} ${meses[Number(month) - 1]} ${hh}:${mm}`;
 }
 
 export function formatoDuracion(ms) {

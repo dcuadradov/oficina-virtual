@@ -1,9 +1,12 @@
 import { CalendarCheck, Clock, PhoneCall, Target, UserCheck, Users } from 'lucide-react';
 import { formatoDuracion, pct } from './contactoReglas';
 
-function Card({ icon: Icon, label, value, sub }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+function Card({ icon: Icon, label, value, sub, onClick }) {
+  const className = `bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-left ${
+    onClick ? 'hover:border-[#1717AF]/30 cursor-pointer' : ''
+  }`;
+  const inner = (
+    <>
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
           {label}
@@ -12,11 +15,19 @@ function Card({ icon: Icon, label, value, sub }) {
       </div>
       <p className="text-2xl font-bold text-[#1717AF]">{value}</p>
       <p className="text-[11px] text-slate-400 mt-1 leading-tight">{sub}</p>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className={className}>{inner}</div>;
 }
 
-export default function ContactoKpis({ kpis, loading, sla = null }) {
+export default function ContactoKpis({ kpis, loading, sla = null, onSla }) {
   const mostrarSla = Boolean(sla);
   if (loading) {
     const nCards = mostrarSla ? 6 : 5;
@@ -39,6 +50,7 @@ export default function ContactoKpis({ kpis, loading, sla = null }) {
           label="Tiempo a contacto"
           value={formatoDuracion(sla.avgMs)}
           sub={`${n(sla.personasSla)} de ${n(kpis.personas)} creados 9:00–21:00`}
+          onClick={onSla}
         />
       )}
       <Card
