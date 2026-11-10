@@ -371,27 +371,32 @@ export function instanteIntento(intento) {
 }
 
 export function detalleSlaContacto(intentos = [], leadMap = {}) {
-  const firstByLead = new Map();
+  const byLead = new Map();
   for (const intento of intentos) {
     if (!intento?.lead_id) continue;
     const t = instanteIntento(intento);
     if (t == null) continue;
-    const prev = firstByLead.get(intento.lead_id);
-    if (prev == null || t < prev.t) firstByLead.set(intento.lead_id, { t, intento });
+    if (!byLead.has(intento.lead_id)) byLead.set(intento.lead_id, []);
+    byLead.get(intento.lead_id).push({ t, intento });
   }
   const filas = [];
-  for (const [leadId, { t, intento }] of firstByLead) {
+  for (const [leadId, items] of byLead) {
     const createdAt = leadMap[leadId]?.created_at;
     if (!createdAt || !creadoEnHorarioSla(createdAt)) continue;
     const createdTs = new Date(createdAt).getTime();
     if (Number.isNaN(createdTs)) continue;
+    const despues = items
+      .filter((item) => item.t >= createdTs)
+      .sort((a, b) => a.t - b.t);
+    const ganador = despues[0];
+    if (!ganador) continue;
     filas.push({
       lead_id: leadId,
       createdAt,
-      primerAt: intento.intentado_at || new Date(t).toISOString(),
-      autor_email: intento.autor_email,
-      resultado: intento.resultado,
-      duracionMs: Math.max(0, t - createdTs),
+      primerAt: ganador.intento.intentado_at || new Date(ganador.t).toISOString(),
+      autor_email: ganador.intento.autor_email,
+      resultado: ganador.intento.resultado,
+      duracionMs: ganador.t - createdTs,
     });
   }
   filas.sort((a, b) => b.duracionMs - a.duracionMs);

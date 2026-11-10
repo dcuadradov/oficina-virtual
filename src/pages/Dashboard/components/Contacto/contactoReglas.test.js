@@ -300,6 +300,27 @@ test('SLA ignora las 2 am y promedia el resto', () => {
   assert.equal(formatoHoraColombia(detalle[0].primerAt), '8 nov 11:00');
 });
 
+test('creación 19:21 y seguimiento 19:40 no se redondean a 0 min', () => {
+  const created = '2026-11-10T00:21:00.000Z';
+  const intentos = [{
+    lead_id: 'x', fecha: '2026-11-09', hora: 19, canal: CANAL_LLAMADA, resultado: 'LNC.',
+    intentado_at: '2026-11-10T00:40:00.000Z',
+  }];
+  const detalle = detalleSlaContacto(intentos, { x: { created_at: created } });
+  assert.equal(formatoHoraColombia(detalle[0].createdAt), '9 nov 19:21');
+  assert.equal(formatoHoraColombia(detalle[0].primerAt), '9 nov 19:40');
+  assert.equal(detalle[0].duracionMs, 19 * 60 * 1000);
+});
+
+test('la hora en punto anterior a la creación no cuenta como 0 min', () => {
+  const created = '2026-11-10T00:21:00.000Z';
+  const intentos = [{
+    lead_id: 'x', fecha: '2026-11-09', hora: 19, canal: CANAL_LLAMADA, resultado: 'LNC.',
+  }];
+  const detalle = detalleSlaContacto(intentos, { x: { created_at: created } });
+  assert.equal(detalle.length, 0);
+});
+
 test('heatmap agendaron ignora LC y pega horas fuera de 7–21', () => {
   const intentos = [
     {

@@ -246,7 +246,7 @@ Arriba: personas contactadas, contestación, efectividad, agendamientos (persona
 
 Los filtros son independientes de Gestión e Informe. Mes, periodo y día usan el rango comercial. País, ocupación, tags, fuente, género y edad recortan al lead. No hay toggle Creación/Actualización: la fecha es la del contacto.
 
-Hay un filtro más, **Todos / Nuevos / En gestión**, al lado de Todos los días. Parte a las personas que se contactaron en el rango según `leads.created_at` (hora Colombia): Nuevos = creados en el mismo rango; En gestión = creados antes. En Nuevos aparece **Tiempo a contacto**: promedio hasta el primer intento, solo con leads creados entre las 9:00 y las 21:00 Colombia (un lead de las 2:00 no entra al promedio). Clic en esa tarjeta abre la lista de personas con hora de creación, hora del primer seguimiento y cuánto tardó; primero los más lentos. Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
+Hay un filtro más, **Todos / Nuevos / En gestión**, al lado de Todos los días. Parte a las personas que se contactaron en el rango según `leads.created_at` (hora Colombia): Nuevos = creados en el mismo rango; En gestión = creados antes. En Nuevos aparece **Tiempo a contacto**: promedio hasta el primer intento **después** de crear el lead, con hora y minuto reales del comentario o recordatorio (no la hora en punto). Solo entran leads creados entre las 9:00 y las 21:00 Colombia (un lead de las 2:00 no entra al promedio). Clic en esa tarjeta abre la lista de personas con hora de creación, hora del primer seguimiento y cuánto tardó; primero los más lentos. Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
 
 ---
 

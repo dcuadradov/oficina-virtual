@@ -64,6 +64,31 @@ async function fetchPaged(buildQuery) {
   return pages.flat();
 }
 
+async function hydrateIntentadoAt(intentos) {
+  const missing = intentos.filter((item) => !item.intentado_at && item.seguimiento_id);
+  if (!missing.length) return intentos;
+  const ids = [...new Set(missing.map((item) => item.seguimiento_id))];
+  const times = {};
+  for (let i = 0; i < ids.length; i += LEAD_IN_SIZE) {
+    const chunk = ids.slice(i, i + LEAD_IN_SIZE);
+    const [comentarios, recordatorios] = await Promise.all([
+      supabase.from('comentarios').select('id, created_at').in('id', chunk),
+      supabase.from('recordatorios').select('id, created_at').in('id', chunk),
+    ]);
+    if (!comentarios.error) {
+      (comentarios.data || []).forEach((row) => { times[String(row.id)] = row.created_at; });
+    }
+    if (!recordatorios.error) {
+      (recordatorios.data || []).forEach((row) => { times[String(row.id)] = row.created_at; });
+    }
+  }
+  return intentos.map((item) => {
+    if (item.intentado_at) return item;
+    const exacto = times[String(item.seguimiento_id)];
+    return exacto ? { ...item, intentado_at: exacto } : item;
+  });
+}
+
 async function fetchLeadsByIds(ids) {
   const unique = [...new Set(ids.filter(Boolean))];
   const rows = [];
@@ -202,6 +227,8 @@ export default function Contacto({
         if (!String(error.message || '').includes('intentado_at')) throw error;
         intentos = await fetchPaged(buildIntentos(INTENTO_COLS));
       }
+
+      intentos = await hydrateIntentadoAt(intentos);
 
       const leads = await fetchLeadsByIds(intentos.map((i) => i.lead_id));
       const map = {};
