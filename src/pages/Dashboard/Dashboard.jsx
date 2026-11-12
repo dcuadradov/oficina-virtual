@@ -13,6 +13,7 @@ import { usePitchAnalisisUniverse } from './components/usePitchAnalisisUniverse'
 import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
+import { sinSalto } from './pitchCharts';
 import { contarPaises, opcionesPais } from './paisFilter';
 import { enriquecerComentarioConCanal } from './canalSiglas';
 import { collectContacts, CONTACT_PAGE_SIZE, nextContactPage } from './copyContacts';
@@ -232,6 +233,7 @@ export default function Dashboard() {
 
   const comercialesAnalisis = useMemo(() => {
     if (!facetEnabled) return comerciales;
+    if (facetPool.length === 0) return comerciales;
     const present = new Set(facetPool.filter(r => matchTagsA(r) && matchDimsA(r)).map(r => r.comercial_email));
     return comerciales.filter(c => present.has(c.email));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,6 +241,7 @@ export default function Dashboard() {
 
   const tagsAnalisis = useMemo(() => {
     if (!facetEnabled) return tagsDisponibles;
+    if (facetPool.length === 0) return tagsDisponibles;
     const present = new Set(facetPool.filter(r => matchComercialA(r) && matchDimsA(r)).map(r => r.label).filter(Boolean));
     return tagsDisponibles.filter(t => present.has(t));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1900,6 +1903,50 @@ export default function Dashboard() {
                   />
                 </DashboardFilters>
 
+                {/* Sub-tabs arriba de los KPI: si los KPI se ocultan, la barra
+                    de tabs no se mueve y el clic no hace saltar la pantalla. */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit mt-2 mb-4">
+                  <button
+                    type="button"
+                    onMouseDown={sinSalto}
+                    onClick={() => setPitchSubTab('agenda')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      pitchSubTab === 'agenda'
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Agenda
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={sinSalto}
+                    onClick={() => setPitchSubTab('agendamiento')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      pitchSubTab === 'agendamiento'
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Agendamiento
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={sinSalto}
+                    onClick={() => setPitchSubTab('analisis')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      pitchSubTab === 'analisis'
+                        ? 'bg-white text-[#1717AF] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Análisis Post - Pitch
+                  </button>
+                </div>
+
+                {/* overflow-anchor: none — el navegador no mueve el scroll
+                    para perseguir contenido que aparece o desaparece debajo. */}
+                <div style={{ overflowAnchor: 'none' }}>
                 {/* KPIs (10 cards 5x2): solo en "Agenda" (en "Agendamiento" y
                     "Análisis" se ocultan para dejar el foco en las gráficas). */}
                 {pitchSubTab === 'agenda' && (
@@ -1915,40 +1962,6 @@ export default function Dashboard() {
                     dimFilters={pitchDims}
                   />
                 )}
-
-                {/* Sub-tabs de Mis Pitch: Agenda | Agendamiento | Análisis */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit mt-4 mb-4">
-                  <button
-                    onClick={() => setPitchSubTab('agenda')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                      pitchSubTab === 'agenda'
-                        ? 'bg-white text-[#1717AF] shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    Agenda
-                  </button>
-                  <button
-                    onClick={() => setPitchSubTab('agendamiento')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                      pitchSubTab === 'agendamiento'
-                        ? 'bg-white text-[#1717AF] shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    Agendamiento
-                  </button>
-                  <button
-                    onClick={() => setPitchSubTab('analisis')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                      pitchSubTab === 'analisis'
-                        ? 'bg-white text-[#1717AF] shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    Análisis Post - Pitch
-                  </button>
-                </div>
 
                 {pitchSubTab === 'agenda' ? (
                   /* Calendario de Pitches */
@@ -1987,6 +2000,7 @@ export default function Dashboard() {
                     onOpenLead={(lead) => handleOpenLeadFromNotification(lead.card_id)}
                   />
                 )}
+                </div>
               </>
             ) : activeView === 'metricas' ? (
               <>
