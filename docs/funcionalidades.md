@@ -49,7 +49,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 
 ## 4. La tabla de leads (el día a día)
 
-- Se puede ver todos los leads con su etapa actual y el último seguimiento que les hicieron, sin abrir cada ficha.
+- Se puede ver todos los leads con su etapa actual y el último seguimiento que les hicieron, sin abrir cada ficha. Ese preview usa el mismo detalle que la ficha: categoría, y si hay siglas de mensaje y/o llamada, `(MNC. - LNC.)` delante del texto. Si no cabe, se corta con puntos suspensivos.
 - Se puede ordenar por columnas, por ejemplo por fecha de última actualización.
 - Se puede filtrar por etapa del embudo con chips agrupados (gestión, pitch, matrícula, etc.).
 - Se puede separar los que están sin gestionar de los que ya se gestionaron.
@@ -93,7 +93,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar los seguimientos por categoría.
 - Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
 - Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA.) y/o del mensaje de WhatsApp (MC., MNC., MA.). Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
-- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial el Detalle sale como `(MNC. - LNC.)` y después el texto.
+- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y después el texto.
 - Si el seguimiento nació de un Recordatorio, el Detalle también muestra esas siglas delante de la observación. Se leen de `recordatorios` cuando el comentario no las trae (el disparador de la base suele copiar solo el texto).
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
 - Los seguimientos quedan marcados según de dónde salieron: gestión normal, resultado de pitch o recordatorio.
