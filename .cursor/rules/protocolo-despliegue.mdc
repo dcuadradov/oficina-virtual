@@ -1,0 +1,15 @@
+---
+description: Protocolo Despliegue — cómo se cierra y publica trabajo en oficina-virtual
+alwaysApply: true
+---
+
+# Protocolo Despliegue
+
+Nombre para invocarlo: **«ejecuta el Protocolo Despliegue»**.
+
+Cierra el trabajo actual así, en este orden: **depurar → probar → documentar → commit → publicar staging y prod.**
+
+- Playbook: `docs/protocolo-despliegue.md`
+- Skill: `.cursor/skills/protocolo-despliegue/SKILL.md`
+
+Si el usuario pide desplegar, publicar, staging, prod o el Protocolo Despliegue, **sigue ese skill**. No cherry-pick aislado. No Firebase sin que el commit esté en origin. No staging sin prod.

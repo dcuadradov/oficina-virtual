@@ -12,18 +12,15 @@ npm run dev            # http://localhost:5173
 
 Ver flujo Git, ambientes y reglas en [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+Para **cerrar y publicar** un trabajo (depurar, probar, documentar, commit, staging y prod): [Protocolo Despliegue](./docs/protocolo-despliegue.md). Al agente: **«ejecuta el Protocolo Despliegue»**.
+
 ## Ambientes
 
 | Ambiente | URL | Deploy |
 |----------|-----|--------|
 | Local | http://localhost:5173 | `npm run dev` |
-| Staging | https://oficina-virtual-md.web.app | push/merge a `develop` |
-| Producción | https://portal.mdenglish.us | merge a `main` |
-
-```bash
-npm run deploy:staging   # build staging + Firebase hosting:staging
-npm run deploy:prod      # solo tras validar staging
-```
+| Staging | https://oficina-virtual-md.web.app | `develop` vía Protocolo Despliegue |
+| Producción | https://portal.mdenglish.us | `main` vía Protocolo Despliegue |
 
 ## Presentación personalizada
 
