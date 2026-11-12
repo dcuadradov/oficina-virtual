@@ -1977,6 +1977,10 @@ export default function Dashboard() {
                   <PitchAgendamiento
                     rows={analisisChartRows}
                     loading={agendamientoLoading}
+                    viewMode={pitchRange.viewMode}
+                    rangeStart={pitchRange.rangeStart}
+                    rangeEnd={pitchRange.rangeEnd}
+                    onOpenLead={(lead) => handleOpenLeadFromNotification(lead.card_id)}
                   />
                 ) : (
                   <PitchAnalisis
@@ -1987,6 +1991,7 @@ export default function Dashboard() {
                     viewMode={pitchRange.viewMode}
                     rangeStart={pitchRange.rangeStart}
                     rangeEnd={pitchRange.rangeEnd}
+                    onOpenLead={(lead) => handleOpenLeadFromNotification(lead.card_id)}
                   />
                 )}
               </>

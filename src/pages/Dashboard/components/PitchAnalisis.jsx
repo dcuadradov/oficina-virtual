@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, Check } from 'lucide-react';
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-} from 'recharts';
-import { DAY_LABELS } from '../../../utils/pitchRange';
 import { ANALISIS_SUBTABS, getSubTabConfig } from './usePitchAnalisisUniverse';
+import { bucketsDeVista, leadsUnicosDeFilas } from '../pitchCharts';
+import PitchRightPanel from './PitchRightPanel';
 
 const SIN = '__SIN__';
 
@@ -25,18 +22,11 @@ const PALETTE = [
 ];
 
 const norm = (v) => (v === null || v === undefined || String(v).trim() === '' ? SIN : String(v).trim());
-const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return d; };
-
-const fmtHour = (h) => {
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const hh = h % 12 || 12;
-  return `${hh}${ampm}`;
-};
 
 /**
  * Tab "Análisis" de Mis Pitch (presentacional). Recibe el universo ya filtrado
- * por comercial/tags/dimensiones (`rows`) y dibuja el panel de motivos
- * (niveles excluyentes con cascada) + torta + tendencia.
+ * por comercial/tags/dimensiones (`rows`) y dibuja Motivos a la izquierda y,
+ * a la derecha, un panel con Participación, Tendencia y Leads.
  */
 export default function PitchAnalisis({
   subTab = 'no_matricula',
@@ -46,6 +36,7 @@ export default function PitchAnalisis({
   viewMode = 'period',
   rangeStart,
   rangeEnd,
+  onOpenLead,
 }) {
   const config = getSubTabConfig(subTab);
   const levels = config.levels;
@@ -142,41 +133,11 @@ export default function PitchAnalisis({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartRows, chartValues, chartAcc, chartLevel]);
 
-  // Buckets de tiempo según el modo de vista (mes 2d/15, semana 7, día 2h/12).
-  const buckets = useMemo(() => {
-    const list = [];
-    if (!rangeStart || !rangeEnd) return list;
-    if (viewMode === 'day') {
-      for (let h = 0; h < 24; h += 2) {
-        list.push({ key: `h${h}`, label: fmtHour(h), test: (p) => p.hour >= h && p.hour < h + 2 });
-      }
-    } else if (viewMode === 'month') {
-      const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
-      const end = new Date(rangeEnd); end.setHours(0, 0, 0, 0);
-      let cursor = new Date(start);
-      let guard = 0;
-      while (cursor <= end && guard < 200) {
-        const bStart = new Date(cursor);
-        const bEnd = addDays(cursor, 2);
-        list.push({ key: `d${bStart.getTime()}`, label: `${bStart.getDate()}`, test: (p) => p.dateLocal >= bStart && p.dateLocal < bEnd });
-        cursor = addDays(cursor, 2);
-        guard++;
-      }
-    } else {
-      const start = new Date(rangeStart); start.setHours(0, 0, 0, 0);
-      const end = new Date(rangeEnd); end.setHours(0, 0, 0, 0);
-      let cursor = new Date(start);
-      let guard = 0;
-      while (cursor <= end && guard < 40) {
-        const d0 = new Date(cursor);
-        list.push({ key: `d${d0.getTime()}`, label: `${DAY_LABELS[d0.getDay()]} ${d0.getDate()}`, test: (p) => p.dateLocal.getTime() === d0.getTime() });
-        cursor = addDays(cursor, 1);
-        guard++;
-      }
-    }
-    return list;
+  const buckets = useMemo(
+    () => bucketsDeVista(viewMode, rangeStart, rangeEnd),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, rangeStart?.getTime(), rangeEnd?.getTime()]);
+    [viewMode, rangeStart?.getTime(), rangeEnd?.getTime()],
+  );
 
   // Tendencia: una serie por valor del nivel activo, leads únicos por bucket.
   const trendData = useMemo(() => {
@@ -185,7 +146,7 @@ export default function PitchAnalisis({
       chartValues.forEach(v => {
         const set = new Set();
         chartRows.forEach(r => {
-          if (norm(r[chartAcc]) === v && b.test(r.parsed)) set.add(r.card_id);
+          if (norm(r[chartAcc]) === v && r.parsed && b.test(r.parsed)) set.add(r.card_id);
         });
         obj[labelFor(chartLevel, v)] = set.size;
       });
@@ -193,6 +154,8 @@ export default function PitchAnalisis({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buckets, chartRows, chartValues, chartAcc, chartLevel]);
+
+  const leadsList = useMemo(() => leadsUnicosDeFilas(chartRows), [chartRows]);
 
   const pct = (n) => (totalLeads > 0 ? Math.round((n / totalLeads) * 100) : 0);
 
@@ -268,46 +231,14 @@ export default function PitchAnalisis({
             </div>
           </div>
 
-          {/* Gráficas */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-              <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Participación</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={45}>
-                      {pieData.map((d) => <Cell key={d.rawValue} fill={colorMap.get(d.rawValue) || '#cbd5e1'} />)}
-                    </Pie>
-                    <Tooltip formatter={(v, n) => [`${v} ${v === 1 ? 'persona' : 'personas'} (${pct(v)}%)`, n]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-              <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Tendencia</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <Tooltip />
-                    {pieData.map((d) => (
-                      <Line
-                        key={d.rawValue}
-                        type="monotone"
-                        dataKey={d.name}
-                        stroke={colorMap.get(d.rawValue) || '#cbd5e1'}
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+          <PitchRightPanel
+            pieData={pieData}
+            colorMap={colorMap}
+            trendData={trendData}
+            leads={leadsList}
+            onOpenLead={onOpenLead}
+            pct={pct}
+          />
         </div>
       )}
     </div>

@@ -194,7 +194,13 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 
 - Se puede analizar por qué no se cerraron las ventas, entrando en cascada desde la categoría del motivo hasta el detalle.
 - Se puede hacer el mismo análisis sobre tres grupos: los que no fueron matrícula, los reprobados y los que sí se matricularon.
-- Se puede ver esos motivos en torta y también su tendencia en el tiempo.
+- A la derecha hay un solo panel con tres pestañas: Participación (torta), Tendencia (en el tiempo) y Leads (personas distintas que coinciden con el filtro). Lo que se marque en Motivos recorta las tres. Clic en un nombre abre la misma ficha que en Gestión.
+- La tendencia usa los mismos cortes que el calendario: día en bloques de 2 horas, periodo por día, mes cada dos días.
+
+**Agendamiento**
+
+- Se puede ver el canal con el que se agendó el pitch (WhatsApp, Llamada, Correo) y filtrarlo.
+- A la derecha, el mismo panel de tres pestañas: Participación, Tendencia por canal y Leads. Lo que se marque en Canal recorta las tres. Clic en un nombre abre la ficha del lead.
 
 **Conversión**
 
