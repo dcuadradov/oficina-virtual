@@ -2549,14 +2549,13 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
   const handleEnviarMensaje = async () => {
     if (!lead?.card_id) return;
     if (enviandoMensaje) return;
-    // El detalle del seguimiento es obligatorio.
-    if (!nuevoMensaje.trim()) return;
+    // El detalle es opcional: con llamada y/o mensaje basta.
     if (!siglaLlamada && !siglaMensaje) return;
     
     try {
       setEnviandoMensaje(true);
       
-      const textoFinal = nuevoMensaje.trim();
+      const textoFinal = nuevoMensaje.trim() || null;
       
       const nuevoComentario = {
         lead_id: lead.card_id,
@@ -3006,7 +3005,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
 
   // Función para programar recordatorio
   const handleProgramarRecordatorio = async () => {
-    if (!fechaSeleccionada || !textoRecordatorio.trim() || !lead?.card_id) return;
+    if (!fechaSeleccionada || !lead?.card_id) return;
     if (!siglaLlamada && !siglaMensaje) {
       setErrorRecordatorio('Elige el resultado de la llamada o del mensaje');
       return;
@@ -3036,10 +3035,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
       fechaCompleta.setHours(hora24, minutos, 0, 0);
       
       // Crear recordatorio (el trigger en BD creará el comentario automáticamente)
+      const observacionFinal = textoRecordatorio.trim() || null;
       const nuevoRecordatorioData = {
         lead_id: lead.card_id,
         fecha_programada: fechaCompleta.toISOString(),
-        observacion: textoRecordatorio.trim(),
+        observacion: observacionFinal,
         creado_por: userEmail,
         estado: 'Programado',
         fase: lead.fase_nombre_pipefy || null,
@@ -3060,14 +3060,14 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
         const observacion = nuevoRecordatorioData.observacion;
         const { data: comentariosRec } = await supabase
           .from('comentarios')
-          .select('id, origen, llamada, mensaje')
+          .select('id, origen, llamada, mensaje, texto')
           .eq('lead_id', lead.card_id)
-          .eq('texto', observacion)
           .order('created_at', { ascending: false })
           .limit(8);
+        const mismoTexto = (c) => String(c.texto || '').trim() === String(observacion || '').trim();
         const destino = (comentariosRec || []).find((c) =>
-          /recordatorio/i.test(c.origen || '') && !c.llamada && !c.mensaje
-        ) || (comentariosRec || []).find((c) => /recordatorio/i.test(c.origen || '')) || comentariosRec?.[0];
+          /recordatorio/i.test(c.origen || '') && mismoTexto(c) && !c.llamada && !c.mensaje
+        ) || (comentariosRec || []).find((c) => /recordatorio/i.test(c.origen || '') && mismoTexto(c)) || comentariosRec?.[0];
         if (destino?.id) {
           await supabase
             .from('comentarios')
@@ -3109,7 +3109,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
           body: JSON.stringify({
             id: null,
             lead_id: lead.card_id,
-            texto: textoRecordatorio.trim(),
+            texto: observacionFinal,
             autor_email: userEmail,
             autor_nombre: userName,
             origen: 'Recordatorio',
@@ -5407,7 +5407,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                             handleEnviarMensaje();
                           }
                         }}
-                        placeholder="Escribe el detalle del seguimiento..."
+                        placeholder="Detalle del seguimiento (opcional)"
                         rows={1}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none transition-all duration-200"
                         style={{ minHeight: '42px', maxHeight: '120px' }}
@@ -5415,9 +5415,9 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </div>
                     <button
                       onClick={handleEnviarMensaje}
-                      disabled={enviandoMensaje || !nuevoMensaje.trim() || !tieneSiglaCanal}
+                      disabled={enviandoMensaje || !tieneSiglaCanal}
                       className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                        !enviandoMensaje && nuevoMensaje.trim() && tieneSiglaCanal
+                        !enviandoMensaje && tieneSiglaCanal
                           ? 'bg-[#1717AF] text-white hover:bg-[#02214A] shadow-lg shadow-[#1717AF]/20'
                           : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       }`}
@@ -5430,7 +5430,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-2">
-                    Enter para enviar • El detalle es obligatorio • Elige llamada o mensaje
+                    Enter para enviar • El detalle es opcional • Elige llamada o mensaje
                   </p>
                 </div>
               </div>
@@ -5455,7 +5455,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
               const minutosValidation = parseInt(minutoInput) || 0;
               const timeIsValid = isTimeValid(fechaSeleccionada, hora24Validation, minutosValidation);
               
-              const canSubmit = fechaSeleccionada && textoRecordatorio.trim().length > 0 && tieneSiglaCanal && !programandoRecordatorio && timeIsValid;
+              const canSubmit = fechaSeleccionada && tieneSiglaCanal && !programandoRecordatorio && timeIsValid;
               
               // Formatear fecha para historial
               const formatFechaHistorial = (dateString) => {
@@ -5550,7 +5550,7 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                                       
                                       {/* Observación */}
                                       <p className="text-sm text-slate-500 line-clamp-2">
-                                        {textoDetalleConCanal(rec.observacion || 'Sin observación', rec.llamada, rec.mensaje)}
+                                        {textoDetalleConCanal(rec.observacion, rec.llamada, rec.mensaje) || 'Sin observación'}
                                       </p>
                                     </div>
                                     
@@ -5744,8 +5744,15 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-800 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 shadow-xl">
                                 <p className="text-slate-300 mb-1 text-[10px] uppercase tracking-wide">Recordatorio</p>
                                 <p className="font-medium truncate">
-                                  {recordatorioDelDia.observacion?.substring(0, 50)}
-                                  {recordatorioDelDia.observacion?.length > 50 ? '...' : ''}
+                                  {(() => {
+                                    const detalleDia = textoDetalleConCanal(
+                                      recordatorioDelDia.observacion,
+                                      recordatorioDelDia.llamada,
+                                      recordatorioDelDia.mensaje
+                                    );
+                                    if (!detalleDia) return 'Sin detalle';
+                                    return detalleDia.length > 50 ? `${detalleDia.substring(0, 50)}...` : detalleDia;
+                                  })()}
                                 </p>
                                 <button
                                   onClick={(e) => {
@@ -5921,11 +5928,11 @@ const LeadSidebar = ({ lead: leadProp, isOpen, onClose, initialTab = 'info', eta
 
                     {/* Textarea */}
                     <div className="mb-3">
-                      <label className="text-xs text-slate-500 mb-1 block">Detalle del recordatorio</label>
+                      <label className="text-xs text-slate-500 mb-1 block">Detalle del recordatorio <span className="text-slate-400 font-normal">(opcional)</span></label>
                       <textarea
                         value={textoRecordatorio}
                         onChange={(e) => setTextoRecordatorio(e.target.value)}
-                        placeholder="Escribe el detalle del recordatorio..."
+                        placeholder="Detalle del recordatorio (opcional)"
                         rows={3}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1717AF]/20 focus:border-[#1717AF] resize-none"
                       />

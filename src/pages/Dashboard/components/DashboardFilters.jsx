@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, Flag, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { filtrarPaises, formatoConteoLeads } from '../paisFilter';
+import StickyFiltersHost from './StickyFiltersHost';
 
 /**
  * Determina si un usuario está conectado basado en su última conexión
@@ -183,6 +184,8 @@ const DashboardFilters = ({
   // Filtros extra que se renderizan al final de la 2ª fila, fluyendo en el
   // mismo contenedor que los demás filtros (e.g. dimensiones de Mis Pitch).
   children = null,
+  // Filtros que van en la 1ª fila, al lado del día.
+  startChildren = null,
 }) => {
   const [comercialOpen, setComercialOpen] = useState(false);
   const [mesOpen, setMesOpen] = useState(false);
@@ -740,7 +743,22 @@ const DashboardFilters = ({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <StickyFiltersHost
+      overlays={(
+        <>
+          {toastMessage && (
+            <div className="fixed bottom-6 right-6 z-[100] animate-fade-in">
+              <div className="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-sm font-medium">{toastMessage}</span>
+              </div>
+            </div>
+          )}
+          {renderMonthConfigModal()}
+        </>
+      )}
+      render={(location) => (
+    <div className={`flex flex-col ${location === 'header' ? 'gap-2' : 'gap-3'}`}>
       {/* Fila 1: Búsqueda + Filtros de fecha + Pill */}
       <div className="flex flex-wrap items-center gap-3">
       {/* Campo de búsqueda */}
@@ -785,6 +803,9 @@ const DashboardFilters = ({
               setPeriodoOpen(false);
               setPaisOpen(false);
             }}
+            title={monthConfigs[selectedMes]?.fecha_inicio
+              ? `${monthConfigs[selectedMes].fecha_inicio} → ${monthConfigs[selectedMes].fecha_fin || 'hoy'}`
+              : undefined}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
               selectedMes
                 ? 'bg-[#1717AF] text-white border-[#1717AF] shadow-md shadow-[#1717AF]/20'
@@ -1105,6 +1126,8 @@ const DashboardFilters = ({
           )}
         </div>
       )}
+
+      {startChildren}
 
       {/* Toggle Creación / Actualización */}
       {showDateFilterToggle && onDateFilterFieldChange && (
@@ -1987,20 +2010,9 @@ const DashboardFilters = ({
       {/* Filtros extra (fluyen en la misma fila que los demás filtros) */}
       {children}
       </div>
-      
-      {/* Toast de notificación */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-[100] animate-fade-in">
-          <div className="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="text-sm font-medium">{toastMessage}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de configuración de mes */}
-      {renderMonthConfigModal()}
     </div>
+      )}
+    />
   );
 };
 

@@ -21,7 +21,11 @@ export function prefijoDetalleCanal(llamada, mensaje) {
 }
 
 export function textoDetalleConCanal(texto, llamada, mensaje) {
-  return `${prefijoDetalleCanal(llamada, mensaje)}${texto ?? ''}`;
+  const cuerpo = String(texto ?? '').trim();
+  const prefijo = prefijoDetalleCanal(llamada, mensaje).trimEnd();
+  if (!prefijo) return cuerpo;
+  if (!cuerpo) return prefijo;
+  return `${prefijo} ${cuerpo}`;
 }
 
 export function origenEsRecordatorio(origen) {

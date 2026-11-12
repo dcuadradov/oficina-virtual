@@ -42,6 +42,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar por tipo de gestión de WhatsApp: los que se atienden por Respond.io y los que se atienden desde el WhatsApp del comercial.
 - Se puede filtrar por los que tienen novedades sin leer, los que tienen ventana de WhatsApp abierta y los que tienen recordatorio activo.
 - Se puede limpiar todos los filtros de un golpe.
+- Si se baja por la página y el header tapa los filtros, esos mismos filtros se meten en el header para poder cambiarlos sin volver arriba.
 - En **Gestión**, el botón **Copiar contactos** abre un recuadro con WhatsApp y correo. Copia todos los leads que cumplen los filtros, no solo la página visible. Junto a cada opción va cuántos hay: el número y el correo pueden no coincidir si a un lead le falta uno de los dos. El correo sale listo para pegar en el campo Para de Gmail. El teléfono sale internacional y pegado, por ejemplo +573173588591. La consulta va de a 1.000 y se detiene a los 15.000 para no recargar el portal.
 
 ---
@@ -90,9 +91,9 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 
 - Se puede ver todo el historial de seguimientos como una conversación, de lo más nuevo a lo más viejo.
 - Se puede filtrar los seguimientos por categoría.
-- Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
+- Se puede escribir un seguimiento nuevo eligiendo categoría. El detalle (texto libre) es opcional: con las siglas de llamada y/o mensaje basta.
 - Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA., LNE.) y/o del mensaje de WhatsApp (MC., MNC., MA., MNE.). LNE. y MNE. son número errado. Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
-- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y después el texto.
+- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y, si hay texto, después el detalle. Si el comercial no escribió detalle, se muestran solo las siglas.
 - Si el seguimiento nació de un Recordatorio, el Detalle también muestra esas siglas delante de la observación. Se leen de `recordatorios` cuando el comentario no las trae (el disparador de la base suele copiar solo el texto).
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
 - Los seguimientos quedan marcados según de dónde salieron: gestión normal, resultado de pitch o recordatorio.
@@ -101,8 +102,8 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 
 ## 7. Recordatorios que programa el comercial
 
-- Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y una nota del motivo.
-- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento (Detalle) y el historial de Recordatorio las muestran delante del texto / observación, también en recordatorios que ya estaban guardados.
+- Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y, si hace falta, una nota del motivo. El detalle es opcional.
+- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento (Detalle) y el historial de Recordatorio las muestran delante del texto / observación (o solas, si no hay nota), también en recordatorios que ya estaban guardados.
 - Al programarlo, el lead queda marcado como gestionado.
 - Se puede ver el historial de recordatorios con su estado: programado, vencido o cancelado.
 - Se puede ver todos los recordatorios en un calendario, con colores distintos para los vencidos, los de hoy y los que vienen.
@@ -213,36 +214,60 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 
 ## 14. Informes mensuales
 
-Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son independientes de Gestión, pero el mes, el periodo y el día usan la misma lógica: el mes toma el rango configurado en Gestión, el periodo es martes a lunes y el día es un día puntual. También se puede filtrar por país (varios), por comercial, por ocupación, por fuente (el `label` del lead, no la procedencia del gráfico), por género, por rango de edad y por si la fecha es de creación o de actualización. Todos se concatenan: el lead entra si cumple todos los que estén marcados, y las listas se recortan con lo ya elegido. Si el campo viene vacío aparece como Sin ocupación, Sin fuente, Sin género o Sin dato. Los números de 2024 y 2025 están fijos y no se recortan con esos filtros.
+Solo supervisores. Arranca en el mes en curso, ya marcado. Los filtros son independientes de Gestión, pero el mes, el periodo y el día usan la misma lógica: el mes toma el rango comercial configurado en Gestión (`config_meses`), no el mes calendario. Si octubre está parametrizado del 29 de septiembre al 2 de noviembre, Informe cuenta exactamente esas fechas y lo dice debajo del título, por ejemplo «Octubre 2026 cuenta 29 sep 2026 – 2 nov 2026». El periodo es martes a lunes y el día es un día puntual. También se puede filtrar por país (varios), por comercial, por ocupación, por tags (los mismos de Gestión), por fuente (de dónde llegó el lead: el mismo de Gestión y del gráfico de procedencia), por género, por rango de edad y por si la fecha es de creación o de actualización. Todos se concatenan: el lead entra si cumple todos los que estén marcados, y las listas se recortan con lo ya elegido. Si el campo viene vacío aparece como Sin ocupación, Sin tag, Sin fuente, Sin género o Sin dato. Los números de 2024 y 2025 están fijos y no se recortan con esos filtros.
 
 - Leads creados en el mes.
 - Fuentes de donde vienen los leads.
 - Cómo se repartieron los leads entre comerciales.
 - Leads por país, día por día. El % de cada país es su participación sobre el total de leads.
 - Sin contacto por país: leads del periodo que hoy están en Sin contacto. El % de cada país es sobre Leads por país.
-- Gestionando por país: leads del periodo que hoy están en Gestionando o Pendiente de agenda. El % de cada país es sobre Sin contacto por país.
-- Pitch por país: leads que entraron a Pitch en el periodo. El % de cada país es sobre Gestionando por país.
-- Matrícula por país: leads que entraron a Matrícula en el periodo. El % de cada país es sobre Pitch por país.
-- Descartados por país: leads del periodo que hoy están en Descartado. El % de cada país es sobre Leads por país, no sobre la etapa anterior del funnel.
+- Gestionando por país: leads del periodo que hoy están en Gestionando, Pendiente de agenda, Listo para agendar, Agendado, Interés futuro, Reprogramar, Posible matrícula o Pago pendiente. El % de cada país es sobre Leads por país.
+- Pitch por país: leads que entraron a Pitch en el periodo (primera vez). El % de cada país es sobre Leads por país.
+- Matrícula por país: leads del periodo que hoy están en Matrícula. El % de cada país es sobre Leads por país.
+- Descartados por país: leads del periodo que hoy están en Descartado, No se matriculó, Matrícula caída, Dejó de contestar, MINDTAP o Datos de contacto errados. El % de cada país es sobre Leads por país.
 
-De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 300 leads es 50%, y el de abajo se calcula sobre esos 150, no sobre el total. Esos porcentajes no suman 100%. Si un país no tiene leads en la etapa de arriba, el % sale como —. Pitch y Matrícula cuentan la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando y Descartados miran en qué etapa está hoy.
+De Sin contacto en adelante el % de cada país es sobre Leads por país, no sobre la tabla de arriba. Al lado del % va entre paréntesis cuántos leads de ese país hay en Leads por país, por ejemplo Colombia 101 32.4% (414). Esos porcentajes no suman 100%. Si un país no tiene leads, el % sale como —. Pitch cuenta la primera vez que el lead entró a esa fase en el periodo; Sin contacto, Gestionando, Matrícula y Descartados miran en qué etapa está hoy.
+
+En esas seis gráficas hay dos pestañas y cambian juntas. **Periodo** es el día a día del mes, periodo o día marcado arriba. **Todos los meses** va de noviembre 2025 hasta hoy: el gráfico es mes a mes, máximo 12 meses (los más recientes), y la lista es el acumulado. Esa pestaña no usa el filtro de mes, periodo o día; país, comercial, ocupación, tags, fuente, género, edad y creación/actualización sí aplican.
+
+En las seis (Leads, Sin contacto, Gestionando, Pitch, Matrícula y Descartados) cada país tiene un checkbox, y arriba está **Todos**. Lo que se marque se combina en una sola serie y las seis gráficas se sincronizan. Un país es su línea; varios se suman. En las de funnel, **Periodo** muestra esa métrica junto a sus leads; **Todos los meses** pone barras de leads y la línea de % sobre esos leads. En Leads por país solo se ve el volumen combinado. La X del país (o desmarcar Todos) vuelve a la vista de siempre.
+
+Si se baja por el Informe y el header tapa los filtros, esos mismos filtros se meten en el header para poder cambiarlos sin volver arriba.
 - Leads por ocupación, día por día.
 - Matrículas del mes, en histórico.
 - Matrículas por ocupación.
 
 ---
 
-## 15. Quién ve qué
+## 15. Contacto
 
-| Rol | Alcance |
-|-----|---------|
-| Comercial | Solo sus leads. Sus propias métricas de conversión. |
-| Setter | Solo las etapas que le corresponden. En la agenda de pitch, los que él mismo agendó. Sin métricas ni informes. |
-| Supervisor | Todos los leads, filtro por comercial, asignaciones del equipo e informes mensuales. Puede definir las fechas de inicio y fin de un mes comercial. |
+Tab después de Informe. Lo ven comercial y supervisor (como Métricas); el setter no. Si `puede_ver_todos` es true, hay selector de comercial; si es false, solo se ve lo propio. El comercial del filtro es **quién contactó**, no el dueño del lead.
+
+Mide personas, no intentos. Tres seguimientos al mismo lead el mismo día son una persona. Si cada seguimiento fue llamada y mensaje, hay 6 intentos y 3 seguimientos. La fecha es cuándo lo registraron (Colombia), no la fecha programada del recordatorio.
+
+El resultado del día no es el último intento: gana el más cerca del agendamiento. Llamada: LA > LC > LNC > LNE. WhatsApp: MA > MC > MNC > MNE. LNE./MNE. son número errado: salen en un KPI y como cuarto tramo ámbar en las barras de Llamadas y WhatsApp. No cuentan como contestación, efectividad ni “no contestó”, y no entran al heatmap ni a las cubetas. Contestación y efectividad se calculan sin quienes solo tuvieron número errado.
+
+Los números salen de `comentarios.llamada` / `comentarios.mensaje`. Si el recordatorio no dejó comentario con sigla, se usa `recordatorios`. Un job a medianoche Colombia (`fn_contacto_materializar`, pg_cron 05:00 UTC) arma `contacto_intento` (cada intento con hora) y `contacto_diario` (la persona del día). Hay datos desde el 4 nov 2026, cuando nacieron las siglas.
+
+Arriba: personas contactadas, contestación, efectividad, número errado, agendamientos (personas distintas; si agendó por llamada y WhatsApp cuenta 1) y seguimientos por persona. Luego las barras de llamada y WhatsApp (no contestaron, contestaron, efectivas, número errado), tres cubetas (1 / 2 / 3 o más seguimientos ese día, con su % de contestación) y un heatmap hora × día de la semana. Cada día tiene tres subfilas juntas: Contestaron, Agendaron y No contestaron, para ver si a las 13:00 contestan o solo es la hora en que llaman. Un filete y un fondo suave separan un día del siguiente. Toggle Llamada / WhatsApp / Ambos. El país y el comercial recortan el mapa. Clic en un tramo de Llamadas o WhatsApp abre las personas con las mismas columnas que Tiempo a contacto (creación, primer seguimiento del lead, sigla LNC./MC./etc., tiempo). Clic en una cubeta o una celda abre esas personas.
+
+Los filtros son independientes de Gestión e Informe. Mes, periodo y día usan el rango comercial. País, ocupación, tags, fuente, género y edad recortan al lead. No hay toggle Creación/Actualización: la fecha es la del contacto.
+
+Hay un filtro más, **Todos / Nuevos / En gestión**, al lado de Todos los días. Parte a las personas que se contactaron en el rango según `leads.created_at` (hora Colombia): Nuevos = creados en el mismo rango; En gestión = creados antes. En Nuevos aparece **Tiempo a contacto**: promedio hasta el primer seguimiento **después** de crear el lead, con hora y minuto reales del comentario (si el comentario no trae sigla, se heredan del recordatorio, pero la hora sigue siendo la del comentario). Solo entran leads creados entre las 9:00 y las 21:00 Colombia (un lead de las 2:00 no entra al promedio). Clic en esa tarjeta abre la lista de personas con hora de creación, hora del primer seguimiento (el comentario, no un recordatorio anterior ni el segundo intento), sigla (LNC. LC. LA. LNE. / MNC. MC. MA. MNE.) y cuánto tardó; primero los más lentos. Detalle técnico (tablas, job, backfill) en `docs/contacto.md`.
 
 ---
 
-## 16. Con qué se conecta
+## 16. Quién ve qué
+
+| Rol | Alcance |
+|-----|---------|
+| Comercial | Solo sus leads. Sus propias métricas de conversión y su propia contactación. |
+| Setter | Solo las etapas que le corresponden. En la agenda de pitch, los que él mismo agendó. Sin métricas, informes ni Contacto. |
+| Supervisor | Todos los leads, filtro por comercial, asignaciones del equipo, informes mensuales y Contacto del equipo (quién contactó). Puede definir las fechas de inicio y fin de un mes comercial. |
+
+---
+
+## 17. Con qué se conecta
 
 | Herramienta | Para qué |
 |-------------|----------|
@@ -258,7 +283,7 @@ De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 
 
 ---
 
-## 17. Dos cosas que conviene saber desde el principio
+## 18. Dos cosas que conviene saber desde el principio
 
 **Casi toda la configuración vive en la base, no en el código.** Formularios, etapas, tags, tipos de notificación y catálogo de planes salen de tablas de configuración. Por eso una funcionalidad puede "no aparecer" o "no hacer nada" en un ambiente solo porque falta una fila, sin que haya ningún error en el código.
 
@@ -266,7 +291,7 @@ De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 
 
 ---
 
-## 18. CMS del blog público
+## 19. CMS del blog público
 
 - Se entra desde el inicio, con la tarjeta **CMS Blog página WEB MD**.
 - Se puede crear un artículo en borrador y publicarlo cuando esté listo.
@@ -279,7 +304,7 @@ De Sin contacto a Matrícula el % se lee como funnel por país: Colombia 150 de 
 
 ---
 
-## 19. Lo que no existe hoy
+## 20. Lo que no existe hoy
 
 - Exportar leads, métricas o informes a Excel, CSV o PDF.
 - Chat de WhatsApp dentro del portal (por fuera se abre Respond.io o WhatsApp Web).

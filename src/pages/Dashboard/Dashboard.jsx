@@ -24,7 +24,9 @@ import CopyContactsModal from './components/CopyContactsModal';
 import MetricasAsignaciones from './components/MetricasAsignaciones';
 import MetricasPerformance from './components/MetricasPerformance';
 import Informe from './components/Informe/Informe';
-import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2, Copy } from 'lucide-react';
+import Contacto from './components/Contacto/Contacto';
+import { indexMonthConfigs, rangoDeMes } from './components/Informe/informeFiltros';
+import { LogOut, RefreshCcw, Home, Table, CalendarDays, UserPlus, BarChart3, FileBarChart2, Copy, Phone } from 'lucide-react';
 
 // Configuración de paginación
 const LEADS_PER_PAGE = 50;
@@ -672,9 +674,7 @@ export default function Dashboard() {
         .from('config_meses')
         .select('mes, fecha_inicio, fecha_fin');
       if (error) throw error;
-      const map = {};
-      (data || []).forEach(c => { map[c.mes] = c; });
-      setMonthConfigs(map);
+      setMonthConfigs(indexMonthConfigs(data));
     } catch (error) {
       console.error('Error cargando config_meses:', error.message);
     }
@@ -713,30 +713,9 @@ export default function Dashboard() {
       fechaInicio = `${inicio} 05:00:00+00`;
       fechaFin = `${fechaFinMasUno} 05:00:00+00`;
     } else if (selectedMes) {
-      const [año, mes] = selectedMes.split('-');
-      const config = monthConfigs[selectedMes];
-
-      if (config) {
-        fechaInicio = `${config.fecha_inicio} 05:00:00+00`;
-        if (config.fecha_fin) {
-          const [yF, mF, dF] = config.fecha_fin.split('-').map(Number);
-          const finMasUno = new Date(yF, mF - 1, dF + 1);
-          const fechaFinMasUno = `${finMasUno.getFullYear()}-${String(finMasUno.getMonth() + 1).padStart(2, '0')}-${String(finMasUno.getDate()).padStart(2, '0')}`;
-          fechaFin = `${fechaFinMasUno} 05:00:00+00`;
-        } else {
-          // Mes actual sin fecha_fin configurada: hasta ahora
-          const now = new Date();
-          const manana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          const fechaManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
-          fechaFin = `${fechaManana} 05:00:00+00`;
-        }
-      } else {
-        // Sin configuración: rango tradicional del 1 al último día
-        const mesSiguiente = new Date(parseInt(año), parseInt(mes), 1);
-        const fechaMesSiguiente = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, '0')}-01`;
-        fechaInicio = `${año}-${mes}-01 05:00:00+00`;
-        fechaFin = `${fechaMesSiguiente} 05:00:00+00`;
-      }
+      const rango = rangoDeMes(monthConfigs, selectedMes);
+      fechaInicio = rango?.fechaInicio ?? null;
+      fechaFin = rango?.fechaFin ?? null;
     }
 
     return { fechaInicio, fechaFin };
@@ -1624,6 +1603,7 @@ export default function Dashboard() {
           </button>
           </div>
         </div>
+        <div id="dashboard-header-filters" />
       </header>
 
       {/* --- CONTENIDO PRINCIPAL --- */}
@@ -1690,6 +1670,19 @@ export default function Dashboard() {
                 >
                   <FileBarChart2 size={18} />
                   Informe
+                </button>
+              )}
+              {!esSetter && (
+                <button
+                  onClick={() => setActiveView('contacto')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeView === 'contacto'
+                      ? 'bg-white text-[#1717AF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Phone size={18} />
+                  Contacto
                 </button>
               )}
             </div>
@@ -2109,6 +2102,16 @@ export default function Dashboard() {
                 onSaveMonthConfig={handleSaveMonthConfig}
                 comerciales={comerciales}
                 onRefreshComerciales={fetchComerciales}
+              />
+            ) : activeView === 'contacto' && !esSetter ? (
+              <Contacto
+                monthConfigs={monthConfigs}
+                onSaveMonthConfig={handleSaveMonthConfig}
+                comerciales={comerciales}
+                onRefreshComerciales={fetchComerciales}
+                puedeVerTodos={puedeVerTodos}
+                userEmail={userEmail}
+                onOpenLead={handleOpenLeadFromNotification}
               />
             ) : null}
           </div>

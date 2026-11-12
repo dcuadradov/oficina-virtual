@@ -1,6 +1,36 @@
 export const SIN_PAIS = 'Sin país';
+
+export const ETAPAS_SIN_CONTACTO = ['Sin contacto'];
+
+export const ETAPAS_GESTIONANDO = [
+  'Gestionando',
+  'Pendiente de agenda',
+  'Listo para agendar',
+  'Agendado',
+  'Interés futuro',
+  'Reprogramar',
+  'Posible matrícula',
+  'Pago pendiente',
+];
+
+export const ETAPAS_MATRICULA = ['Matrícula'];
+
+export const ETAPAS_DESCARTADO = [
+  'Descartado',
+  'No se matriculó',
+  'Matrícula caída',
+  'Dejó de contestar',
+  'MINDTAP',
+  'Datos de contacto errados',
+];
+
 export const LINE_COLORS = ['#1717AF', '#6366F1', '#10B981', '#F59E0B', '#EC4899'];
 export const COLOR_OTROS = '#94A3B8';
+export const COLOR_LEADS_OVERLAY = '#64748B';
+export const COLOR_LEADS_BAR = '#CBD5E1';
+export const OVERLAY_LEADS_KEY = 'Leads';
+export const COMPARE_METRIC_KEY = 'metrica';
+export const COMPARE_PCT_KEY = 'pct';
 export const TOP_N = 5;
 
 export function paisKey(pais) {
@@ -29,6 +59,33 @@ export function buildDayList(startDateLocal, endDateLocal) {
   return days;
 }
 
+const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+export const MAX_MESES_GRAFICA = 12;
+
+export function buildMonthList(startYm, endYm, maxMonths = MAX_MESES_GRAFICA) {
+  const months = [];
+  if (!startYm || !endYm) return months;
+  const [ys, ms] = startYm.split('-').map(Number);
+  const [ye, me] = endYm.split('-').map(Number);
+  let y = ys;
+  let m = ms;
+  while (y < ye || (y === ye && m <= me)) {
+    months.push({
+      dateKey: `${y}-${String(m).padStart(2, '0')}`,
+      dayLabel: `${MESES_CORTO[m - 1]} ${String(y).slice(2)}`,
+      dayFull: `${MESES_LARGO[m - 1]} ${y}`,
+    });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  if (maxMonths && months.length > maxMonths) return months.slice(-maxMonths);
+  return months;
+}
+
 export function dateKeyUtcMinus5(tsString) {
   if (!tsString) return null;
   const d = new Date(tsString);
@@ -50,7 +107,12 @@ export function filtrarPorEtapas(rows, etapas) {
   return (rows || []).filter((row) => set.has(row.etapa_funnel));
 }
 
-export function agregarPorPaisYDia(rows, dateField) {
+export function monthKeyUtcMinus5(tsString) {
+  const dKey = dateKeyUtcMinus5(tsString);
+  return dKey ? dKey.slice(0, 7) : null;
+}
+
+function agregarPorPais(rows, dateField, toKey) {
   const totalsByPais = {};
   const byDayByPais = {};
   let total = 0;
@@ -58,12 +120,45 @@ export function agregarPorPaisYDia(rows, dateField) {
     const key = paisKey(row.pais);
     totalsByPais[key] = (totalsByPais[key] || 0) + 1;
     total += 1;
-    const dKey = dateKeyUtcMinus5(row[dateField]);
+    const dKey = toKey(row[dateField]);
     if (!dKey) continue;
     if (!byDayByPais[dKey]) byDayByPais[dKey] = {};
     byDayByPais[dKey][key] = (byDayByPais[dKey][key] || 0) + 1;
   }
   return { totalsByPais, byDayByPais, total };
+}
+
+export function agregarPorPaisYDia(rows, dateField) {
+  return agregarPorPais(rows, dateField, dateKeyUtcMinus5);
+}
+
+export function agregarPorPaisYMes(rows, dateField) {
+  return agregarPorPais(rows, dateField, monthKeyUtcMinus5);
+}
+
+export function paisesEnFoco({ selectedPaises, selectedPais } = {}) {
+  if (Array.isArray(selectedPaises)) return selectedPaises.filter(Boolean);
+  if (Array.isArray(selectedPais)) return selectedPais.filter(Boolean);
+  if (selectedPais) return [selectedPais];
+  return [];
+}
+
+export function sumByPaises(byPais = {}, paises = []) {
+  return (paises || []).reduce((acc, pais) => acc + (byPais?.[pais] || 0), 0);
+}
+
+export function etiquetaPaises(paises = []) {
+  if (!paises.length) return '';
+  if (paises.length === 1) return paises[0];
+  if (paises.length === 2) return `${paises[0]} + ${paises[1]}`;
+  return `${paises.length} países`;
+}
+
+export function togglePaisSeleccionado(selected = [], pais) {
+  if (!pais) return selected;
+  return selected.includes(pais)
+    ? selected.filter((item) => item !== pais)
+    : [...selected, pais];
 }
 
 export function sortedPaises({
@@ -83,7 +178,87 @@ export function sortedPaises({
         count,
         sharePct,
         pct: conversionPct,
+        baselineCount: pctMode === 'funnel' ? (baselineByPais?.[pais] || 0) : null,
       };
     })
     .sort((a, b) => b.count - a.count);
+}
+
+export function buildPaisChartRows({
+  days = [],
+  byDayByPais = {},
+  overlayByDayByPais = null,
+  selectedPais = null,
+  selectedPaises = null,
+  topPaises = [],
+  otrosPaises = [],
+} = {}) {
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
+    const row = { day: dayLabel, dateKey, dayFull };
+    const byPais = byDayByPais?.[dateKey] || {};
+    if (foco.length) {
+      row[COMPARE_METRIC_KEY] = sumByPaises(byPais, foco);
+      if (overlayByDayByPais) {
+        row[OVERLAY_LEADS_KEY] = sumByPaises(overlayByDayByPais[dateKey], foco);
+      }
+      return row;
+    }
+    topPaises.forEach((p) => { row[p.pais] = byPais[p.pais] || 0; });
+    if (otrosPaises.length) {
+      row.Otros = otrosPaises.reduce((acc, p) => acc + (byPais[p.pais] || 0), 0);
+    }
+    return row;
+  });
+}
+
+export function buildPaisLineDefs({
+  selectedPais = null,
+  selectedPaises = null,
+  showLeadsOverlay = false,
+  topPaises = [],
+  otrosPaises = [],
+  colorByPais = {},
+} = {}) {
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  if (foco.length) {
+    const out = [{
+      key: COMPARE_METRIC_KEY,
+      color: colorByPais[foco[0]] || LINE_COLORS[0],
+    }];
+    if (showLeadsOverlay) {
+      out.push({
+        key: OVERLAY_LEADS_KEY,
+        color: COLOR_LEADS_OVERLAY,
+        dashed: true,
+      });
+    }
+    return out;
+  }
+  const out = topPaises.map((p, i) => ({ key: p.pais, color: LINE_COLORS[i] }));
+  if (otrosPaises.length) out.push({ key: 'Otros', color: COLOR_OTROS });
+  return out;
+}
+
+export function buildPaisCompareMonthRows({
+  days = [],
+  byDayByPais = {},
+  overlayByDayByPais = {},
+  selectedPais = null,
+  selectedPaises = null,
+} = {}) {
+  const foco = paisesEnFoco({ selectedPaises, selectedPais });
+  if (!foco.length) return [];
+  return (days || []).map(({ dateKey, dayLabel, dayFull }) => {
+    const metric = sumByPaises(byDayByPais?.[dateKey], foco);
+    const leads = sumByPaises(overlayByDayByPais?.[dateKey], foco);
+    return {
+      day: dayLabel,
+      dateKey,
+      dayFull,
+      [OVERLAY_LEADS_KEY]: leads,
+      [COMPARE_METRIC_KEY]: metric,
+      [COMPARE_PCT_KEY]: funnelPct(metric, leads),
+    };
+  });
 }
