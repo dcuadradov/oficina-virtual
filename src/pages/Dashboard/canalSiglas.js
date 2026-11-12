@@ -1,5 +1,5 @@
-export const OPCIONES_LLAMADA = ['LNC.', 'LC.', 'LA.'];
-export const OPCIONES_MENSAJE = ['MC.', 'MNC.', 'MA.'];
+export const OPCIONES_LLAMADA = ['LNC.', 'LC.', 'LA.', 'LNE.'];
+export const OPCIONES_MENSAJE = ['MC.', 'MNC.', 'MA.', 'MNE.'];
 export const SIGLA_LLAMADA_DEFAULT = 'LNC.';
 export const SIGLA_MENSAJE_DEFAULT = 'MNC.';
 
