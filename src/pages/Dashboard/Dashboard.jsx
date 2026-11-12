@@ -16,7 +16,15 @@ import { resolvePitchRange } from '../../utils/pitchRange';
 import { sinSalto } from './pitchCharts';
 import { contarPaises, opcionesPais } from './paisFilter';
 import { enriquecerComentarioConCanal } from './canalSiglas';
-import { collectContacts, CONTACT_PAGE_SIZE, nextContactPage } from './copyContacts';
+import { collectContacts, CONTACT_PAGE_SIZE, MAX_CONTACT_ROWS } from './copyContacts';
+import {
+  aplicarPlanFechaAQuery,
+  columnasRefLeads,
+  fusionarLeadsPorCardId,
+  ordenarLeadsPorCampo,
+  recolectarFilasLeads,
+  resolverFechaGestion,
+} from './fetchMatriculaHistorial';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
 import CrearLeadModal from './components/CrearLeadModal';
@@ -758,24 +766,25 @@ export default function Dashboard() {
         }
       }
 
-      const PAGE_SIZE = 1000;
-      const pages = [];
-      let from = 0;
-      let keepFetching = true;
       const fasesEmdi = ['340832804', '339756097', '341769991'];
+      const { plan, matriculaIds } = await resolverFechaGestion(supabase, {
+        dateFilterField,
+        fechaInicio,
+        fechaFin,
+        activeEtapas,
+      });
+      if (fetchId !== paisFetchId.current) return;
 
-      while (keepFetching) {
+      const buildPaisQuery = (selectCols, rama = 'unica') => {
         let q = aplicarVisibilidadFases(
-          supabase.from('leads').select('pais')
+          supabase.from('leads').select(selectCols)
         );
         if (puedeVerTodos && selectedComercial) {
           q = q.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos) {
           q = q.eq('comercial_email', userEmail);
         }
-        if (fechaInicio && fechaFin) {
-          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
-        }
+        q = aplicarPlanFechaAQuery(q, plan, { matriculaIds, rama });
         if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
         if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
@@ -814,20 +823,19 @@ export default function Dashboard() {
         } else if (filtroGestionWA === 'personal') {
           q = q.eq('gestion_whatsapp_personal', true);
         }
+        return q;
+      };
 
-        const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
-        if (error) throw error;
-        if (fetchId !== paisFetchId.current) return;
+      const { rows, cancelled } = await recolectarFilasLeads(
+        buildPaisQuery,
+        plan,
+        matriculaIds,
+        'pais',
+        { cancelled: () => fetchId !== paisFetchId.current },
+      );
+      if (cancelled || fetchId !== paisFetchId.current) return;
 
-        pages.push(data || []);
-        if (!data || data.length < PAGE_SIZE) {
-          keepFetching = false;
-        } else {
-          from += PAGE_SIZE;
-        }
-      }
-
-      publicar(pages);
+      publicar([rows]);
     } catch (error) {
       console.error('Error cargando países:', error);
     }
@@ -857,24 +865,25 @@ export default function Dashboard() {
         }
       }
 
-      const pages = [];
-      let from = 0;
-      let truncated = false;
-      let keepFetching = true;
       const fasesEmdi = ['340832804', '339756097', '341769991'];
+      const { plan, matriculaIds } = await resolverFechaGestion(supabase, {
+        dateFilterField,
+        fechaInicio,
+        fechaFin,
+        activeEtapas,
+      });
+      if (fetchId !== copyFetchId.current) return empty;
 
-      while (keepFetching) {
+      const buildContactosQuery = (selectCols, rama = 'unica') => {
         let q = aplicarVisibilidadFases(
-          supabase.from('leads').select('telefono, email')
+          supabase.from('leads').select(selectCols)
         );
         if (puedeVerTodos && selectedComercial) {
           q = q.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos) {
           q = q.eq('comercial_email', userEmail);
         }
-        if (fechaInicio && fechaFin) {
-          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
-        }
+        q = aplicarPlanFechaAQuery(q, plan, { matriculaIds, rama });
         if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
         if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
@@ -914,18 +923,23 @@ export default function Dashboard() {
         } else if (filtroGestionWA === 'personal') {
           q = q.eq('gestion_whatsapp_personal', true);
         }
+        return q;
+      };
 
-        const { data, error } = await q.range(from, from + CONTACT_PAGE_SIZE - 1);
-        if (error) throw error;
-        if (fetchId !== copyFetchId.current) return empty;
-        pages.push(data || []);
-        const step = nextContactPage(from, data?.length || 0);
-        truncated = step.truncated;
-        keepFetching = !step.done;
-        from = step.nextFrom;
-      }
+      const { rows, truncated, cancelled } = await recolectarFilasLeads(
+        buildContactosQuery,
+        plan,
+        matriculaIds,
+        'telefono, email',
+        {
+          pageSize: CONTACT_PAGE_SIZE,
+          maxRows: MAX_CONTACT_ROWS,
+          cancelled: () => fetchId !== copyFetchId.current,
+        },
+      );
+      if (cancelled || fetchId !== copyFetchId.current) return empty;
 
-      return { ...collectContacts(pages), truncated };
+      return { ...collectContacts([rows]), truncated };
     } catch (error) {
       console.error('Error cargando contactos:', error);
       return empty;
@@ -1033,22 +1047,25 @@ export default function Dashboard() {
         return;
       }
 
-      const PAGE_SIZE = 1000;
-      let allLeads = [];
-      let from = 0;
-      let keepFetching = true;
-
       const hace24Horas = (filtroWhatsApp === 'abierta' || filtroWhatsApp === 'cerrada')
         ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
         : null;
       const fasesEmdi = ['340832804', '339756097', '341769991'];
       const nowISO = new Date().toISOString();
+      // Los chips cuentan todas las etapas: Matrícula por historial, el resto
+      // por updated_at cuando el toggle es Actualización.
+      const { plan, matriculaIds } = await resolverFechaGestion(supabase, {
+        dateFilterField,
+        fechaInicio,
+        fechaFin,
+        activeEtapas: [],
+      });
 
-      while (keepFetching) {
+      const buildStatsQuery = (selectCols, rama = 'unica') => {
         let statsQuery = aplicarVisibilidadFases(
           supabase
             .from('leads')
-            .select('estado_gestion, etapa_funnel, fecha_gestion, card_id, label')
+            .select(selectCols)
         );
 
         if (puedeVerTodos && selectedComercial) {
@@ -1057,9 +1074,7 @@ export default function Dashboard() {
           statsQuery = statsQuery.eq('comercial_email', userEmail);
         }
 
-        if (fechaInicio && fechaFin) {
-          statsQuery = statsQuery.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
-        }
+        statsQuery = aplicarPlanFechaAQuery(statsQuery, plan, { matriculaIds, rama });
 
         if (selectedTag.length > 0) {
           statsQuery = statsQuery.in('label', selectedTag);
@@ -1105,16 +1120,16 @@ export default function Dashboard() {
           statsQuery = statsQuery.eq('gestion_whatsapp_personal', true);
         }
 
-        const { data, error: statsError } = await statsQuery.range(from, from + PAGE_SIZE - 1);
-        if (statsError) throw statsError;
+        return statsQuery;
+      };
 
-        allLeads = allLeads.concat(data || []);
-        if (!data || data.length < PAGE_SIZE) {
-          keepFetching = false;
-        } else {
-          from += PAGE_SIZE;
-        }
-      }
+      const { rows } = await recolectarFilasLeads(
+        buildStatsQuery,
+        plan,
+        matriculaIds,
+        'estado_gestion, etapa_funnel, fecha_gestion, card_id, label',
+      );
+      let allLeads = fusionarLeadsPorCardId(rows);
 
       // Aplicar filtro por categoría de seguimiento (post-query porque requiere join con comentarios)
       if (selectedCategoria) {
@@ -1194,18 +1209,23 @@ export default function Dashboard() {
         setLoading(false); setIsRefreshing(false); return;
       }
 
-      const buildQuery = (selectCols = '*') => {
+      const { plan, matriculaIds } = await resolverFechaGestion(supabase, {
+        dateFilterField,
+        fechaInicio,
+        fechaFin,
+        activeEtapas,
+      });
+
+      const buildQuery = (selectCols = '*', rama = 'unica', { withCount = true } = {}) => {
         let q = aplicarVisibilidadFases(
-          supabase.from('leads').select(selectCols, { count: 'exact' })
+          supabase.from('leads').select(selectCols, withCount ? { count: 'exact' } : undefined)
         );
         if (puedeVerTodos && selectedComercial) {
           q = q.eq('comercial_email', selectedComercial);
         } else if (!puedeVerTodos) {
           q = q.eq('comercial_email', userEmail);
         }
-        if (fechaInicio && fechaFin) {
-          q = q.gte(dateFilterField, fechaInicio).lte(dateFilterField, fechaFin);
-        }
+        q = aplicarPlanFechaAQuery(q, plan, { matriculaIds, rama });
         if (activeFilter !== 'todos') q = q.eq('estado_gestion', activeFilter);
         if (activeEtapas.length > 0) q = q.in('etapa_funnel', activeEtapas);
         if (searchQuery && searchQuery.trim()) {
@@ -1250,33 +1270,31 @@ export default function Dashboard() {
       };
 
       let data, totalCount;
+      const needsClientPage = plan.kind === 'mixto' || filtroSinSeguimiento;
 
-      if (filtroSinSeguimiento) {
-        // IDs de leads que tienen al menos un comentario (cualquier origen)
-        const { data: conSeg } = await supabase
-          .from('comentarios')
-          .select('lead_id');
-        const idsConSeg = new Set((conSeg || []).map(c => c.lead_id));
+      if (needsClientPage) {
+        const sortField = filtroSinSeguimiento ? 'updated_at' : sortConfig.field;
+        const { rows: allRefsRaw } = await recolectarFilasLeads(
+          (selectCols, rama) => buildQuery(selectCols, rama, { withCount: false }),
+          plan,
+          matriculaIds,
+          columnasRefLeads(sortField),
+        );
+        const allRefs = fusionarLeadsPorCardId(allRefsRaw);
 
-        // Fetch ligero: solo card_id + updated_at de todos los leads filtrados
-        let allRefs = [];
-        let batchOffset = 0;
-        const BATCH = 1000;
-        while (true) {
-          const qBatch = buildQuery('card_id, updated_at');
-          const { data: batch } = await qBatch
-            .order('updated_at', { ascending: true })
-            .range(batchOffset, batchOffset + BATCH - 1);
-          if (!batch || batch.length === 0) break;
-          allRefs = allRefs.concat(batch);
-          if (batch.length < BATCH) break;
-          batchOffset += BATCH;
+        let combined = allRefs;
+        if (filtroSinSeguimiento) {
+          const { data: conSeg } = await supabase
+            .from('comentarios')
+            .select('lead_id');
+          const idsConSeg = new Set((conSeg || []).map(c => c.lead_id));
+          const ordered = ordenarLeadsPorCampo(allRefs, { field: 'updated_at', ascending: true });
+          const sinSeg = ordered.filter(l => !idsConSeg.has(l.card_id));
+          const conSegLeads = ordered.filter(l => idsConSeg.has(l.card_id));
+          combined = [...sinSeg, ...conSegLeads];
+        } else {
+          combined = ordenarLeadsPorCampo(allRefs, sortConfig);
         }
-
-        // Separar en sin/con seguimiento (ambos ya ordenados por updated_at ASC)
-        const sinSeg = allRefs.filter(l => !idsConSeg.has(l.card_id));
-        const conSegLeads = allRefs.filter(l => idsConSeg.has(l.card_id));
-        const combined = [...sinSeg, ...conSegLeads];
 
         totalCount = combined.length;
         const from = page * LEADS_PER_PAGE;
@@ -1725,6 +1743,11 @@ export default function Dashboard() {
                   onRefreshComerciales={fetchComerciales}
                   dateFilterField={dateFilterField}
                   onDateFilterFieldChange={setDateFilterField}
+                  dateFilterToggleHint={
+                    dateFilterField === 'created_at'
+                      ? 'Filtrar fechas por creación del lead'
+                      : 'En Matrícula: fecha de entrada a la fase. En el resto: última actualización'
+                  }
                   puedeVerTodos={puedeVerTodos}
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}

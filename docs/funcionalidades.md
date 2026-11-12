@@ -34,6 +34,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede buscar por nombre, correo, teléfono, país, etapa o ID de tarjeta.
 - Se puede filtrar por mes, por semana comercial (martes a lunes) o por un día puntual.
 - Se puede elegir si esa fecha corresponde a la creación del lead o a su última actualización.
+- En **Actualización**, Matrícula no usa la última edición del lead: el chip y el listado cuentan cuándo el lead **entró por primera vez** a esa fase (`historial.created_at`), y solo si hoy sigue en Matrícula. Un comentario o un cambio de tag ya no mueve la matrícula de periodo. Las demás etapas siguen usando la última actualización. **Creación** no cambia.
 - Se puede filtrar por fuente, tag, referido y categoría de seguimiento.
 - En **Gestión** se puede filtrar por país del lead. Se pueden marcar varios: el lead entra si es de cualquiera de ellos, y ese resultado se sigue combinando con fuente, tag, comercial, fechas y el resto. La lista de países solo muestra los que tienen leads con los demás filtros activos, y al lado de cada uno va cuántos leads son. En el listado se puede escribir para buscar el país (no distingue mayúsculas ni tildes).
 - En **Referido por** se puede escribir para ir filtrando la lista al momento (no distingue mayúsculas ni tildes). Si no hay coincidencias, muestra “Sin resultados”.
@@ -186,7 +187,7 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 
 **Pitch**
 
-- Se puede ver diez indicadores: efectividad, asistencia, porcentaje de matrícula, no matrícula, pago pendiente, posible matrícula, reprobado, interés futuro, reprogramado y sin reprogramar.
+- Se puede ver diez indicadores: efectividad, asistencia, porcentaje de matrícula, no matrícula, pago pendiente, posible matrícula, reprobado, interés futuro, reprogramado y sin reprogramar. El número grande de Matrícula sigue siendo el resultado del pitch en la fecha del pitch. El de **Reales** es el mismo conteo que Gestión > Matrícula con Actualización: primera entrada a Matrícula en el historial, si el lead sigue ahí hoy.
 - Se puede ver los pitches en un calendario por día y hora, con color según cómo terminó cada uno.
 - Se puede abrir el lead desde cualquier pitch del calendario.
 - Se puede cruzar todo eso por profesión, género, edad, ciudad y país.

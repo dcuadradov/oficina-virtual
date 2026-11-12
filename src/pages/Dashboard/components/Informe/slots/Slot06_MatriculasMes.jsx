@@ -32,8 +32,9 @@ export default function Slot06_MatriculasMes({ selectedMes, monthConfigs, filtro
   }, [selectedMonthIdx, matriculas2026Dynamic]);
 
   // Carga matrículas 2026 desde Supabase (marzo en adelante).
-  // Criterio: etapa_funnel = 'Matrícula' + updated_at dentro del rango del mes.
-  // Mismo criterio que el KPI "Matrícula Real" en Mis Pitch para mantener consistencia.
+  // Criterio Informe: etapa_funnel = 'Matrícula' + updated_at del mes.
+  // Mis Pitch "Reales" y Gestión > Matrícula (Actualización) datan por la
+  // primera entrada a Matrícula en historial; este slot todavía no.
   useEffect(() => {
     let cancelled = false;
     const cargar = async () => {
