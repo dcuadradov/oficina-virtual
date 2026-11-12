@@ -14,6 +14,7 @@ import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
 import { resolvePitchRange } from '../../utils/pitchRange';
 import { contarPaises, opcionesPais } from './paisFilter';
+import { enriquecerComentarioConCanal } from './canalSiglas';
 import { collectContacts, CONTACT_PAGE_SIZE, nextContactPage } from './copyContacts';
 import RecordatoriosCalendar from './components/RecordatoriosCalendar';
 import NotificacionesBell from './components/NotificacionesBell';
@@ -1328,17 +1329,28 @@ export default function Dashboard() {
 
       if (data && data.length > 0) {
         const cardIds = data.map(lead => lead.card_id);
-        const { data: comentarios, error: errorComentarios } = await supabase
-          .from('comentarios')
-          .select('lead_id, texto, created_at, categoria')
-          .in('lead_id', cardIds)
-          .order('created_at', { ascending: false });
+        const [{ data: comentarios, error: errorComentarios }, { data: recs }] = await Promise.all([
+          supabase
+            .from('comentarios')
+            .select('lead_id, texto, created_at, categoria, llamada, mensaje, origen')
+            .in('lead_id', cardIds)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('recordatorios')
+            .select('lead_id, observacion, llamada, mensaje, created_at')
+            .in('lead_id', cardIds),
+        ]);
 
         if (!errorComentarios && comentarios) {
+          const recsPorLead = {};
+          (recs || []).forEach((r) => {
+            if (!recsPorLead[r.lead_id]) recsPorLead[r.lead_id] = [];
+            recsPorLead[r.lead_id].push(r);
+          });
           const ultimosMap = {};
           comentarios.forEach(c => {
             if (!ultimosMap[c.lead_id]) {
-              ultimosMap[c.lead_id] = c;
+              ultimosMap[c.lead_id] = enriquecerComentarioConCanal(c, recsPorLead[c.lead_id] || []);
             }
           });
           setUltimosSeguimientos(ultimosMap);
