@@ -7,11 +7,11 @@ import {
   etiquetaMes,
   etiquetaRangoComercial,
   facetasCruzadas,
-  getCurrentMonthKey,
   indexMonthConfigs,
   parseInformeDates,
   rowMatchesInformeDims,
 } from '../Informe/informeFiltros';
+import { periodoComercialActual } from '../../../../utils/pitchRange';
 import ContactoCanalBars from './ContactoCanalBars';
 import ContactoCohorteFilter from './ContactoCohorteFilter';
 import ContactoHeatmap from './ContactoHeatmap';
@@ -147,8 +147,9 @@ export default function Contacto({
   userEmail,
   onOpenLead,
 }) {
-  const [selectedMes, setSelectedMes] = useState(getCurrentMonthKey);
-  const [selectedPeriodo, setSelectedPeriodo] = useState(null);
+  const periodoEnCurso = useMemo(() => periodoComercialActual(), []);
+  const [selectedMes, setSelectedMes] = useState(null);
+  const [selectedPeriodo, setSelectedPeriodo] = useState(() => periodoEnCurso.value);
   const [selectedDia, setSelectedDia] = useState(null);
   const [selectedPais, setSelectedPais] = useState([]);
   const [selectedComercial, setSelectedComercial] = useState(null);
@@ -205,22 +206,30 @@ export default function Contacto({
     if (selectedMes && !selectedDia && !selectedPeriodo && !configsListos) {
       return { fechaInicio: null, fechaFin: null, startDateLocal: null, endDateLocal: null };
     }
-    return parseInformeDates({
+    const parsed = parseInformeDates({
       selectedDia,
       selectedPeriodo,
       selectedMes,
       monthConfigs: configsMes,
     });
-  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos]);
+    if (parsed.startDateLocal && parsed.endDateLocal) return parsed;
+    return parseInformeDates({
+      selectedPeriodo: periodoEnCurso.value,
+      monthConfigs: configsMes,
+    });
+  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos, periodoEnCurso]);
   const rangoEtiqueta = etiquetaRangoComercial(rango);
 
   const autorFiltro = !puedeVerTodos ? userEmail : selectedComercial;
 
   const fetchDatos = useCallback(async () => {
     if (selectedMes && !selectedDia && !selectedPeriodo && !configsListos) return;
-    const { startDateLocal, endDateLocal } = parseInformeDates({
+    const parsed = parseInformeDates({
       selectedDia, selectedPeriodo, selectedMes, monthConfigs: configsMes,
     });
+    const { startDateLocal, endDateLocal } = (parsed.startDateLocal && parsed.endDateLocal)
+      ? parsed
+      : parseInformeDates({ selectedPeriodo: periodoEnCurso.value, monthConfigs: configsMes });
     if (!startDateLocal || !endDateLocal) return;
     if (!puedeVerTodos && !userEmail) return;
 
@@ -283,7 +292,7 @@ export default function Contacto({
     } finally {
       setLoading(false);
     }
-  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos, autorFiltro, puedeVerTodos, userEmail]);
+  }, [selectedDia, selectedPeriodo, selectedMes, configsMes, configsListos, autorFiltro, puedeVerTodos, userEmail, periodoEnCurso]);
 
   useEffect(() => {
     fetchDatos();
@@ -500,8 +509,10 @@ export default function Contacto({
         <h2 className="text-lg font-semibold text-slate-800">Contacto</h2>
         <p className="text-xs text-slate-500 mt-0.5">
           Personas, no intentos. Gana el resultado más cerca del agendamiento.
-          {rangoEtiqueta && selectedMes && !selectedDia && !selectedPeriodo
-            ? ` ${etiquetaMes(selectedMes)} cuenta ${rangoEtiqueta}.`
+          {rangoEtiqueta
+            ? (selectedMes && !selectedDia && !selectedPeriodo
+              ? ` ${etiquetaMes(selectedMes)} cuenta ${rangoEtiqueta}.`
+              : ` ${rangoEtiqueta}.`)
             : ''}
         </p>
       </div>
@@ -527,6 +538,7 @@ export default function Contacto({
         showReferidoFilter={false}
         showGestionWAFilter={false}
         showDateFilterToggle={false}
+        periodoImplicito={periodoEnCurso}
         puedeVerTodos={puedeVerTodos}
         monthConfigs={configsMes}
         onSaveMonthConfig={onSaveMonthConfig}
