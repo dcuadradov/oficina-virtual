@@ -22,8 +22,8 @@ const parseDT = (s) => {
  * el lead (comercial, tag y dimensiones). El pool se acota SOLO por periodo
  * para que los filtros facetados se calculen aguas arriba, igual que Análisis.
  *
- * Devuelve filas: { id, card_id, comercial_email, label, ocupacion, sexo,
- * edad, ciudad, pais, cierre_pitch, parsed }.
+ * Devuelve filas: { id, card_id, nombre, comercial_email, label, ocupacion,
+ * sexo, edad, ciudad, pais, cierre_pitch, parsed }.
  */
 export function usePitchAgendamientoUniverse({ enabled, rangeStart, rangeEnd, esSetter = false, userEmail = null }) {
   const [rows, setRows] = useState([]);
@@ -41,11 +41,20 @@ export function usePitchAgendamientoUniverse({ enabled, rangeStart, rangeEnd, es
         const lo = addDays(rangeStart, -1); lo.setHours(0, 0, 0, 0);
         const hi = addDays(rangeEnd, 2); hi.setHours(0, 0, 0, 0);
 
-        const { data: prData, error: prErr } = await supabase
+        let { data: prData, error: prErr } = await supabase
           .from('pitches_resultados')
           .select('id, card_id, cierre_pitch, fecha_pitch')
           .gte('fecha_pitch', isoDay(lo))
           .lt('fecha_pitch', isoDay(hi));
+        if (prErr && /cierre_pitch/.test(prErr.message || '')) {
+          const retry = await supabase
+            .from('pitches_resultados')
+            .select('id, card_id, fecha_pitch')
+            .gte('fecha_pitch', isoDay(lo))
+            .lt('fecha_pitch', isoDay(hi));
+          prData = retry.data;
+          prErr = retry.error;
+        }
         if (prErr) throw prErr;
         if (cancelled) return;
 
@@ -55,7 +64,7 @@ export function usePitchAgendamientoUniverse({ enabled, rangeStart, rangeEnd, es
         if (cardIds.length > 0) {
           let leadsQuery = supabase
             .from('leads')
-            .select('card_id, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
+            .select('card_id, nombre, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
             .in('card_id', cardIds);
           if (esSetter && userEmail) leadsQuery = leadsQuery.eq('setter_email', userEmail);
           const { data: leadsData, error: leadsErr } = await leadsQuery;
@@ -77,6 +86,7 @@ export function usePitchAgendamientoUniverse({ enabled, rangeStart, rangeEnd, es
           built.push({
             id: p.id,
             card_id: p.card_id,
+            nombre: lead.nombre,
             comercial_email: lead.comercial_email,
             label: lead.label,
             ocupacion: lead.ocupacion,

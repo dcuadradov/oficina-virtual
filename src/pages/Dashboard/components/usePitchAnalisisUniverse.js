@@ -51,8 +51,8 @@ const parseDT = (s) => {
  * periodo + sub-tab (no por comercial/tags/dimensiones) para que las opciones
  * de los filtros se calculen de forma facetada aguas arriba.
  *
- * Devuelve filas: { card_id, comercial_email, label, ocupacion, sexo, edad,
- * ciudad, pais, cat, sub, stage, matricula, parsed }.
+ * Devuelve filas: { card_id, nombre, comercial_email, label, ocupacion, sexo,
+ * edad, ciudad, pais, cat, sub, stage, matricula, parsed }.
  */
 export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd, esSetter = false, userEmail = null }) {
   const [rows, setRows] = useState([]);
@@ -67,15 +67,20 @@ export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd
     const load = async () => {
       setLoading(true);
       try {
-        const results = getSubTabConfig(subTab).results;
+        const config = getSubTabConfig(subTab);
+        const results = config.results;
         if (results.length === 0) { setRows([]); setLoading(false); return; }
 
         const lo = addDays(rangeStart, -1); lo.setHours(0, 0, 0, 0);
         const hi = addDays(rangeEnd, 2); hi.setHours(0, 0, 0, 0);
 
+        const pitchCols = config.levels.includes('matricula')
+          ? 'card_id, pitch_result, pitch_stage, motivo_no_matricula, motivo_no_matricula_categoria, motivo_matricula, fecha_pitch'
+          : 'card_id, pitch_result, pitch_stage, motivo_no_matricula, motivo_no_matricula_categoria, fecha_pitch';
+
         const { data: prData, error: prErr } = await supabase
           .from('pitches_resultados')
-          .select('card_id, pitch_result, pitch_stage, motivo_no_matricula, motivo_no_matricula_categoria, motivo_matricula, fecha_pitch')
+          .select(pitchCols)
           .in('pitch_result', results)
           .gte('fecha_pitch', isoDay(lo))
           .lt('fecha_pitch', isoDay(hi));
@@ -88,7 +93,7 @@ export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd
         if (cardIds.length > 0) {
           let leadsQuery = supabase
             .from('leads')
-            .select('card_id, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
+            .select('card_id, nombre, comercial_email, label, ocupacion, sexo, edad, ciudad, pais')
             .in('card_id', cardIds);
           // Setter: el universo base solo acota por setter_email (comercial/tags
           // se filtran aguas abajo en Dashboard, igual que para comerciales).
@@ -111,6 +116,7 @@ export function usePitchAnalisisUniverse({ enabled, subTab, rangeStart, rangeEnd
           if (parsed.dateLocal < start || parsed.dateLocal > end) continue;
           built.push({
             card_id: p.card_id,
+            nombre: lead.nombre,
             comercial_email: lead.comercial_email,
             label: lead.label,
             ocupacion: lead.ocupacion,
