@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
-import { bucketsDeVista, leadsUnicosDeFilas } from '../pitchCharts';
+import { bucketsDeVista, leadsUnicosDeFilas, sinSalto } from '../pitchCharts';
 import PitchRightPanel from './PitchRightPanel';
 
 const SIN = '__SIN__';
@@ -120,26 +120,15 @@ export default function PitchAgendamiento({
 
   const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={32} className="text-[#1717AF] animate-spin" />
-      </div>
-    );
-  }
-
-  if (rows.length === 0) {
-    return (
-      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
-        <div className="text-sm font-medium text-slate-600">Sin datos en este periodo</div>
-        <div className="text-xs text-slate-400 mt-1">No hay pitches con los filtros actuales.</div>
-      </div>
-    );
-  }
-
   return (
+    <div className="relative" style={{ overflowAnchor: 'none' }}>
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl bg-white/70">
+          <Loader2 size={32} className="text-[#1717AF] animate-spin" />
+        </div>
+      )}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-      <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
+      <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 flex flex-col h-[28rem]">
         <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-baseline gap-2">
           Canal de agendamiento
           <span className="text-xs font-medium text-slate-400">
@@ -147,10 +136,14 @@ export default function PitchAgendamiento({
           </span>
         </h3>
         <div className="mt-1">
+          {rows.length === 0 && !loading && (
+            <p className="px-1 py-2 text-xs text-slate-400">No hay pitches con los filtros actuales.</p>
+          )}
           {list.map(item => (
             <button
               key={item.key}
               type="button"
+              onMouseDown={sinSalto}
               onClick={() => toggle(item.key)}
               className="w-full flex items-center gap-2.5 px-1 py-1.5 rounded-lg text-left transition-colors hover:bg-slate-50"
             >
@@ -186,6 +179,7 @@ export default function PitchAgendamiento({
         unitPlural="pitches"
         pct={pct}
       />
+    </div>
     </div>
   );
 }

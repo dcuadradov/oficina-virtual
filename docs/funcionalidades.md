@@ -189,6 +189,7 @@ Detalle técnico en [presentacion-personalizada.md](./presentacion-personalizada
 - Se puede ver los pitches en un calendario por día y hora, con color según cómo terminó cada uno.
 - Se puede abrir el lead desde cualquier pitch del calendario.
 - Se puede cruzar todo eso por profesión, género, edad, ciudad y país.
+- Al cambiar entre Agenda, Agendamiento y Análisis, o al marcar motivos, canales y las pestañas del panel derecho, la pantalla se queda en el mismo lugar: no salta ni se recorre sola.
 
 **Análisis post-pitch**
 

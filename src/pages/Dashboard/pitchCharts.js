@@ -64,6 +64,10 @@ export function bucketsDeVista(viewMode, rangeStart, rangeEnd) {
   return list;
 }
 
+export function sinSalto(e) {
+  e.preventDefault();
+}
+
 export function leadsUnicosDeFilas(rows = []) {
   const map = new Map();
   for (const row of rows || []) {

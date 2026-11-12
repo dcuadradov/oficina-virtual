@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { ANALISIS_SUBTABS, getSubTabConfig } from './usePitchAnalisisUniverse';
-import { bucketsDeVista, leadsUnicosDeFilas } from '../pitchCharts';
+import { bucketsDeVista, leadsUnicosDeFilas, sinSalto } from '../pitchCharts';
 import PitchRightPanel from './PitchRightPanel';
 
 const SIN = '__SIN__';
@@ -160,12 +160,14 @@ export default function PitchAnalisis({
   const pct = (n) => (totalLeads > 0 ? Math.round((n / totalLeads) * 100) : 0);
 
   return (
-    <div>
+    <div style={{ overflowAnchor: 'none' }}>
       {/* Sub-tabs del Análisis */}
       <div className="flex items-center gap-1 border-b border-slate-200 mb-4">
         {ANALISIS_SUBTABS.map(t => (
           <button
             key={t.id}
+            type="button"
+            onMouseDown={sinSalto}
             onClick={() => onSubTabChange?.(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
               subTab === t.id ? 'border-[#1717AF] text-[#1717AF]' : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -177,68 +179,67 @@ export default function PitchAnalisis({
       </div>
 
       {levels.length === 0 ? (
-        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center min-h-[28rem] flex flex-col items-center justify-center">
           <div className="text-sm font-medium text-slate-600">{config.label}</div>
           <div className="text-xs text-slate-400 mt-1">Próximamente.</div>
         </div>
-      ) : loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="text-[#1717AF] animate-spin" />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 px-6 py-16 text-center">
-          <div className="text-sm font-medium text-slate-600">Sin datos en este periodo</div>
-          <div className="text-xs text-slate-400 mt-1">No hay pitches en este sub-tab con los filtros actuales.</div>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {/* Panel de motivos (scrollable) */}
-          <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-baseline gap-2">
-              Motivos
-              <span className="text-xs font-medium text-slate-400">
-                {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'}
-              </span>
-            </h3>
-            <div className="overflow-y-auto pr-1" style={{ maxHeight: '460px' }}>
-              {levels.map((lv, idx) => {
-                const list = listFor(idx);
-                const isActive = safeActive === lv;
-                return (
-                  <div key={lv} className={idx > 0 ? 'mt-4' : ''}>
-                    {levels.length > 1 && (
-                      <LevelHeader label={LEVEL_META[lv].label} active={isActive} onClick={() => setActiveLevel(lv)} />
-                    )}
-                    <div className="mt-1">
-                      {list.length === 0 ? (
-                        <p className="px-1 py-2 text-xs text-slate-400">Sin opciones</p>
-                      ) : list.map(item => (
-                        <ItemRow
-                          key={item.value}
-                          label={labelFor(lv, item.value)}
-                          count={item.count}
-                          pct={pct(item.count)}
-                          checked={(selected[lv] || []).includes(item.value)}
-                          dim={item.value === SIN}
-                          color={isActive ? colorMap.get(item.value) : null}
-                          onClick={() => toggle(lv, item.value)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+        <div className="relative">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl bg-white/70">
+              <Loader2 size={32} className="text-[#1717AF] animate-spin" />
             </div>
-          </div>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            <div className="lg:col-span-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 flex flex-col h-[28rem]">
+              <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-baseline gap-2 flex-shrink-0">
+                Motivos
+                <span className="text-xs font-medium text-slate-400">
+                  {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'}
+                </span>
+              </h3>
+              <div className="overflow-y-auto pr-1 flex-1 min-h-0">
+                {rows.length === 0 && !loading ? (
+                  <p className="px-1 py-2 text-xs text-slate-400">No hay pitches en este sub-tab con los filtros actuales.</p>
+                ) : levels.map((lv, idx) => {
+                  const list = listFor(idx);
+                  const isActive = safeActive === lv;
+                  return (
+                    <div key={lv} className={idx > 0 ? 'mt-4' : ''}>
+                      {levels.length > 1 && (
+                        <LevelHeader label={LEVEL_META[lv].label} active={isActive} onClick={() => setActiveLevel(lv)} />
+                      )}
+                      <div className="mt-1">
+                        {list.length === 0 ? (
+                          <p className="px-1 py-2 text-xs text-slate-400">Sin opciones</p>
+                        ) : list.map(item => (
+                          <ItemRow
+                            key={item.value}
+                            label={labelFor(lv, item.value)}
+                            count={item.count}
+                            pct={pct(item.count)}
+                            checked={(selected[lv] || []).includes(item.value)}
+                            dim={item.value === SIN}
+                            color={isActive ? colorMap.get(item.value) : null}
+                            onClick={() => toggle(lv, item.value)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-          <PitchRightPanel
-            pieData={pieData}
-            colorMap={colorMap}
-            trendData={trendData}
-            leads={leadsList}
-            onOpenLead={onOpenLead}
-            pct={pct}
-          />
+            <PitchRightPanel
+              pieData={pieData}
+              colorMap={colorMap}
+              trendData={trendData}
+              leads={leadsList}
+              onOpenLead={onOpenLead}
+              pct={pct}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -249,6 +250,8 @@ export default function PitchAnalisis({
 function LevelHeader({ label, active, onClick }) {
   return (
     <button
+      type="button"
+      onMouseDown={sinSalto}
       onClick={onClick}
       className={`w-full flex items-center gap-2 pb-1 border-b transition-colors ${active ? 'border-[#1717AF]' : 'border-slate-200'}`}
     >
@@ -266,6 +269,8 @@ function LevelHeader({ label, active, onClick }) {
 function ItemRow({ label, count, pct, checked, dim, color, onClick }) {
   return (
     <button
+      type="button"
+      onMouseDown={sinSalto}
       onClick={onClick}
       className="w-full flex items-center gap-2.5 px-1 py-1.5 rounded-lg text-left transition-colors hover:bg-slate-50"
     >
