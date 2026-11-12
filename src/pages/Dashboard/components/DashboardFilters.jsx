@@ -164,6 +164,7 @@ const DashboardFilters = ({
   onRefreshComerciales,
   dateFilterField = 'created_at',
   onDateFilterFieldChange,
+  dateFilterToggleHint,
   showDateFilterToggle = true,
   puedeVerTodos = false,
   monthConfigs = {},
@@ -1155,8 +1156,9 @@ const DashboardFilters = ({
             </button>
           </div>
           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-            <div className="relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium shadow-lg">
-              Filtrar fechas por {dateFilterField === 'created_at' ? 'creación' : 'última actualización'}
+            <div className={`relative bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-lg font-medium shadow-lg ${dateFilterToggleHint ? 'whitespace-normal max-w-xs text-center' : 'whitespace-nowrap'}`}>
+              {dateFilterToggleHint
+                || `Filtrar fechas por ${dateFilterField === 'created_at' ? 'creación' : 'última actualización'}`}
               <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
             </div>
           </div>

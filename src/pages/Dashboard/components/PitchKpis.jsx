@@ -4,6 +4,11 @@ import { Loader2, Target, UserCheck } from 'lucide-react';
 import { PITCH_STATES } from '../../../constants/pitchColors';
 import { rowMatchesDims, PITCH_DIMS } from './PitchDimFilters';
 import { applyPitchScopeFilter } from '../../../utils/pitchScopeFilter';
+import {
+  ETAPA_MATRICULA,
+  LEAD_IN_CHUNK,
+  fetchIdsPrimeraMatricula,
+} from '../fetchMatriculaHistorial';
 
 // Presets de selección rápida para el filtro de tags en Mis Pitch.
 // Se renderizan como chips arriba del dropdown del filtro.
@@ -76,9 +81,9 @@ export default function PitchKpis({
   const [loading, setLoading] = useState(true);
 
   // Carga datos en paralelo: pitches del periodo, count de leads creados y
-  // count de matrículas reales (etapa_funnel='Matrícula' con updated_at en
-  // el periodo, igual que el contador de Gestión > Matrícula con
-  // "Actualización").
+  // count de matrículas reales (misma regla que Gestión > Matrícula con
+  // Actualización: primera entrada a Matrícula en historial, si hoy sigue
+  // en esa etapa).
   useEffect(() => {
     if (!rangeStart || !rangeEnd) return;
     let cancelled = false;
@@ -128,25 +133,42 @@ export default function PitchKpis({
         );
         if (selectedTags.length > 0) lq = lq.in('label', selectedTags);
 
-        // 3) Matrículas reales del periodo: réplica del contador de
-        // "Gestión > Matrícula" con filtro Actualización. Filtra por
-        // etapa_funnel y updated_at, aplicando comercial y tags.
-        let mq = applyPitchScopeFilter(
-          supabase
-            .from('leads')
-            .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
-            .eq('etapa_funnel', 'Matrícula')
-            .gte('updated_at', fechaInicio)
-            .lt('updated_at', fechaFin),
-          scope
-        );
-        if (selectedTags.length > 0) mq = mq.in('label', selectedTags);
-
-        const [pRes, lRes, mRes] = await Promise.all([pq, lq, mq]);
+        const [pRes, lRes, matriculaIds] = await Promise.all([
+          pq,
+          lq,
+          fetchIdsPrimeraMatricula(supabase, {
+            fechaInicio,
+            fechaFin,
+            exclusiveEnd: false,
+          }),
+        ]);
         if (cancelled) return;
         if (pRes.error) throw pRes.error;
         if (lRes.error) throw lRes.error;
-        if (mRes.error) throw mRes.error;
+
+        // 3) Matrículas reales: réplica de Gestión > Matrícula + Actualización.
+        // Lead único que hoy está en Matrícula, atribuido al periodo en que
+        // entró por primera vez a esa fase (historial.created_at).
+        let matriculaRows = [];
+        let matriculaCount = 0;
+        if (matriculaIds.length > 0) {
+          for (let i = 0; i < matriculaIds.length; i += LEAD_IN_CHUNK) {
+            const chunk = matriculaIds.slice(i, i + LEAD_IN_CHUNK);
+            let mq = applyPitchScopeFilter(
+              supabase
+                .from('leads')
+                .select(dimsActive ? DIM_COLS : 'card_id', dimsActive ? undefined : { count: 'exact', head: true })
+                .eq('etapa_funnel', ETAPA_MATRICULA)
+                .in('card_id', chunk),
+              scope
+            );
+            if (selectedTags.length > 0) mq = mq.in('label', selectedTags);
+            const mRes = await mq;
+            if (mRes.error) throw mRes.error;
+            if (dimsActive) matriculaRows.push(...(mRes.data || []));
+            else matriculaCount += mRes.count || 0;
+          }
+        }
 
         // Filtrar pitches por:
         // - rango de fecha (mismo criterio sin TZ que el calendario)
@@ -172,8 +194,8 @@ export default function PitchKpis({
         );
         setMatriculaReal(
           dimsActive
-            ? (mRes.data || []).filter(r => rowMatchesDims(r, dimFilters)).length
-            : (mRes.count || 0)
+            ? matriculaRows.filter(r => rowMatchesDims(r, dimFilters)).length
+            : matriculaCount
         );
       } catch (err) {
         console.error('Error cargando KPIs de Pitch:', err);
@@ -290,8 +312,8 @@ export default function PitchKpis({
       title: 'Matrícula',
       value: pct(counts.matricula, counts.asistieron),
       sub: `${counts.matricula} / ${counts.asistieron} asist.`,
-      // Conversión real: leads del periodo (únicos) hoy en fase Matrícula
-      // sobre el total de pitches asistidos del periodo.
+      // Conversión real: leads que entraron a Matrícula en el periodo
+      // (historial) y hoy siguen ahí, sobre pitches asistidos del periodo.
       extra: `Reales ${matriculaReal} - ${pct(matriculaReal, counts.asistieron)}%`,
       state: stateById.matricula,
     },

@@ -20,7 +20,8 @@ export const LEADS_HISTORICOS = {
 
 // Datos históricos de matrículas (leads que llegaron a etapa "Matrícula").
 // Para 2026 desde marzo en adelante se consultan en runtime contra Supabase
-// usando updated_at + etapa_funnel = 'Matrícula' (mismo criterio del KPI "Reales" en Mis Pitch).
+// usando updated_at + etapa_funnel = 'Matrícula'. Informe aún no usa el
+// criterio de historial de Mis Pitch "Reales" / Gestión > Matrícula.
 export const MATRICULAS_HISTORICAS = {
   2024: {
     '01': 31, '02': 32, '03': 36, '04': 27,
