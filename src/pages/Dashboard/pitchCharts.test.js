@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bucketsDeVista, leadsUnicosDeFilas } from './pitchCharts.js';
+import { bucketsDeVista, leadsUnicosDeFilas, sinSalto } from './pitchCharts.js';
 
 test('leads únicos se recortan por card_id y se ordenan por nombre', () => {
   const lista = leadsUnicosDeFilas([
@@ -51,4 +51,10 @@ test('el modo mes agrupa de a dos días', () => {
 
 test('sin rango no hay buckets', () => {
   assert.deepEqual(bucketsDeVista('day', null, null), []);
+});
+
+test('sinSalto cancela el default para que el clic no mueva el scroll', () => {
+  let cancelled = false;
+  sinSalto({ preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true);
 });
