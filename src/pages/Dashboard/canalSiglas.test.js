@@ -61,6 +61,8 @@ test('el detalle concatena el prefijo con el texto de comentarios o de recordato
     '(MNC. - LNC.) Llamar al doctor en horas de la tarde'
   );
   assert.equal(textoDetalleConCanal('Sin observación', null, null), 'Sin observación');
+  assert.equal(textoDetalleConCanal(null, 'LNC.', 'MNC.'), '(MNC. - LNC.)');
+  assert.equal(textoDetalleConCanal('   ', 'LC.', null), '(LC.)');
 });
 
 test('la tabla usa el mismo detalle que el sidebar, con categoría delante', () => {

@@ -91,9 +91,9 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 
 - Se puede ver todo el historial de seguimientos como una conversación, de lo más nuevo a lo más viejo.
 - Se puede filtrar los seguimientos por categoría.
-- Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
+- Se puede escribir un seguimiento nuevo eligiendo categoría. El detalle (texto libre) es opcional: con las siglas de llamada y/o mensaje basta.
 - Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA., LNE.) y/o del mensaje de WhatsApp (MC., MNC., MA., MNE.). LNE. y MNE. son número errado. Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
-- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y después el texto.
+- Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y, si hay texto, después el detalle. Si el comercial no escribió detalle, se muestran solo las siglas.
 - Si el seguimiento nació de un Recordatorio, el Detalle también muestra esas siglas delante de la observación. Se leen de `recordatorios` cuando el comentario no las trae (el disparador de la base suele copiar solo el texto).
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
 - Los seguimientos quedan marcados según de dónde salieron: gestión normal, resultado de pitch o recordatorio.
@@ -102,8 +102,8 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 
 ## 7. Recordatorios que programa el comercial
 
-- Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y una nota del motivo.
-- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento (Detalle) y el historial de Recordatorio las muestran delante del texto / observación, también en recordatorios que ya estaban guardados.
+- Se puede programar un recordatorio para volver a contactar al lead, con fecha, hora y, si hace falta, una nota del motivo. El detalle es opcional.
+- Al programarlo también hay que marcar llamada y/o mensaje, igual que en el seguimiento (por defecto MNC. y LNC.). Quedan en `llamada` y `mensaje` de `recordatorios`. El historial de Seguimiento (Detalle) y el historial de Recordatorio las muestran delante del texto / observación (o solas, si no hay nota), también en recordatorios que ya estaban guardados.
 - Al programarlo, el lead queda marcado como gestionado.
 - Se puede ver el historial de recordatorios con su estado: programado, vencido o cancelado.
 - Se puede ver todos los recordatorios en un calendario, con colores distintos para los vencidos, los de hoy y los que vienen.
