@@ -31,6 +31,7 @@ import {
   esContestacion,
   esEfectiva,
   esNoContesto,
+  esNumeroErrado,
   filtraIntentosHeatmap,
   filtraIntentosPorCohorte,
   kpisContacto,
@@ -407,6 +408,7 @@ export default function Contacto({
     const match = consolidado.filter((row) => {
       if (segmento === 'no') return esNoContesto(row.resultado);
       if (segmento === 'contesto') return row.resultado === 'LC.' || row.resultado === 'MC.';
+      if (segmento === 'errado') return esNumeroErrado(row.resultado);
       return esEfectiva(row.resultado);
     });
     const primerByLead = {};
@@ -426,7 +428,13 @@ export default function Contacto({
       };
     });
     const tituloCanal = canal === CANAL_LLAMADA ? 'Llamadas' : 'WhatsApp';
-    const tituloSeg = segmento === 'no' ? 'No contestaron' : segmento === 'contesto' ? 'Contestaron' : 'Efectivas';
+    const tituloSeg = segmento === 'no'
+      ? 'No contestaron'
+      : segmento === 'contesto'
+        ? 'Contestaron'
+        : segmento === 'errado'
+          ? 'Número errado'
+          : 'Efectivas';
     const filas = filasDesdeLeads(match.map((row) => row.lead_id), extra)
       .sort((a, b) => (b.duracionMs ?? -1) - (a.duracionMs ?? -1));
     setLista({
@@ -441,6 +449,7 @@ export default function Contacto({
     const people = new Map();
     const porDia = new Map();
     for (const intento of intentos) {
+      if (esNumeroErrado(intento.resultado)) continue;
       const key = `${intento.fecha}|${intento.lead_id}`;
       if (!porDia.has(key)) porDia.set(key, new Set());
       if (intento.seguimiento_id) porDia.get(key).add(intento.seguimiento_id);

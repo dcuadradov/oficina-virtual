@@ -15,9 +15,9 @@ El comercial del filtro es quien registró la llamada o el mensaje, no el dueño
 
 ## De dónde salen los números
 
-Siglas en `comentarios.llamada` / `comentarios.mensaje` (LNC. LC. LA. / MNC. MC. MA.). Si el recordatorio no dejó un comentario con sigla a ±60 s y el mismo texto, entra `recordatorios`.
+Siglas en `comentarios.llamada` / `comentarios.mensaje` (LNC. LC. LA. LNE. / MNC. MC. MA. MNE.). Si el recordatorio no dejó un comentario con sigla a ±60 s y el mismo texto, entra `recordatorios`.
 
-Un seguimiento puede abrir 0, 1 o 2 intentos (llamada, WhatsApp o ambos). El resultado del día por canal no es el último: gana el más cerca del agendamiento (`LA > LC > LNC`, `MA > MC > MNC`).
+Un seguimiento puede abrir 0, 1 o 2 intentos (llamada, WhatsApp o ambos). El resultado del día por canal no es el último: gana el más cerca del agendamiento (`LA > LC > LNC > LNE`, `MA > MC > MNC > MNE`). LNE./MNE. (número errado) entran al KPI y al cuarto tramo de las barras; no son contestación ni “no contestó”, y no van al heatmap ni a las cubetas. Contestación y efectividad usan como denominador a quienes no fueron solo número errado. Migración: `db/migrations/2026-11-11_contacto_lne_mne.sql`.
 
 Hay datos desde el **4 nov 2026**, cuando nacieron las siglas.
 

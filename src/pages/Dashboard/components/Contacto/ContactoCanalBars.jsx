@@ -5,6 +5,7 @@ const TRAMOS = [
   { id: 'no', key: 'noContestaron', pctKey: 'pctNo', label: 'No contestaron', color: 'bg-slate-300' },
   { id: 'contesto', key: 'contestaronSolo', pctKey: 'pctContestoSolo', label: 'Contestaron', color: 'bg-[#1717AF]' },
   { id: 'efectiva', key: 'efectivas', pctKey: 'pctEfectivas', label: 'Efectivas', color: 'bg-emerald-500' },
+  { id: 'errado', key: 'numeroErrado', pctKey: 'pctErrado', label: 'Número errado', color: 'bg-amber-400' },
 ];
 
 function CanalCard({ titulo, icon: Icon, barra, onSegmento }) {

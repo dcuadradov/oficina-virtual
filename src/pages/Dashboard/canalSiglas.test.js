@@ -15,8 +15,8 @@ import {
 } from './canalSiglas.js';
 
 test('las opciones de llamada y mensaje son las siglas acordadas, con punto', () => {
-  assert.deepEqual(OPCIONES_LLAMADA, ['LNC.', 'LC.', 'LA.']);
-  assert.deepEqual(OPCIONES_MENSAJE, ['MC.', 'MNC.', 'MA.']);
+  assert.deepEqual(OPCIONES_LLAMADA, ['LNC.', 'LC.', 'LA.', 'LNE.']);
+  assert.deepEqual(OPCIONES_MENSAJE, ['MC.', 'MNC.', 'MA.', 'MNE.']);
 });
 
 test('hay que elegir llamada, mensaje o las dos', () => {

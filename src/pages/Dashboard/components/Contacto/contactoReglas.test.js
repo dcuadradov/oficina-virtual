@@ -459,3 +459,51 @@ test('heatmap agendaron ignora LC y pega horas fuera de 7–21', () => {
   assert.equal(agendaron.find((c) => c.dia === 2 && c.hora === 7).intentos, 1);
   assert.equal(agendaron.find((c) => c.dia === 2 && c.hora === 21).intentos, 1);
 });
+
+test('LNE y MNE son número errado y pierden ante no contestó', () => {
+  assert.equal(partirSeguimiento({ llamada: 'LNE.', mensaje: 'MNE.' }).length, 2);
+  const ganador = resultadoDelDia([
+    { resultado: 'LNE.', hora: 9 },
+    { resultado: 'LNC.', hora: 12 },
+  ]);
+  assert.equal(ganador.resultado, 'LNC.');
+  assert.equal(resultadoDelDia([{ resultado: 'LNE.', hora: 9 }]).resultado, 'LNE.');
+});
+
+test('número errado sale en KPI y barra, sin bajar contestación ni entrar al heatmap', () => {
+  const intentos = [
+    { fecha: '2026-11-11', lead_id: 'ok', seguimiento_id: '1', canal: CANAL_LLAMADA, resultado: 'LC.', hora: 10, dia_semana: 3 },
+    { fecha: '2026-11-11', lead_id: 'mal', seguimiento_id: '2', canal: CANAL_LLAMADA, resultado: 'LNE.', hora: 10, dia_semana: 3 },
+  ];
+  const diarios = diariosDesdeIntentos(intentos);
+  const kpis = kpisContacto(diarios, intentos);
+  assert.equal(kpis.personas, 2);
+  assert.equal(kpis.personasParaTasa, 1);
+  assert.equal(kpis.contestaron, 1);
+  assert.equal(kpis.pctContestacion, 100);
+  assert.equal(kpis.numeroErrado, 1);
+  assert.equal(kpis.numeroErradoLlamada, 1);
+  assert.equal(kpis.seguimientos, 1);
+
+  const barra = conteoCanal(diarios, CANAL_LLAMADA);
+  assert.equal(barra.numeroErrado, 1);
+  assert.equal(barra.contestaronSolo, 1);
+  assert.equal(barra.personas, 2);
+
+  const heatmap = celdasHeatmap(intentos, { pestana: 'contestaron', canal: CANAL_LLAMADA });
+  assert.equal(heatmap.find((c) => c.dia === 3 && c.hora === 10).intentos, 1);
+  const noCont = celdasHeatmap(intentos, { pestana: 'no_contestaron', canal: CANAL_LLAMADA });
+  assert.equal(noCont.find((c) => c.dia === 3 && c.hora === 10).intentos, 0);
+
+  const cubetas = cubetasIntensidad(intentos);
+  assert.equal(cubetas[0].personasDia, 1);
+  assert.equal(cubetas[0].contestaron, 1);
+});
+
+test('si primero marcó número errado y luego contestó, el día es contestó', () => {
+  const ganador = resultadoDelDia([
+    { resultado: 'LNE.', hora: 9 },
+    { resultado: 'LC.', hora: 11 },
+  ]);
+  assert.equal(ganador.resultado, 'LC.');
+});

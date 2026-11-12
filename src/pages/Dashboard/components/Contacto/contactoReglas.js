@@ -10,11 +10,15 @@ export const CANAL_MENSAJE = 'mensaje';
 export const RESULTADO_LNC = 'LNC.';
 export const RESULTADO_LC = 'LC.';
 export const RESULTADO_LA = 'LA.';
+export const RESULTADO_LNE = 'LNE.';
 export const RESULTADO_MNC = 'MNC.';
 export const RESULTADO_MC = 'MC.';
 export const RESULTADO_MA = 'MA.';
+export const RESULTADO_MNE = 'MNE.';
 
 export const PRIORIDAD_RESULTADO = {
+  [RESULTADO_LNE]: 0,
+  [RESULTADO_MNE]: 0,
   [RESULTADO_LNC]: 1,
   [RESULTADO_LC]: 2,
   [RESULTADO_LA]: 3,
@@ -40,12 +44,18 @@ export const DIAS_SEMANA = [
 ];
 
 export function prioridadResultado(sigla) {
-  return PRIORIDAD_RESULTADO[sigla] || 0;
+  return Object.prototype.hasOwnProperty.call(PRIORIDAD_RESULTADO, sigla)
+    ? PRIORIDAD_RESULTADO[sigla]
+    : -1;
 }
 
 export function canalDeResultado(sigla) {
-  if (sigla === RESULTADO_LNC || sigla === RESULTADO_LC || sigla === RESULTADO_LA) return CANAL_LLAMADA;
-  if (sigla === RESULTADO_MNC || sigla === RESULTADO_MC || sigla === RESULTADO_MA) return CANAL_MENSAJE;
+  if (sigla === RESULTADO_LNC || sigla === RESULTADO_LC || sigla === RESULTADO_LA || sigla === RESULTADO_LNE) {
+    return CANAL_LLAMADA;
+  }
+  if (sigla === RESULTADO_MNC || sigla === RESULTADO_MC || sigla === RESULTADO_MA || sigla === RESULTADO_MNE) {
+    return CANAL_MENSAJE;
+  }
   return null;
 }
 
@@ -69,6 +79,10 @@ export function esEfectiva(resultado) {
 
 export function esNoContesto(resultado) {
   return resultado === RESULTADO_LNC || resultado === RESULTADO_MNC;
+}
+
+export function esNumeroErrado(resultado) {
+  return resultado === RESULTADO_LNE || resultado === RESULTADO_MNE;
 }
 
 export function resultadoDelDia(intentos = []) {
@@ -127,6 +141,7 @@ export function conteoCanal(diarios = [], canal) {
     row.resultado === RESULTADO_LC || row.resultado === RESULTADO_MC
   )).length;
   const efectivas = consolidado.filter((row) => esEfectiva(row.resultado)).length;
+  const numeroErrado = consolidado.filter((row) => esNumeroErrado(row.resultado)).length;
   const contestaronIncluye = contestaronSolo + efectivas;
   return {
     canal,
@@ -134,10 +149,12 @@ export function conteoCanal(diarios = [], canal) {
     noContestaron,
     contestaronSolo,
     efectivas,
+    numeroErrado,
     contestaronIncluye,
     pctNo: total ? (noContestaron / total) * 100 : 0,
     pctContestoSolo: total ? (contestaronSolo / total) * 100 : 0,
     pctEfectivas: total ? (efectivas / total) * 100 : 0,
+    pctErrado: total ? (numeroErrado / total) * 100 : 0,
     pctContestaron: total ? (contestaronIncluye / total) * 100 : 0,
   };
 }
@@ -163,21 +180,46 @@ export function kpisContacto(diarios = [], intentos = []) {
   const agendaronMensaje = new Set(
     consolidado.filter((row) => row.canal === CANAL_MENSAJE && esEfectiva(row.resultado)).map((row) => row.lead_id),
   );
-  const seguimientos = new Set(intentos.map((item) => item.seguimiento_id).filter(Boolean));
+  const numeroErradoLlamada = new Set(
+    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esNumeroErrado(row.resultado)).map((row) => row.lead_id),
+  );
+  const numeroErradoMensaje = new Set(
+    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esNumeroErrado(row.resultado)).map((row) => row.lead_id),
+  );
+  const numeroErrado = new Set([...numeroErradoLlamada, ...numeroErradoMensaje]);
+  const porPersona = new Map();
+  for (const row of consolidado) {
+    if (!porPersona.has(row.lead_id)) porPersona.set(row.lead_id, []);
+    porPersona.get(row.lead_id).push(row);
+  }
+  let personasSoloErrado = 0;
+  for (const rows of porPersona.values()) {
+    if (rows.length > 0 && rows.every((row) => esNumeroErrado(row.resultado))) {
+      personasSoloErrado += 1;
+    }
+  }
+  const seguimientos = new Set(
+    intentos.filter((item) => !esNumeroErrado(item.resultado)).map((item) => item.seguimiento_id).filter(Boolean),
+  );
   const personas = people.size;
+  const personasParaTasa = personas - personasSoloErrado;
   return {
     personas,
     personasLlamada: peopleLlamada.size,
     personasMensaje: peopleMensaje.size,
+    personasParaTasa,
     contestaron: contestaron.size,
-    pctContestacion: personas ? (contestaron.size / personas) * 100 : 0,
+    pctContestacion: personasParaTasa ? (contestaron.size / personasParaTasa) * 100 : 0,
     efectivas: efectivas.size,
-    pctEfectividad: personas ? (efectivas.size / personas) * 100 : 0,
+    pctEfectividad: personasParaTasa ? (efectivas.size / personasParaTasa) * 100 : 0,
     agendamientos: efectivas.size,
     agendaronLlamada: agendaronLlamada.size,
     agendaronMensaje: agendaronMensaje.size,
+    numeroErrado: numeroErrado.size,
+    numeroErradoLlamada: numeroErradoLlamada.size,
+    numeroErradoMensaje: numeroErradoMensaje.size,
     seguimientos: seguimientos.size,
-    seguimientosPorPersona: personas ? seguimientos.size / personas : 0,
+    seguimientosPorPersona: personasParaTasa ? seguimientos.size / personasParaTasa : 0,
   };
 }
 
@@ -185,6 +227,7 @@ export function intensidadPorPersonaDia(intentos = []) {
   const grupos = new Map();
   for (const intento of intentos) {
     if (!intento?.lead_id || !intento?.fecha) continue;
+    if (esNumeroErrado(intento.resultado)) continue;
     const key = `${intento.fecha}|${intento.lead_id}`;
     if (!grupos.has(key)) {
       grupos.set(key, {
@@ -421,7 +464,7 @@ export function intentosDesdeSeguimientos(comentarios = [], recordatorios = []) 
     const partes = partesColombia(created_at);
     if (!partes || !lead_id) return;
     for (const p of partirSeguimiento({ llamada, mensaje })) {
-      if (prioridadResultado(p.resultado) <= 0) continue;
+      if (prioridadResultado(p.resultado) < 0) continue;
       intentos.push({
         fecha: partes.fecha,
         hora: partes.hora,
@@ -481,6 +524,7 @@ export function detallePrimerContacto(intentos = [], leadMap = {}, { canal = nul
   for (const intento of intentos) {
     if (!intento?.lead_id) continue;
     if (canal && intento.canal !== canal) continue;
+    if (esNumeroErrado(intento.resultado)) continue;
     const t = instanteIntento(intento);
     if (t == null) continue;
     if (!byLead.has(intento.lead_id)) byLead.set(intento.lead_id, []);
