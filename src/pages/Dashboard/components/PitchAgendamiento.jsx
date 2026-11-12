@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { bucketsDeVista, leadsUnicosDeFilas } from '../pitchCharts';
+import PitchRightPanel from './PitchRightPanel';
 
 const SIN = '__SIN__';
 
@@ -24,9 +25,16 @@ const classifyCierre = (raw) => {
 /**
  * Tab "Agendamiento" de Mis Pitch. Recibe el universo ya filtrado por
  * comercial/tags/dimensiones y muestra el canal de cierre (WhatsApp / Llamada
- * / Correo) en un panel + torta, con el mismo lenguaje visual que Análisis.
+ * / Correo) a la izquierda y, a la derecha, Participación / Tendencia / Leads.
  */
-export default function PitchAgendamiento({ rows = [], loading = false }) {
+export default function PitchAgendamiento({
+  rows = [],
+  loading = false,
+  viewMode = 'period',
+  rangeStart,
+  rangeEnd,
+  onOpenLead,
+}) {
   const [selected, setSelected] = useState([]);
 
   const classified = useMemo(
@@ -81,6 +89,34 @@ export default function PitchAgendamiento({ rows = [], loading = false }) {
       .filter(it => visibleKeys.includes(it.key) && it.count > 0)
       .map(it => ({ name: it.label, rawValue: it.key, value: it.count }));
   }, [list, selected]);
+
+  const visibleRows = useMemo(() => {
+    const keys = new Set(pieData.map(d => d.rawValue));
+    if (keys.size === 0) return [];
+    return classified.filter(r => keys.has(r.key));
+  }, [classified, pieData]);
+
+  const leadsList = useMemo(() => leadsUnicosDeFilas(visibleRows), [visibleRows]);
+
+  const buckets = useMemo(
+    () => bucketsDeVista(viewMode, rangeStart, rangeEnd),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewMode, rangeStart?.getTime(), rangeEnd?.getTime()],
+  );
+
+  const trendData = useMemo(() => {
+    return buckets.map(b => {
+      const obj = { label: b.label };
+      pieData.forEach(d => {
+        const set = new Set();
+        visibleRows.forEach(r => {
+          if (r.key === d.rawValue && r.parsed && b.test(r.parsed)) set.add(r.card_id);
+        });
+        obj[d.name] = set.size;
+      });
+      return obj;
+    });
+  }, [buckets, pieData, visibleRows]);
 
   const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
 
@@ -140,29 +176,16 @@ export default function PitchAgendamiento({ rows = [], loading = false }) {
         )}
       </div>
 
-      <div className="lg:col-span-2">
-        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5">
-          <h3 className="text-sm font-semibold text-slate-700 text-center mb-2">Participación</h3>
-          {pieData.length === 0 ? (
-            <div className="h-80 flex items-center justify-center text-sm text-slate-400">
-              Sin canales para mostrar
-            </div>
-          ) : (
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} innerRadius={55}>
-                    {pieData.map((d) => (
-                      <Cell key={d.rawValue} fill={colorMap.get(d.rawValue) || '#cbd5e1'} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v, n) => [`${v} ${v === 1 ? 'pitch' : 'pitches'} (${pct(v)}%)`, n]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
+      <PitchRightPanel
+        pieData={pieData}
+        colorMap={colorMap}
+        trendData={trendData}
+        leads={leadsList}
+        onOpenLead={onOpenLead}
+        unitSingular="pitch"
+        unitPlural="pitches"
+        pct={pct}
+      />
     </div>
   );
 }
