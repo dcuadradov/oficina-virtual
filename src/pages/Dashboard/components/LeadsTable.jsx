@@ -5,6 +5,7 @@ import { getCountryFlag } from '../../../utils/countryFlags';
 import { actualizarFaseDesdePortal } from '../../../utils/actualizarFaseLead';
 import CrearRespondModal from './CrearRespondModal';
 import WhatsAppWebButton from './WhatsAppWebButton';
+import { textoDetalleConCanal } from '../canalSiglas';
 
 /**
  * Calcula las horas restantes de la ventana de 24h de WhatsApp
@@ -1171,15 +1172,19 @@ const LeadsTable = ({
                   >
                     {(() => {
                       const seguimiento = ultimosSeguimientos[lead.card_id];
+                      const categoria = seguimiento?.categoria || 'Otro';
+                      const detalle = seguimiento
+                        ? textoDetalleConCanal(seguimiento.texto, seguimiento.llamada, seguimiento.mensaje)
+                        : '';
                       return (
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0 max-w-[280px]">
                             {seguimiento ? (
                               <>
-                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`} title={`${seguimiento.categoria || 'Otro'}: ${seguimiento.texto}`}>
-                                  <span className="text-[#1717AF] font-medium">{seguimiento.categoria || 'Otro'}</span>
+                                <p className={`text-sm truncate ${noRevisado ? 'text-slate-700' : 'text-slate-600'}`} title={`${categoria}: ${detalle}`}>
+                                  <span className="text-[#1717AF] font-medium">{categoria}</span>
                                   <span className="text-slate-400 mx-1">•</span>
-                                  {seguimiento.texto}
+                                  {detalle}
                                 </p>
                                 <p className="text-xs text-slate-400">
                                   <span className="font-bold text-slate-600">{getTimeAgoDetailed(seguimiento.created_at)}</span>
