@@ -71,6 +71,12 @@ test('la tabla usa el mismo detalle que el sidebar, con categoría delante', () 
   assert.equal(`Otro • ${detalle}`, 'Otro • (MNC. - LNC.) Vamos a ver si funcionó');
 });
 
+test('la tabla usa el mismo detalle que el sidebar, con categoría delante', () => {
+  const detalle = textoDetalleConCanal('Vamos a ver si funcionó', 'LNC.', 'MNC.');
+  assert.equal(detalle, '(MNC. - LNC.) Vamos a ver si funcionó');
+  assert.equal(`Otro • ${detalle}`, 'Otro • (MNC. - LNC.) Vamos a ver si funcionó');
+});
+
 test('el origen Recordatorio se reconoce aunque cambie mayúsculas', () => {
   assert.equal(origenEsRecordatorio('Recordatorio'), true);
   assert.equal(origenEsRecordatorio('recordatorio'), true);
