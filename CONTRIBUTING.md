@@ -49,69 +49,35 @@ npm run dev
 
 ---
 
-## 📝 Flujo de Trabajo (Git Flow)
+## Protocolo Despliegue
 
-### Estructura de Ramas
-```
-main (producción) ←── Solo código probado y aprobado
-  │
-  └── develop (staging) ←── Integración de features
-        │
-        ├── feature/calendario-pitch
-        ├── feature/resumen-ia
-        └── fix/bug-login
-```
+Cómo se cierra y publica trabajo (depurar, probar, documentar, commit, staging **y** prod):
 
-### 1. Crear rama para tu tarea
-```bash
-# Desde develop, crear rama nueva
-git checkout develop
-git pull origin develop
-git checkout -b feature/nombre-del-feature
+→ [docs/protocolo-despliegue.md](./docs/protocolo-despliegue.md)
+
+Al agente: **«ejecuta el Protocolo Despliegue»**.
+
+---
+
+## Ramas
+
+```
+main     → producción (portal.mdenglish.us)
+develop  → staging (oficina-virtual-md.web.app)
+feat/…   → WIP que todavía no debe salir a staging
 ```
 
-### 2. Desarrollar
-```bash
-# Programas con hot reload
-npm run dev
+`develop` es desplegable. Lo que no deba ir al aire no se mezcla en `develop`.
 
-# Haces commits
-git add .
-git commit -m "Add: descripción del cambio"
-```
-
-### 3. Subir tu rama
-```bash
-git push origin feature/nombre-del-feature
-```
-
-### 4. Crear Pull Request
-- En GitHub, crea un PR de `feature/nombre` → `develop`
-- Espera revisión de código
-- Una vez aprobado, haz merge
-
-### 5. Deploy Automático a Staging
-- Al hacer merge a `develop`, se despliega automáticamente a staging
-- Prueba en: https://oficina-virtual-md.web.app
-
-### 6. Release a Producción
-```bash
-# Cuando develop está listo para producción
-git checkout main
-git pull origin main
-git merge develop
-git push origin main
-```
-- Esto dispara deploy automático a producción
+El GitHub Action de Firebase tiene el token vencido: el deploy real es local (`npm run deploy:staging` / `deploy:prod`) y lo hace el **Protocolo Despliegue**.
 
 ---
 
 ## ⚠️ Reglas Importantes
 
-1. **NUNCA** hagas `deploy:prod` sin probar en staging primero
-2. **NUNCA** modifiques datos de producción directamente en Supabase
-3. **SIEMPRE** crea una rama para cada feature/bugfix
-4. **SIEMPRE** haz Pull Request para revisar el código antes de merge
+1. Cerrar trabajo con el **Protocolo Despliegue** (staging y prod, el mismo árbol).
+2. **NUNCA** modifiques datos de producción directamente en Supabase.
+3. **NUNCA** force-push a `develop` ni a `main`.
 
 ---
 
