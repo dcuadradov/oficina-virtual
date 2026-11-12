@@ -91,7 +91,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede ver todo el historial de seguimientos como una conversación, de lo más nuevo a lo más viejo.
 - Se puede filtrar los seguimientos por categoría.
 - Se puede escribir un seguimiento nuevo eligiendo categoría y escribiendo el detalle.
-- Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA.) y/o del mensaje de WhatsApp (MC., MNC., MA.). Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
+- Al crear un seguimiento hay que marcar el resultado de la llamada (LNC., LC., LA., LNE.) y/o del mensaje de WhatsApp (MC., MNC., MA., MNE.). LNE. y MNE. son número errado. Por defecto vienen MNC. y LNC. Puede ser uno o los dos; sin al menos uno no se guarda.
 - Esos resultados quedan en las columnas `llamada` y `mensaje` de `comentarios`. En el historial de la ficha y en la columna de seguimiento de la tabla el Detalle sale como `(MNC. - LNC.)` y después el texto.
 - Si el seguimiento nació de un Recordatorio, el Detalle también muestra esas siglas delante de la observación. Se leen de `recordatorios` cuando el comentario no las trae (el disparador de la base suele copiar solo el texto).
 - Cada seguimiento que se escribe en el portal también queda registrado en Respond.io, para que quien atienda el chat lo vea.
