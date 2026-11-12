@@ -37,6 +37,7 @@ export function whatsappWebUrl(raw) {
 export function formatEmail(raw) {
   const value = String(raw || '').trim();
   if (!value || !value.includes('@')) return null;
+  if (value.toLowerCase() === 'notiene@mail.com') return null;
   return value;
 }
 

@@ -23,6 +23,11 @@ test('formatEmail recorta y descarta lo que no es correo', () => {
   assert.equal(formatEmail(''), null);
 });
 
+test('formatEmail no trata notiene@mail.com como correo', () => {
+  assert.equal(formatEmail('notiene@mail.com'), null);
+  assert.equal(formatEmail('  NoTiene@Mail.com  '), null);
+});
+
 test('collectContacts no repite y cuenta teléfono y correo por separado', () => {
   const pages = [
     [
@@ -30,10 +35,11 @@ test('collectContacts no repite y cuenta teléfono y correo por separado', () =>
       { telefono: '+573001112233', email: 'UNO@mdenglish.us' },
       { telefono: '', email: 'solo@mdenglish.us' },
       { telefono: '+52.5512345678', email: null },
+      { telefono: '+573009990000', email: 'notiene@mail.com' },
     ],
   ];
   assert.deepEqual(collectContacts(pages), {
-    phones: ['+573001112233', '+525512345678'],
+    phones: ['+573001112233', '+525512345678', '+573009990000'],
     emails: ['uno@mdenglish.us', 'solo@mdenglish.us'],
   });
 });

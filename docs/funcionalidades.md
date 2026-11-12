@@ -43,7 +43,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede filtrar por los que tienen novedades sin leer, los que tienen ventana de WhatsApp abierta y los que tienen recordatorio activo.
 - Se puede limpiar todos los filtros de un golpe.
 - Si se baja por la página y el header tapa los filtros, esos mismos filtros se meten en el header para poder cambiarlos sin volver arriba.
-- En **Gestión**, el botón **Copiar contactos** abre un recuadro con WhatsApp y correo. Copia todos los leads que cumplen los filtros, no solo la página visible. Junto a cada opción va cuántos hay: el número y el correo pueden no coincidir si a un lead le falta uno de los dos. El correo sale listo para pegar en el campo Para de Gmail. El teléfono sale internacional y pegado, por ejemplo +573173588591. La consulta va de a 1.000 y se detiene a los 15.000 para no recargar el portal.
+- En **Gestión**, el botón **Copiar contactos** abre un recuadro con WhatsApp y correo. Copia todos los leads que cumplen los filtros, no solo la página visible. Junto a cada opción va cuántos hay: el número y el correo pueden no coincidir si a un lead le falta uno de los dos. El correo sale listo para pegar en el campo Para de Gmail. No entra el comodín `notiene@mail.com`. El teléfono sale internacional y pegado, por ejemplo +573173588591. La consulta va de a 1.000 y se detiene a los 15.000 para no recargar el portal.
 
 ---
 
