@@ -13,6 +13,13 @@ const addDays = (date, n) => {
   return d;
 };
 
+export function toFechaISOLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // Devuelve el martes ≤ fecha dada (anclaje de periodos martes-a-lunes).
 const getTuesdayWeekStart = (date) => {
   const d = new Date(date);
@@ -22,6 +29,25 @@ const getTuesdayWeekStart = (date) => {
   d.setDate(d.getDate() - offset);
   return d;
 };
+
+/**
+ * Periodo comercial en curso: martes a lunes que contiene `now`.
+ * `value` es el mismo string que usan los dropdowns de mes/periodo/día.
+ */
+export function periodoComercialActual(now = new Date()) {
+  const start = getTuesdayWeekStart(now);
+  const end = addDays(start, 6);
+  const fmt = (date) => date.toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'short',
+  });
+  return {
+    value: `${toFechaISOLocal(start)}_${toFechaISOLocal(end)}`,
+    label: `${fmt(start)} - ${fmt(end)}`,
+    start,
+    end,
+  };
+}
 
 /**
  * Resuelve el rango activo a partir de los dropdowns del Dashboard.

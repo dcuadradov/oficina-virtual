@@ -12,7 +12,7 @@ import PitchAnalisis from './components/PitchAnalisis';
 import { usePitchAnalisisUniverse } from './components/usePitchAnalisisUniverse';
 import PitchAgendamiento from './components/PitchAgendamiento';
 import { usePitchAgendamientoUniverse } from './components/usePitchAgendamientoUniverse';
-import { resolvePitchRange } from '../../utils/pitchRange';
+import { periodoComercialActual, resolvePitchRange } from '../../utils/pitchRange';
 import { sinSalto } from './pitchCharts';
 import { contarPaises, opcionesPais } from './paisFilter';
 import { enriquecerComentarioConCanal } from './canalSiglas';
@@ -211,6 +211,7 @@ export default function Dashboard() {
     () => resolvePitchRange({ selectedDia, selectedPeriodo, selectedMes, monthConfigs }),
     [selectedDia, selectedPeriodo, selectedMes, monthConfigs]
   );
+  const periodoPitchImplicito = useMemo(() => periodoComercialActual(), []);
   const analisisEnabled = activeView === 'pitch' && pitchSubTab === 'analisis';
   const agendamientoEnabled = activeView === 'pitch' && pitchSubTab === 'agendamiento';
   const facetEnabled = analisisEnabled || agendamientoEnabled;
@@ -1906,6 +1907,7 @@ export default function Dashboard() {
                   monthConfigs={monthConfigs}
                   onSaveMonthConfig={handleSaveMonthConfig}
                   puedeVerTodos={puedeVerTodos}
+                  periodoImplicito={periodoPitchImplicito}
                 >
                   {/* Filtros de análisis (profesión/género/edad/ciudad/país):
                       fluyen en la misma fila que los demás filtros. En "Agenda"
