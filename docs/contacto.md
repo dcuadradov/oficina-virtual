@@ -47,7 +47,7 @@ Ventana de fechas: `p_desde` y `p_hasta` inclusive, en `America/Bogota` (`05:00:
 
 `src/pages/Dashboard/components/Contacto/`. Las reglas (prioridad, KPIs, barras, cubetas, heatmap, ranking) viven en `contactoReglas.js` y se cubren con `contactoReglas.test.js`. El heatmap combina Contestaron / Agendaron / No contestaron en tres subfilas por día (`capasHeatmap`); cada capa se pinta contra su máximo. Cada día es un bloque (filete izquierdo, línea debajo, fondo intercalado) para no mezclar Lun con Mar. El toggle de canal sigue.
 
-Filtros independientes de Gestión e Informe. El default es el periodo en curso (martes a lunes), no el mes; el chip se ve seleccionado. Mes / periodo / día usan `config_meses`. País, ocupación, tags, fuente, género y edad recortan al lead. No hay Creación/Actualización: la fecha es la del contacto.
+Filtros independientes de Gestión e Informe. El default es el periodo en curso (martes a lunes), no el mes; el chip se ve seleccionado. Mes / periodo / día usan `config_meses`. Los KPI de semana y mes suman persona × día, igual que al filtrar un día: si se contactó el mismo lead el martes y el miércoles, cuenta 2. País, ocupación, tags, fuente, género y edad recortan al lead. No hay Creación/Actualización: la fecha es la del contacto.
 
 ## Nuevos / En gestión
 

@@ -120,11 +120,16 @@ export function diariosDesdeIntentos(intentos = []) {
   });
 }
 
+function clavePersonaDia(row) {
+  if (!row?.fecha || !row?.lead_id) return null;
+  return `${row.fecha}|${row.lead_id}`;
+}
+
 export function consolidarPorPersonaCanal(diarios = []) {
   const map = new Map();
   for (const row of diarios) {
     if (!row?.lead_id || !row?.canal) continue;
-    const key = `${row.lead_id}|${row.canal}`;
+    const key = `${row.fecha || ''}|${row.lead_id}|${row.canal}`;
     const prev = map.get(key);
     if (!prev || prioridadResultado(row.resultado) > prioridadResultado(prev.resultado)) {
       map.set(key, row);
@@ -160,37 +165,39 @@ export function conteoCanal(diarios = [], canal) {
 }
 
 export function kpisContacto(diarios = [], intentos = []) {
-  const people = new Set(diarios.map((row) => row.lead_id).filter(Boolean));
+  const people = new Set(diarios.map(clavePersonaDia).filter(Boolean));
   const peopleLlamada = new Set(
-    diarios.filter((row) => row.canal === CANAL_LLAMADA).map((row) => row.lead_id),
+    diarios.filter((row) => row.canal === CANAL_LLAMADA).map(clavePersonaDia).filter(Boolean),
   );
   const peopleMensaje = new Set(
-    diarios.filter((row) => row.canal === CANAL_MENSAJE).map((row) => row.lead_id),
+    diarios.filter((row) => row.canal === CANAL_MENSAJE).map(clavePersonaDia).filter(Boolean),
   );
   const consolidado = consolidarPorPersonaCanal(diarios);
   const contestaron = new Set(
-    consolidado.filter((row) => esContestacion(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => esContestacion(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const efectivas = new Set(
-    consolidado.filter((row) => esEfectiva(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => esEfectiva(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const agendaronLlamada = new Set(
-    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esEfectiva(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esEfectiva(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const agendaronMensaje = new Set(
-    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esEfectiva(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esEfectiva(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const numeroErradoLlamada = new Set(
-    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esNumeroErrado(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => row.canal === CANAL_LLAMADA && esNumeroErrado(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const numeroErradoMensaje = new Set(
-    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esNumeroErrado(row.resultado)).map((row) => row.lead_id),
+    consolidado.filter((row) => row.canal === CANAL_MENSAJE && esNumeroErrado(row.resultado)).map(clavePersonaDia).filter(Boolean),
   );
   const numeroErrado = new Set([...numeroErradoLlamada, ...numeroErradoMensaje]);
   const porPersona = new Map();
   for (const row of consolidado) {
-    if (!porPersona.has(row.lead_id)) porPersona.set(row.lead_id, []);
-    porPersona.get(row.lead_id).push(row);
+    const key = clavePersonaDia(row);
+    if (!key) continue;
+    if (!porPersona.has(key)) porPersona.set(key, []);
+    porPersona.get(key).push(row);
   }
   let personasSoloErrado = 0;
   for (const rows of porPersona.values()) {
