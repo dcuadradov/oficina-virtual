@@ -188,21 +188,28 @@ test('el ranking mira quién contactó, no el dueño del lead', () => {
   assert.equal(ranking[1].contestaron, 0);
 });
 
-test('la misma persona dos días sigue siendo una, y contestó si algún día contestó', () => {
-  const intentos = [
-    {
-      fecha: '2026-11-09', lead_id: 'lead-1', seguimiento_id: 'lun', canal: CANAL_LLAMADA,
-      resultado: 'LNC.', hora: 10, dia_semana: 1, autor_email: 'ana@mdenglish.us',
-    },
-    {
-      fecha: '2026-11-10', lead_id: 'lead-1', seguimiento_id: 'mar', canal: CANAL_LLAMADA,
-      resultado: 'LC.', hora: 10, dia_semana: 2, autor_email: 'ana@mdenglish.us',
-    },
-  ];
+test('la semana suma los días: la misma persona en dos días cuenta dos', () => {
+  const lun = {
+    fecha: '2026-11-09', lead_id: 'lead-1', seguimiento_id: 'lun', canal: CANAL_LLAMADA,
+    resultado: 'LNC.', hora: 10, dia_semana: 1, autor_email: 'ana@mdenglish.us',
+  };
+  const mar = {
+    fecha: '2026-11-10', lead_id: 'lead-1', seguimiento_id: 'mar', canal: CANAL_LLAMADA,
+    resultado: 'LC.', hora: 10, dia_semana: 2, autor_email: 'ana@mdenglish.us',
+  };
+  const intentos = [lun, mar];
   const kpis = kpisContacto(diariosDesdeIntentos(intentos), intentos);
-  assert.equal(kpis.personas, 1);
+  const kpisLun = kpisContacto(diariosDesdeIntentos([lun]), [lun]);
+  const kpisMar = kpisContacto(diariosDesdeIntentos([mar]), [mar]);
+  assert.equal(kpis.personas, 2);
   assert.equal(kpis.contestaron, 1);
   assert.equal(kpis.seguimientos, 2);
+  assert.equal(kpis.personas, kpisLun.personas + kpisMar.personas);
+  assert.equal(kpis.contestaron, kpisLun.contestaron + kpisMar.contestaron);
+  const barra = conteoCanal(diariosDesdeIntentos(intentos), CANAL_LLAMADA);
+  assert.equal(barra.personas, 2);
+  assert.equal(barra.noContestaron, 1);
+  assert.equal(barra.contestaronSolo, 1);
   const cubetas = cubetasIntensidad(intentos);
   assert.equal(cubetas[0].personasDia, 2);
 });

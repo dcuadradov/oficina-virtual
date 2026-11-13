@@ -385,7 +385,7 @@ const DashboardFilters = ({
     || (!selectedMes && !selectedDia && periodoImplicito?.value)
     || null;
   const selectedPeriodoLabel = periodOptions.find(p => p.value === periodoEfectivo)?.label
-    || periodoImplicito?.label
+    || (periodoEfectivo ? periodoImplicito?.label : null)
     || 'Todos los periodos';
   const esPeriodoActual = Boolean(currentPeriod && periodoEfectivo === currentPeriod.value);
   
