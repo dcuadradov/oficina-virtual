@@ -28,10 +28,17 @@ export function formatPhone(raw) {
   return `+${digits}`;
 }
 
-export function whatsappWebUrl(raw) {
+export function prefersWhatsAppApp(userAgent) {
+  const ua = userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent || '');
+  return /Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+}
+
+export function whatsappWebUrl(raw, { mobile = true } = {}) {
   const phone = formatPhone(raw);
   if (!phone) return null;
-  return `https://wa.me/${phone.slice(1)}`;
+  const digits = phone.slice(1);
+  if (mobile) return `https://wa.me/${digits}`;
+  return `https://web.whatsapp.com/send?phone=${digits}`;
 }
 
 export function formatEmail(raw) {

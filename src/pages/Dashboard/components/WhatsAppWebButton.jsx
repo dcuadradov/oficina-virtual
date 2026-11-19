@@ -1,5 +1,5 @@
 import React from 'react';
-import { whatsappWebUrl } from '../copyContacts';
+import { formatPhone, prefersWhatsAppApp, whatsappWebUrl } from '../copyContacts';
 
 function WhatsAppIsotype({ size = 18 }) {
   return (
@@ -14,9 +14,9 @@ export default function WhatsAppWebButton({
   size = 18,
   className = 'p-2.5 rounded-xl transition-all duration-200',
 }) {
-  const url = whatsappWebUrl(telefono);
+  const tieneTelefono = Boolean(formatPhone(telefono));
 
-  if (!url) {
+  if (!tieneTelefono) {
     return (
       <button
         type="button"
@@ -35,10 +35,11 @@ export default function WhatsAppWebButton({
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        window.open(url, '_blank', 'noopener,noreferrer');
+        const target = whatsappWebUrl(telefono, { mobile: prefersWhatsAppApp() });
+        if (target) window.open(target, '_blank', 'noopener,noreferrer');
       }}
       className={`${className} text-[#25D366] hover:text-[#1ebe57] hover:bg-emerald-50 hover:scale-110 cursor-pointer`}
-      title="Abrir en WhatsApp Web"
+      title="Abrir conversación en WhatsApp"
     >
       <WhatsAppIsotype size={size} />
     </button>

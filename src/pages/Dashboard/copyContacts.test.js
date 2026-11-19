@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectContacts, formatEmail, formatPhone, joinForClipboard, nextContactPage, whatsappWebUrl } from './copyContacts.js';
+import { collectContacts, formatEmail, formatPhone, joinForClipboard, nextContactPage, prefersWhatsAppApp, whatsappWebUrl } from './copyContacts.js';
 
 test('formatPhone deja el internacional todo pegado', () => {
   assert.equal(formatPhone('+57.3173588591'), '+573173588591');
@@ -10,11 +10,20 @@ test('formatPhone deja el internacional todo pegado', () => {
   assert.equal(formatPhone('   '), null);
 });
 
-test('whatsappWebUrl arma el enlace de WhatsApp Web', () => {
+test('prefersWhatsAppApp distingue celular de computador', () => {
+  assert.equal(prefersWhatsAppApp('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'), true);
+  assert.equal(prefersWhatsAppApp('Mozilla/5.0 (Linux; Android 14; Pixel 8)'), true);
+  assert.equal(prefersWhatsAppApp('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'), false);
+  assert.equal(prefersWhatsAppApp('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), false);
+  assert.equal(prefersWhatsAppApp(''), false);
+});
+
+test('whatsappWebUrl abre la app en el celular y WhatsApp Web en el computador', () => {
   assert.equal(whatsappWebUrl('+57.3173588591'), 'https://wa.me/573173588591');
-  assert.equal(whatsappWebUrl('+57 317 358 8591'), 'https://wa.me/573173588591');
-  assert.equal(whatsappWebUrl('+573176675788'), 'https://wa.me/573176675788');
-  assert.equal(whatsappWebUrl(''), null);
+  assert.equal(whatsappWebUrl('+57 317 358 8591', { mobile: true }), 'https://wa.me/573173588591');
+  assert.equal(whatsappWebUrl('+573176675788', { mobile: false }), 'https://web.whatsapp.com/send?phone=573176675788');
+  assert.equal(whatsappWebUrl('+57.3173588591', { mobile: false }), 'https://web.whatsapp.com/send?phone=573173588591');
+  assert.equal(whatsappWebUrl('', { mobile: false }), null);
 });
 
 test('formatEmail recorta y descarta lo que no es correo', () => {
