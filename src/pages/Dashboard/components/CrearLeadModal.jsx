@@ -14,6 +14,7 @@ import {
   Check
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import { conIdentificadorWhatsapp, validarUsuarioWhatsapp } from './crearLeadIdentificador';
 
 /**
  * Parsea las opciones del campo select
@@ -112,6 +113,9 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   const [paisDropdownOpen, setPaisDropdownOpen] = useState(null); // nombre del campo con dropdown abierto
   const [paisBusqueda, setPaisBusqueda] = useState('');
   const paisSearchRef = useRef(null);
+  // Identificador: teléfono (false) o usuario de WhatsApp (true)
+  const [tieneUsuarioWhatsapp, setTieneUsuarioWhatsapp] = useState(false);
+  const [usuarioWhatsapp, setUsuarioWhatsapp] = useState('');
   
   // Estados para carga de archivo
   const [archivo, setArchivo] = useState(null);
@@ -255,6 +259,8 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       });
       setFormData(initialData);
       setTelefonoData(initialTelefonoData);
+      setTieneUsuarioWhatsapp(false);
+      setUsuarioWhatsapp('');
     } catch (error) {
       console.error('Error cargando fields:', error);
     } finally {
@@ -268,6 +274,28 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
       ...prev,
       [fieldNombre]: value
     }));
+  };
+
+  const handleIdentificadorChange = (usarUsuario) => {
+    setTieneUsuarioWhatsapp(usarUsuario);
+    if (usarUsuario) {
+      setTelefonoData(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(nombre => {
+          next[nombre] = { ...next[nombre], numero: '' };
+        });
+        return next;
+      });
+      setFormData(prev => {
+        const next = { ...prev };
+        fields.forEach(field => {
+          if (field.tipo === 'telefono') next[field.nombre] = '';
+        });
+        return next;
+      });
+    } else {
+      setUsuarioWhatsapp('');
+    }
   };
 
   // Manejar cambio de campo de teléfono
@@ -380,6 +408,15 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
     for (const field of fields) {
       if (!shouldShowField(field)) continue;
       
+      if (field.tipo === 'telefono' && tieneUsuarioWhatsapp) {
+        const validacionUsuario = validarUsuarioWhatsapp(usuarioWhatsapp);
+        if (!validacionUsuario.valido) {
+          setToast({ type: 'error', message: validacionUsuario.mensaje });
+          return false;
+        }
+        continue;
+      }
+
       if (field.obligatorio && !formData[field.nombre]?.trim()) {
         setToast({ type: 'error', message: `El campo "${field.nombre}" es obligatorio` });
         return false;
@@ -423,6 +460,7 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
           trimmedData[key] = textFieldNames.has(key) && typeof value === 'string' ? value.trim() : value;
         }
         payload.data = trimmedData;
+        payload = conIdentificadorWhatsapp(payload, tieneUsuarioWhatsapp, usuarioWhatsapp);
       } else {
         const base64 = await fileToBase64(archivo);
         payload.archivo = base64;
@@ -460,6 +498,8 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
   const resetForm = () => {
     setFormData({});
     setTelefonoData({});
+    setTieneUsuarioWhatsapp(false);
+    setUsuarioWhatsapp('');
     setArchivo(null);
     setModoCreacion('individual');
     setToast(null);
@@ -559,6 +599,10 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                 
                 {fields.map((field) => {
                   if (!shouldShowField(field)) return null;
+
+                  const validacionUsuarioCampo = field.tipo === 'telefono' && tieneUsuarioWhatsapp
+                    ? validarUsuarioWhatsapp(usuarioWhatsapp)
+                    : null;
                   
                   let opciones = parseOpciones(field.opciones);
                   const dep = parseDependeDe(field.depende_de);
@@ -662,7 +706,58 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                           )}
                         </div>
                       ) : field.tipo === 'telefono' ? (
-                        /* Campo de teléfono internacional */
+                        /* Teléfono o usuario de WhatsApp */
+                        <div className="space-y-2">
+                          <div className="flex p-1 bg-slate-100 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => handleIdentificadorChange(false)}
+                              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                                !tieneUsuarioWhatsapp
+                                  ? 'bg-white text-[#1717AF] shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              Teléfono
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleIdentificadorChange(true)}
+                              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                                tieneUsuarioWhatsapp
+                                  ? 'bg-white text-[#1717AF] shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              Usuario de WhatsApp
+                            </button>
+                          </div>
+                          {tieneUsuarioWhatsapp ? (
+                            <div className="space-y-1">
+                              <div className={`flex items-center border rounded-xl overflow-hidden ${
+                                usuarioWhatsapp.trim() && validacionUsuarioCampo && !validacionUsuarioCampo.valido
+                                  ? 'border-rose-300 bg-rose-50/50'
+                                  : 'border-slate-200 focus-within:border-[#1717AF] focus-within:ring-2 focus-within:ring-[#1717AF]/20'
+                              }`}>
+                                <span className="pl-4 text-slate-400 text-sm select-none">@</span>
+                                <input
+                                  type="text"
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                  value={usuarioWhatsapp}
+                                  onChange={(e) => setUsuarioWhatsapp(e.target.value.replace(/^@+/, ''))}
+                                  placeholder="usuario"
+                                  className="flex-1 px-2 py-3 text-sm bg-transparent focus:outline-none"
+                                />
+                              </div>
+                              {usuarioWhatsapp.trim() && validacionUsuarioCampo && !validacionUsuarioCampo.valido && (
+                                <p className="text-xs text-rose-500 flex items-center gap-1">
+                                  <AlertCircle size={12} />
+                                  {validacionUsuarioCampo.mensaje}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
                         <div className="space-y-1">
                           <div className="flex gap-2">
                             {/* Selector de país */}
@@ -778,6 +873,8 @@ const CrearLeadModal = ({ isOpen, onClose }) => {
                               <AlertCircle size={12} />
                               {validarTelefono(field.nombre).mensaje}
                             </p>
+                          )}
+                        </div>
                           )}
                         </div>
                       ) : (

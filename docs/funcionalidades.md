@@ -26,6 +26,7 @@ El CMS solo lo ven quienes tienen `modulo_id = cms` en `usuarios_modulos`. Desde
 - Se puede elegir entre distintos formularios de creación, según cómo esté configurado el módulo.
 - Los campos del formulario no están fijos en el código: se configuran desde la base, así que se pueden agregar o quitar preguntas sin tocar la app.
 - Se puede registrar el teléfono con el código de país correspondiente, y el sistema valida que el número tenga la cantidad de dígitos de ese país.
+- En la carga uno a uno, encima del teléfono se elige si el lead se identifica con número o con usuario de WhatsApp. Si es usuario, no se pide el número. Eso sale en `tiene_usuario_whatsapp` (true o false) y `usuario_whatsapp`; el resto del formulario viaja igual. El Excel masivo sigue siendo solo por teléfono.
 
 ---
 
