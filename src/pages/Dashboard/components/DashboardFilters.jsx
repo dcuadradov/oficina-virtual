@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Users, Calendar, CalendarRange, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X, Search, MessageSquare, Tag, Loader2, Globe, Flag, UserPlus, Smartphone, Settings, Check } from 'lucide-react';
 import { getCountryFlag } from '../../../utils/countryFlags';
 import { filtrarPaises, formatoConteoLeads } from '../paisFilter';
+import { filtrarCategoriasSeguimiento } from '../categoriaFilter';
 import { toFechaISOLocal } from '../../../utils/pitchRange';
 import StickyFiltersHost from './StickyFiltersHost';
 
@@ -202,6 +203,7 @@ const DashboardFilters = ({
   const [periodoOpen, setPeriodoOpen] = useState(false);
   const [diaOpen, setDiaOpen] = useState(false);
   const [categoriaOpen, setCategoriaOpen] = useState(false);
+  const [categoriaBusqueda, setCategoriaBusqueda] = useState('');
   const [tagOpen, setTagOpen] = useState(false);
   // Buffer local para modo staged (cambios pendientes hasta hacer click en
   // "Filtrar"). En modo no-staged este estado se ignora.
@@ -359,6 +361,10 @@ const DashboardFilters = ({
   }, [referidoOpen]);
 
   useEffect(() => {
+    if (!categoriaOpen) setCategoriaBusqueda('');
+  }, [categoriaOpen]);
+
+  useEffect(() => {
     if (!paisOpen) setPaisBusqueda('');
   }, [paisOpen]);
 
@@ -373,6 +379,11 @@ const DashboardFilters = ({
   const paisesFiltrados = useMemo(
     () => filtrarPaises(paises, paisBusqueda),
     [paises, paisBusqueda],
+  );
+
+  const categoriasFiltradas = useMemo(
+    () => filtrarCategoriasSeguimiento(categorias, categoriaBusqueda),
+    [categorias, categoriaBusqueda],
   );
   
   // Obtener label del comercial seleccionado
@@ -1417,44 +1428,64 @@ const DashboardFilters = ({
           </button>
           
           {categoriaOpen && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 max-h-72 overflow-y-auto">
-              <button
-                onClick={() => {
-                  onCategoriaChange(null);
-                  setCategoriaOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  !selectedCategoria 
-                    ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium' 
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Todas las categorías
-              </button>
-              <div className="h-px bg-slate-100 my-1" />
-              {[...categorias].sort((a, b) => {
-                const padre = (a.categoria_padre || '').localeCompare(b.categoria_padre || '', 'es', { sensitivity: 'base' });
-                if (padre !== 0) return padre;
-                return (a.categoria || '').localeCompare(b.categoria || '', 'es', { sensitivity: 'base' });
-              }).map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    onCategoriaChange(cat.categoria);
-                    setCategoriaOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                    selectedCategoria === cat.categoria
-                      ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {cat.categoria}
-                  {cat.categoria_padre && (
-                    <span className="text-slate-400"> ({cat.categoria_padre})</span>
-                  )}
-                </button>
-              ))}
+            <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col overflow-hidden" style={{ maxHeight: '320px' }}>
+              <div className="p-2 border-b border-slate-100">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={categoriaBusqueda}
+                    onChange={(e) => setCategoriaBusqueda(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Buscar categoría..."
+                    autoFocus
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1717AF]/30 focus:border-[#1717AF]"
+                  />
+                </div>
+              </div>
+              <div className="overflow-y-auto py-1">
+                {!categoriaBusqueda.trim() && (
+                  <>
+                    <button
+                      onClick={() => {
+                        onCategoriaChange(null);
+                        setCategoriaOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        !selectedCategoria
+                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Todas las categorías
+                    </button>
+                    <div className="h-px bg-slate-100 my-1" />
+                  </>
+                )}
+                {categoriasFiltradas.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
+                ) : (
+                  categoriasFiltradas.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        onCategoriaChange(cat.categoria);
+                        setCategoriaOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        selectedCategoria === cat.categoria
+                          ? 'bg-[#1717AF]/10 text-[#1717AF] font-medium'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {cat.categoria}
+                      {cat.categoria_padre && (
+                        <span className="text-slate-400"> ({cat.categoria_padre})</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
