@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Sparkles } from 'lucide-react';
 import {
-  Bar, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { getCountryFlag } from '../../../../utils/countryFlags';
 import {
@@ -22,6 +23,7 @@ import {
   sortedPaises,
   togglePaisSeleccionado,
 } from './paisPorDia';
+import { etiquetaMotivo, SIN_CATEGORIA } from './ultimoSeguimiento';
 
 function formatPct(pct) {
   if (pct == null || Number.isNaN(pct)) return '—';
@@ -53,6 +55,205 @@ const VISTAS = [
   { id: 'meses', label: 'Todos los meses' },
 ];
 
+const MOTIVO_COLORS = [
+  '#1717AF', '#6366F1', '#7C3AED', '#A855F7', '#EC4899',
+  '#F43F5E', '#F97316', '#F59E0B', '#10B981', '#06B6D4',
+  '#3B82F6', '#8B5CF6',
+];
+const COLOR_SIN_CATEGORIA = '#94A3B8';
+
+function colorMotivo(categoria, index) {
+  if (categoria === SIN_CATEGORIA) return COLOR_SIN_CATEGORIA;
+  return MOTIVO_COLORS[index % MOTIVO_COLORS.length];
+}
+
+function ListaPaises({
+  ranked,
+  sePuedeFocar,
+  foco,
+  todosMarcados,
+  algunosMarcados,
+  toggleTodos,
+  togglePais,
+  colorByPais,
+  pctMode,
+}) {
+  return (
+    <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1">
+      {sePuedeFocar && ranked.length > 0 && (
+        <button
+          type="button"
+          onClick={toggleTodos}
+          className="sticky top-0 z-10 w-full flex items-center gap-2 text-sm py-1.5 px-2 mb-1 rounded-lg bg-white border-b border-slate-100 hover:bg-slate-50"
+          title={todosMarcados ? 'Quitar todos' : 'Marcar todos'}
+        >
+          <CheckBox checked={todosMarcados} indeterminate={algunosMarcados} />
+          <span className="flex-1 truncate text-xs font-medium text-slate-700 text-left">Todos</span>
+          <span className="text-slate-400 text-xs tabular-nums">
+            {ranked.length}
+          </span>
+        </button>
+      )}
+      <div className="space-y-1">
+        {ranked.map((p) => {
+          const marcado = foco.includes(p.pais);
+          const claseFila = `w-full flex items-center gap-2 text-sm py-1 px-2 rounded-lg transition-colors text-left ${
+            marcado
+              ? 'bg-[#1717AF]/10 ring-1 ring-[#1717AF]/25'
+              : sePuedeFocar
+                ? 'hover:bg-slate-50 cursor-pointer'
+                : 'hover:bg-slate-50'
+          }`;
+          const contenido = (
+            <>
+              {sePuedeFocar && <CheckBox checked={marcado} />}
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: colorByPais[p.pais] || COLOR_OTROS }}
+              />
+              <span className="text-base leading-none flex-shrink-0">{p.bandera}</span>
+              <span
+                className={`flex-1 truncate text-xs ${p.pais === SIN_PAIS ? 'italic text-slate-500' : 'text-slate-700'}`}
+              >
+                {p.pais}
+              </span>
+              <span className="text-slate-500 text-xs tabular-nums">
+                {p.count.toLocaleString('es-CO')}
+              </span>
+              <span className="text-slate-800 font-semibold text-xs tabular-nums whitespace-nowrap text-right">
+                {pctMode === 'funnel' ? formatPctConBase(p.pct, p.baselineCount) : formatPct(p.pct)}
+              </span>
+            </>
+          );
+          if (!sePuedeFocar) {
+            return (
+              <div key={p.pais} className={claseFila} title={p.pais}>
+                {contenido}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={p.pais}
+              type="button"
+              onClick={() => togglePais(p.pais)}
+              className={claseFila}
+              title={marcado ? `Quitar ${p.pais}` : `Sumar ${p.pais}`}
+              aria-pressed={marcado}
+            >
+              {contenido}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MotivoPie({ rows = [], total = 0, loading = false, emptyLabel }) {
+  const segmentos = useMemo(
+    () => (rows || []).map((row, i) => ({
+      ...row,
+      color: colorMotivo(row.categoria, i),
+    })),
+    [rows],
+  );
+
+  if (loading) {
+    return (
+      <div className="w-full h-[320px] flex items-center justify-center text-xs text-slate-400 animate-pulse">
+        Cargando…
+      </div>
+    );
+  }
+  if (!total) {
+    return (
+      <div className="w-full h-[320px] flex items-center justify-center text-sm text-slate-400 text-center px-4">
+        {emptyLabel || 'Sin motivos en el periodo.'}
+      </div>
+    );
+  }
+
+  const renderTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload;
+    if (!row) return null;
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs min-w-[160px]">
+        <div className="text-slate-700 mb-1">{row.categoria}</div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-slate-500">Descartados</span>
+          <span className="font-semibold text-slate-800 tabular-nums">
+            {row.count.toLocaleString('es-CO')}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-slate-500">Sobre descartados</span>
+          <span className="font-semibold text-slate-800 tabular-nums">{formatPct(row.pct)}</span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative w-full h-[320px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={segmentos}
+            dataKey="count"
+            nameKey="categoria"
+            cx="50%"
+            cy="50%"
+            innerRadius={52}
+            outerRadius={88}
+            paddingAngle={2}
+            startAngle={90}
+            endAngle={-270}
+            isAnimationActive
+            animationDuration={900}
+            animationEasing="ease-out"
+            stroke="none"
+          >
+            {segmentos.map((seg) => (
+              <Cell key={seg.categoria} fill={seg.color} />
+            ))}
+          </Pie>
+          <Tooltip content={renderTooltip} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <span className="text-2xl font-bold text-slate-800">{total.toLocaleString('es-CO')}</span>
+        <span className="text-xs text-slate-500 mt-0.5">descartados</span>
+      </div>
+    </div>
+  );
+}
+
+function ListaMotivos({ rows = [] }) {
+  return (
+    <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1 space-y-1">
+      {rows.map((row, i) => (
+        <div
+          key={row.categoria}
+          className="flex items-center gap-2 text-sm py-1 px-2 rounded-lg hover:bg-slate-50"
+          title={etiquetaMotivo(row)}
+        >
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: colorMotivo(row.categoria, i) }}
+          />
+          <span
+            className={`flex-1 truncate text-xs ${row.categoria === SIN_CATEGORIA ? 'italic text-slate-500' : 'text-slate-700'}`}
+          >
+            {etiquetaMotivo(row)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PaisPorDiaChart({
   title,
   subtitle,
@@ -73,8 +274,11 @@ export default function PaisPorDiaChart({
   selectedPaises = null,
   onPaisFocusChange,
   compareLabel = '',
+  motivo = null,
 }) {
-  const serie = vista === 'meses' && monthly ? monthly : {
+  const [motivoActivo, setMotivoActivo] = useState(false);
+  const tieneMotivo = Boolean(motivo);
+  const periodSerie = {
     days,
     totalsByPais,
     byDayByPais,
@@ -85,7 +289,10 @@ export default function PaisPorDiaChart({
     subtitle,
     emptyLabel,
   };
-  const ejeMensual = vista === 'meses' && Boolean(monthly);
+  const serie = motivoActivo
+    ? periodSerie
+    : (vista === 'meses' && monthly ? monthly : periodSerie);
+  const ejeMensual = !motivoActivo && vista === 'meses' && Boolean(monthly);
   const serieLoading = serie.loading ?? loading;
   const overlay = serie.overlayByDayByPais ?? overlayByDayByPais;
   const foco = paisesEnFoco({ selectedPaises, selectedPais });
@@ -95,6 +302,9 @@ export default function PaisPorDiaChart({
   const tasaVsVolumen = mostrarLeads && ejeMensual;
   const sePuedeFocar = typeof onPaisFocusChange === 'function';
   const metricLabel = compareLabel || etiquetaFoco || 'Métrica';
+  const subtitleActivo = motivoActivo
+    ? (motivo?.subtitle || subtitle)
+    : (serie.subtitle || subtitle);
 
   const ranked = useMemo(
     () => sortedPaises({
@@ -206,26 +416,48 @@ export default function PaisPorDiaChart({
   const top3Share = ranked.slice(0, 3).reduce((a, p) => a + p.sharePct, 0);
   const top3Count = Math.min(3, ranked.length);
   const topVolume = ranked[0];
+  const topMotivo = motivo?.rows?.[0];
 
   const setFoco = (next) => onPaisFocusChange?.(next);
   const togglePais = (pais) => setFoco(togglePaisSeleccionado(foco, pais));
   const toggleTodos = () => setFoco(todosMarcados ? [] : idsLista);
+  const irAVista = (id) => {
+    setMotivoActivo(false);
+    onVistaChange?.(id);
+  };
+
+  const hayDatos = motivoActivo
+    ? (total || compareMode)
+    : (serie.total || compareMode);
+  const listaPaises = (
+    <ListaPaises
+      ranked={ranked}
+      sePuedeFocar={sePuedeFocar}
+      foco={foco}
+      todosMarcados={todosMarcados}
+      algunosMarcados={algunosMarcados}
+      toggleTodos={toggleTodos}
+      togglePais={togglePais}
+      colorByPais={colorByPais}
+      pctMode={pctMode}
+    />
+  );
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
         <div>
           <h3 className="text-base font-semibold text-slate-800">{title}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{serie.subtitle || subtitle}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{subtitleActivo}</p>
         </div>
         <div className="flex items-center gap-2">
           {monthly && VISTAS.map((tab) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => onVistaChange?.(tab.id)}
+              onClick={() => irAVista(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                vista === tab.id
+                !motivoActivo && vista === tab.id
                   ? 'bg-[#1717AF] text-white shadow-sm shadow-[#1717AF]/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
@@ -233,6 +465,19 @@ export default function PaisPorDiaChart({
               {tab.label}
             </button>
           ))}
+          {tieneMotivo && (
+            <button
+              type="button"
+              onClick={() => setMotivoActivo(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                motivoActivo
+                  ? 'bg-[#1717AF] text-white shadow-sm shadow-[#1717AF]/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Motivo
+            </button>
+          )}
           {compareMode && sePuedeFocar && (
             <button
               type="button"
@@ -243,13 +488,26 @@ export default function PaisPorDiaChart({
               {etiquetaFoco} ×
             </button>
           )}
-          {serieLoading && <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>}
+          {(serieLoading || (motivoActivo && motivo?.loading)) && (
+            <span className="text-xs text-slate-400 animate-pulse">Cargando…</span>
+          )}
         </div>
       </div>
 
-      {!(serie.total || compareMode) ? (
+      {!hayDatos ? (
         <div className="py-16 text-center text-sm text-slate-400">
-          {serie.emptyLabel || emptyLabel}
+          {motivoActivo ? (motivo?.emptyLabel || emptyLabel) : (serie.emptyLabel || emptyLabel)}
+        </div>
+      ) : motivoActivo ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          <MotivoPie
+            rows={motivo?.rows}
+            total={motivo?.total || 0}
+            loading={motivo?.loading}
+            emptyLabel={motivo?.emptyLabel}
+          />
+          <ListaMotivos rows={motivo?.rows} />
+          {listaPaises}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
@@ -396,81 +654,32 @@ export default function PaisPorDiaChart({
             </div>
           </div>
 
-          <div className="max-h-[320px] overflow-y-auto overflow-x-hidden pr-1">
-            {sePuedeFocar && ranked.length > 0 && (
-              <button
-                type="button"
-                onClick={toggleTodos}
-                className="sticky top-0 z-10 w-full flex items-center gap-2 text-sm py-1.5 px-2 mb-1 rounded-lg bg-white border-b border-slate-100 hover:bg-slate-50"
-                title={todosMarcados ? 'Quitar todos' : 'Marcar todos'}
-              >
-                <CheckBox checked={todosMarcados} indeterminate={algunosMarcados} />
-                <span className="flex-1 truncate text-xs font-medium text-slate-700 text-left">Todos</span>
-                <span className="text-slate-400 text-xs tabular-nums">
-                  {ranked.length}
-                </span>
-              </button>
-            )}
-            <div className="space-y-1">
-            {ranked.map((p) => {
-              const marcado = foco.includes(p.pais);
-              const claseFila = `w-full flex items-center gap-2 text-sm py-1 px-2 rounded-lg transition-colors text-left ${
-                marcado
-                  ? 'bg-[#1717AF]/10 ring-1 ring-[#1717AF]/25'
-                  : sePuedeFocar
-                    ? 'hover:bg-slate-50 cursor-pointer'
-                    : 'hover:bg-slate-50'
-              }`;
-              const contenido = (
-                <>
-                  {sePuedeFocar && <CheckBox checked={marcado} />}
-                  <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: colorByPais[p.pais] || COLOR_OTROS }}
-                  />
-                  <span className="text-base leading-none flex-shrink-0">{p.bandera}</span>
-                  <span
-                    className={`flex-1 truncate text-xs ${p.pais === SIN_PAIS ? 'italic text-slate-500' : 'text-slate-700'}`}
-                  >
-                    {p.pais}
-                  </span>
-                  <span className="text-slate-500 text-xs tabular-nums">
-                    {p.count.toLocaleString('es-CO')}
-                  </span>
-                  <span className="text-slate-800 font-semibold text-xs tabular-nums whitespace-nowrap text-right">
-                    {pctMode === 'funnel' ? formatPctConBase(p.pct, p.baselineCount) : formatPct(p.pct)}
-                  </span>
-                </>
-              );
-              if (!sePuedeFocar) {
-                return (
-                  <div key={p.pais} className={claseFila} title={p.pais}>
-                    {contenido}
-                  </div>
-                );
-              }
-              return (
-                <button
-                  key={p.pais}
-                  type="button"
-                  onClick={() => togglePais(p.pais)}
-                  className={claseFila}
-                  title={marcado ? `Quitar ${p.pais}` : `Sumar ${p.pais}`}
-                  aria-pressed={marcado}
-                >
-                  {contenido}
-                </button>
-              );
-            })}
-            </div>
-          </div>
+          {listaPaises}
         </div>
       )}
 
       {ranked.length > 0 && serie.total > 0 && (
         <div className="mt-5 flex items-start gap-2 text-sm bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
           <Sparkles size={16} className="text-[#1717AF] mt-0.5 flex-shrink-0" />
-          {tasaVsVolumen ? (
+          {motivoActivo ? (
+            <p className="text-slate-600 leading-relaxed">
+              El % de cada motivo es sobre los{' '}
+              <span className="font-semibold text-slate-800">descartados del periodo</span>
+              {compareMode ? (
+                <>
+                  {' '}de <span className="font-semibold text-slate-800">{etiquetaFoco}</span>
+                </>
+              ) : null}
+              . El motivo es el último seguimiento (comentario o recordatorio)
+              {topMotivo ? (
+                <>
+                  . El más frecuente es{' '}
+                  <span className="font-semibold text-slate-800">{topMotivo.categoria}</span>
+                  {' '}({topMotivo.count.toLocaleString('es-CO')}, {Math.round(topMotivo.pct)}%).
+                </>
+              ) : '.'}
+            </p>
+          ) : tasaVsVolumen ? (
             <p className="text-slate-600 leading-relaxed">
               Las barras son los leads de{' '}
               <span className="font-semibold text-slate-800">{etiquetaFoco}</span>
