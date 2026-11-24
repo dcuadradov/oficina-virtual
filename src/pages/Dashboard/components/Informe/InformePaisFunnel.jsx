@@ -12,10 +12,18 @@ import {
   ETAPAS_SIN_CONTACTO,
   filtrarPorEtapas,
 } from './paisPorDia';
+import {
+  aplicarEvento,
+  CATEGORIA_NO_ES_MEDICO,
+  contarMotivos,
+  filtrarPorUltimaCategoria,
+  leadIdKey,
+} from './ultimoSeguimiento';
 import PaisPorDiaChart from './PaisPorDiaChart';
 import SlotFasePorPais from './slots/SlotFasePorPais';
 
 const PAGE_SIZE = 1000;
+const LEAD_IN_SIZE = 100;
 
 async function fetchLeadsPais(filtros, dateField, cancelled) {
   const acc = [];
@@ -23,7 +31,7 @@ async function fetchLeadsPais(filtros, dateField, cancelled) {
   let keep = true;
   while (keep && !cancelled()) {
     const q = applyLeadFilters(
-      supabase.from('leads').select(`pais, ${dateField}, etapa_funnel`)
+      supabase.from('leads').select(`card_id, pais, ${dateField}, etapa_funnel`)
         .or('etapa_funnel.neq.No mostrar,etapa_funnel.is.null'),
       filtros,
     );
@@ -36,6 +44,52 @@ async function fetchLeadsPais(filtros, dateField, cancelled) {
   return acc;
 }
 
+async function fetchUltimosDeTabla(table, chunk, map, cancelled) {
+  const pending = new Set(chunk.map(leadIdKey).filter(Boolean));
+  let from = 0;
+  while (pending.size && !cancelled()) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('lead_id, categoria, created_at')
+      .in('lead_id', chunk)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    for (const row of data || []) {
+      const id = leadIdKey(row.lead_id);
+      if (!id || !pending.has(id)) continue;
+      aplicarEvento(map, { ...row, lead_id: id });
+      pending.delete(id);
+    }
+    if (!data || data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+}
+
+async function fetchUltimosSeguimientos(leadIds, cancelled) {
+  const unique = [...new Set((leadIds || []).map(leadIdKey).filter(Boolean))];
+  const map = {};
+  for (let i = 0; i < unique.length && !cancelled(); i += LEAD_IN_SIZE) {
+    const chunk = unique.slice(i, i + LEAD_IN_SIZE);
+    await Promise.all([
+      fetchUltimosDeTabla('comentarios', chunk, map, cancelled),
+      fetchUltimosDeTabla('recordatorios', chunk, map, cancelled),
+    ]);
+  }
+  return map;
+}
+
+function idsDeLeads(...listas) {
+  const ids = new Set();
+  listas.forEach((rows) => {
+    (rows || []).forEach((row) => {
+      const id = leadIdKey(row?.card_id);
+      if (id) ids.add(id);
+    });
+  });
+  return [...ids];
+}
+
 function seriesDesdeLeads(rows, dateField, etapas, agregar) {
   const filtered = etapas ? filtrarPorEtapas(rows, etapas) : rows;
   return agregar(filtered, dateField);
@@ -44,8 +98,10 @@ function seriesDesdeLeads(rows, dateField, etapas, agregar) {
 export default function InformePaisFunnel({ rango, filtros = {} }) {
   const [leadsRows, setLeadsRows] = useState([]);
   const [leadsMomRows, setLeadsMomRows] = useState([]);
+  const [ultimosPorLead, setUltimosPorLead] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMom, setLoadingMom] = useState(false);
+  const [loadingSeguimientos, setLoadingSeguimientos] = useState(false);
   const [vistaPais, setVistaPais] = useState('periodo');
   const [paisesEnFoco, setPaisesEnFoco] = useState([]);
   const dateField = filtros.dateField === 'updated_at' ? 'updated_at' : 'created_at';
@@ -57,28 +113,55 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
     const cargar = async () => {
       setLoading(Boolean(rango?.fechaInicio));
       setLoadingMom(true);
+      setLoadingSeguimientos(true);
+      setUltimosPorLead({});
       try {
         const filtrosMom = {
           ...filtros,
           fechaInicio: momRango.fechaInicio,
           fechaFin: momRango.fechaFin,
         };
-        const periodoPromise = rango?.fechaInicio
-          ? fetchLeadsPais(filtros, dateField, isCancelled)
-          : Promise.resolve([]);
-        const [periodo, mom] = await Promise.all([
-          periodoPromise,
-          fetchLeadsPais(filtrosMom, dateField, isCancelled),
-        ]);
+        const momPromise = fetchLeadsPais(filtrosMom, dateField, isCancelled);
+        const periodo = rango?.fechaInicio
+          ? await fetchLeadsPais(filtros, dateField, isCancelled)
+          : [];
         if (cancelled) return;
         setLeadsRows(periodo);
-        setLeadsMomRows(mom);
+        setLoading(false);
+
+        try {
+          const ultimosPeriodo = await fetchUltimosSeguimientos(idsDeLeads(periodo), isCancelled);
+          if (cancelled) return;
+          setUltimosPorLead(ultimosPeriodo);
+          setLoadingSeguimientos(false);
+
+          const mom = await momPromise;
+          if (cancelled) return;
+          setLeadsMomRows(mom);
+          setLoadingMom(false);
+
+          const missingMom = idsDeLeads(mom).filter((id) => !ultimosPeriodo[id]);
+          if (missingMom.length) {
+            setLoadingSeguimientos(true);
+            const extra = await fetchUltimosSeguimientos(missingMom, isCancelled);
+            if (cancelled) return;
+            setUltimosPorLead({ ...ultimosPeriodo, ...extra });
+          }
+        } catch (segErr) {
+          console.error('[InformePaisFunnel] error cargando seguimientos:', segErr.message);
+          const mom = await momPromise.catch(() => []);
+          if (!cancelled) {
+            setLeadsMomRows(mom);
+            setLoadingMom(false);
+          }
+        }
       } catch (err) {
         console.error('[InformePaisFunnel] error cargando leads:', err.message);
       } finally {
         if (!cancelled) {
           setLoading(false);
           setLoadingMom(false);
+          setLoadingSeguimientos(false);
         }
       }
     };
@@ -98,6 +181,14 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
   const leadsAgg = useMemo(
     () => agregarPorPaisYDia(leadsRows, dateField),
     [leadsRows, dateField],
+  );
+  const noMedicosRows = useMemo(
+    () => filtrarPorUltimaCategoria(leadsRows, ultimosPorLead, CATEGORIA_NO_ES_MEDICO),
+    [leadsRows, ultimosPorLead],
+  );
+  const noMedicosAgg = useMemo(
+    () => agregarPorPaisYDia(noMedicosRows, dateField),
+    [noMedicosRows, dateField],
   );
   const sinContactoAgg = useMemo(
     () => seriesDesdeLeads(leadsRows, dateField, ETAPAS_SIN_CONTACTO, agregarPorPaisYDia),
@@ -120,6 +211,14 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
     () => agregarPorPaisYMes(leadsMomRows, dateField),
     [leadsMomRows, dateField],
   );
+  const noMedicosMomRows = useMemo(
+    () => filtrarPorUltimaCategoria(leadsMomRows, ultimosPorLead, CATEGORIA_NO_ES_MEDICO),
+    [leadsMomRows, ultimosPorLead],
+  );
+  const noMedicosMomAgg = useMemo(
+    () => agregarPorPaisYMes(noMedicosMomRows, dateField),
+    [noMedicosMomRows, dateField],
+  );
   const sinContactoMomAgg = useMemo(
     () => seriesDesdeLeads(leadsMomRows, dateField, ETAPAS_SIN_CONTACTO, agregarPorPaisYMes),
     [leadsMomRows, dateField],
@@ -137,6 +236,16 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
     [leadsMomRows, dateField],
   );
 
+  const motivosDescartados = useMemo(
+    () => contarMotivos({
+      leads: leadsRows,
+      ultimos: ultimosPorLead,
+      etapas: ETAPAS_DESCARTADO,
+      paises: paisesEnFoco,
+    }),
+    [leadsRows, ultimosPorLead, paisesEnFoco],
+  );
+
   const tabProps = { vista: vistaPais, onVistaChange: setVistaPais };
   const focoLista = {
     selectedPaises: paisesEnFoco,
@@ -146,6 +255,8 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
     ...focoLista,
     overlayByDayByPais: leadsAgg.byDayByPais,
   };
+  const loadingNoMedicos = loading || loadingSeguimientos;
+  const loadingNoMedicosMom = loadingMom || loadingSeguimientos;
 
   return (
     <>
@@ -169,6 +280,33 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
           loading: loadingMom,
           subtitle: "Mes a mes desde noviembre 2025. La lista es el acumulado; no usa el filtro de mes, periodo o día.",
           emptyLabel: "Sin leads desde noviembre 2025.",
+        }}
+      />
+      <PaisPorDiaChart
+        title="No son médicos por país"
+        subtitle='Leads del periodo cuyo último seguimiento es «No es médico». El % de cada país es sobre Leads por país.'
+        emptyLabel='Sin leads cuyo último seguimiento sea «No es médico» en el periodo filtrado.'
+        loading={loadingNoMedicos}
+        days={days}
+        totalsByPais={noMedicosAgg.totalsByPais}
+        byDayByPais={noMedicosAgg.byDayByPais}
+        total={noMedicosAgg.total}
+        pctMode="funnel"
+        baselineByPais={leadsAgg.totalsByPais}
+        previousLabel="Leads por país"
+        compareLabel="No son médicos"
+        {...tabProps}
+        {...focoProps}
+        monthly={{
+          days: months,
+          totalsByPais: noMedicosMomAgg.totalsByPais,
+          byDayByPais: noMedicosMomAgg.byDayByPais,
+          total: noMedicosMomAgg.total,
+          baselineByPais: leadsMomAgg.totalsByPais,
+          overlayByDayByPais: leadsMomAgg.byDayByPais,
+          loading: loadingNoMedicosMom,
+          subtitle: 'Leads desde noviembre 2025 cuyo último seguimiento es «No es médico». El % es sobre el acumulado de Leads por país.',
+          emptyLabel: 'Sin leads con último seguimiento «No es médico» desde noviembre 2025.',
         }}
       />
       <PaisPorDiaChart
@@ -287,6 +425,15 @@ export default function InformePaisFunnel({ rango, filtros = {} }) {
         compareLabel="Descartados"
         {...tabProps}
         {...focoProps}
+        motivo={{
+          rows: motivosDescartados.rows,
+          total: motivosDescartados.total,
+          loading: loadingSeguimientos,
+          subtitle: 'Motivo del último seguimiento de los descartados del periodo. El % es sobre esos descartados, no sobre todos los leads.',
+          emptyLabel: paisesEnFoco.length
+            ? 'Sin descartados en los países seleccionados.'
+            : 'Sin leads descartados en el periodo filtrado.',
+        }}
         monthly={{
           days: months,
           totalsByPais: descartadosMomAgg.totalsByPais,
